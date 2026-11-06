@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bookshelf">
+  <rect width="64" height="64" rx="14" fill="#232833"/>
+  <path d="M13.5 19.2c6.1-2.1 11.8-1.5 18.5 2.5 6.7-4 12.4-4.6 18.5-2.5v26.9c-6.1-2.1-11.8-1.5-18.5 2.5-6.7-4-12.4-4.6-18.5-2.5Z" fill="#f3ead8"/>
+  <path d="M32 21.7v27.4" stroke="#c8bba2" stroke-width="1.7" stroke-linecap="round"/>
+  <path d="M38.2 12.2h7.2v14.6L41.8 23l-3.6 3.8Z" fill="#e0a34a"/>
+  <path d="M14.5 51.4h35" stroke="#5d6675" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
