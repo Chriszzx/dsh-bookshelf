@@ -30,6 +30,17 @@ window.__ModuleLoader__.load({
 .bs-title{margin:0;font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em}
 .bs-subtitle{margin:4px 0 0;font-size:12.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
 .bs-header-actions{display:flex;align-items:center;gap:8px;flex:none}
+.bs-import-menu-wrap{position:relative;display:inline-flex}
+.bs-import-trigger{padding-right:9px}
+.bs-import-trigger svg:last-child{opacity:.75}
+.bs-import-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:12;display:flex;flex-direction:column;gap:2px;min-width:280px;max-width:calc(100vw - 24px);padding:5px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-overlay);box-shadow:0 18px 44px -20px rgba(0,0,0,.55)}
+.bs-import-menu-item{display:flex;align-items:flex-start;gap:9px;width:100%;padding:8px 9px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;text-align:left;cursor:pointer}
+.bs-import-menu-item:hover{background:var(--dsw-alias-bg-layer-2)}
+.bs-import-menu-item:focus-visible{background:var(--dsw-alias-bg-layer-2);outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-import-menu-item>svg{flex:none;margin-top:2px;color:var(--dsw-alias-label-secondary)}
+.bs-import-menu-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bs-import-menu-info strong{font-size:12.5px;font-weight:600;line-height:1.35}
+.bs-import-menu-info span{font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary)}
 .bs-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;font:inherit;font-size:13px;font-weight:500;line-height:1.4;padding:7px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap}
 .bs-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2)}
 .bs-button:disabled{opacity:.55;cursor:default}
@@ -129,6 +140,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-empty-icon{display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:18px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
 .bs-empty-title{margin:0;font-size:16px;line-height:1.4;font-weight:600}
 .bs-empty-text{margin:0;max-width:34em;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
+.bs-empty-actions{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 .bs-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 32px 10px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
 .bs-banner-error{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
 .bs-banner-ok{border-color:var(--dsw-alias-state-success-primary);color:var(--dsw-alias-state-success-primary)}
@@ -780,6 +792,10 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function ChevronRightIcon({ size = 16 }) {
       return svgIcon(size, [h('path', { key: 'a', d: 'M9 5l7 7-7 7' })])
+    }
+
+    function ChevronDownIcon({ size = 12 }) {
+      return svgIcon(size, [h('path', { key: 'a', d: 'M5 9l7 7 7-7' })])
     }
 
     function TrashIcon({ size = 14 }) {
@@ -3800,6 +3816,94 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    function ImportMenu({ t, disabled = false, busy = false, onPickFiles, onLinkFolder }) {
+      const [open, setOpen] = useState(false)
+      const wrapRef = useRef(null)
+
+      useEffect(() => {
+        if (!open) return undefined
+        const onPointerDown = (event) => {
+          if (wrapRef.current !== null && !wrapRef.current.contains(event.target)) setOpen(false)
+        }
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          event.preventDefault()
+          event.stopPropagation()
+          setOpen(false)
+        }
+        document.addEventListener('pointerdown', onPointerDown)
+        document.addEventListener('keydown', onKeyDown)
+        return () => {
+          document.removeEventListener('pointerdown', onPointerDown)
+          document.removeEventListener('keydown', onKeyDown)
+        }
+      }, [open])
+
+      const choose = (action) => {
+        setOpen(false)
+        action()
+      }
+
+      return h(
+        'div',
+        { className: 'bs-import-menu-wrap', ref: wrapRef },
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'bs-button bs-button-primary bs-import-trigger',
+            onClick: () => setOpen((value) => !value),
+            disabled,
+            'aria-haspopup': 'menu',
+            'aria-expanded': open,
+            'aria-label': t('import'),
+            title: t('import'),
+          },
+          busy ? h(Spinner, { small: true }) : h(PlusIcon),
+          h('span', null, busy ? t('importing') : t('import')),
+          h(ChevronDownIcon, { size: 12 }),
+        ),
+        open
+          ? h(
+              'div',
+              { className: 'bs-import-menu', role: 'menu', 'aria-label': t('import') },
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'bs-import-menu-item',
+                  role: 'menuitem',
+                  onClick: () => choose(onPickFiles),
+                },
+                h(BookIcon, { size: 16 }),
+                h(
+                  'span',
+                  { className: 'bs-import-menu-info' },
+                  h('strong', null, t('importFilesMenu')),
+                  h('span', null, t('importFilesHint')),
+                ),
+              ),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'bs-import-menu-item',
+                  role: 'menuitem',
+                  onClick: () => choose(onLinkFolder),
+                },
+                h(LinkIcon, { size: 16 }),
+                h(
+                  'span',
+                  { className: 'bs-import-menu-info' },
+                  h('strong', null, t('importFolderMenu')),
+                  h('span', null, t('importFolderHint')),
+                ),
+              ),
+            )
+          : null,
+      )
+    }
+
     function LinkImportDialog({ t, base, onClose, onChanged }) {
       const [session, setSession] = useState(null)
       const [picking, setPicking] = useState(false)
@@ -3807,6 +3911,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [notice, setNotice] = useState(null)
       const [adding, setAdding] = useState('')
       const [added, setAdded] = useState(new Set())
+      const [modes, setModes] = useState({})
       const [filter, setFilter] = useState('')
 
       useEffect(() => {
@@ -3834,6 +3939,7 @@ html.bb-paged body table tr{break-inside:avoid}
           setSession(payload)
           setFilter('')
           setAdded(new Set())
+          setModes({})
         } catch (failure) {
           setError(t('linkPickFailed', { message: failure instanceof Error ? failure.message : String(failure) }))
         } finally {
@@ -3858,11 +3964,16 @@ html.bb-paged body table tr{break-inside:avoid}
               next.add(file.name)
               return next
             })
+            const mode = payload && payload.mode === 'copy' ? 'copy' : 'symlink'
+            setModes((current) => ({ ...current, [file.name]: mode }))
+            const title = payload && payload.book ? payload.book.title : file.name
             setNotice({
               kind: 'ok',
               text: payload && payload.duplicate
                 ? t('linkAlready')
-                : t('linkAdded', { title: payload && payload.book ? payload.book.title : file.name }),
+                : mode === 'copy'
+                  ? t('linkAddedCopy', { title })
+                  : t('linkAdded', { title }),
             })
             if (typeof onChanged === 'function') onChanged()
           } catch (failure) {
@@ -3991,7 +4102,11 @@ html.bb-paged body table tr{break-inside:avoid}
                             'div',
                             { className: 'bs-apple-info' },
                             h('div', { className: 'bs-apple-book-title', title: file.name }, file.name.replace(/\.[^.]+$/, '')),
-                            h('div', { className: 'bs-apple-meta' }, `${formatBytes(file.bytes)} · ${t('linkSoftShort')}`),
+                            h(
+                              'div',
+                              { className: 'bs-apple-meta' },
+                              `${formatBytes(file.bytes)} · ${t((modes[file.name] || file.mode) === 'copy' ? 'linkCopyShort' : 'linkSoftShort')}`,
+                            ),
                           ),
                           h(
                             'button',
@@ -4379,6 +4494,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [deleteTarget, setDeleteTarget] = useState(null)
       const [deleting, setDeleting] = useState(false)
       const [dragging, setDragging] = useState(false)
+      const fileInputRef = useRef(null)
       const [query, setStoredQuery] = useShelfView(viewState, 'query')
       const [sortMode, setStoredSort] = useShelfView(viewState, 'sortMode')
       const shelfScrollRef = useRef(null)
@@ -4671,6 +4787,26 @@ html.bb-paged body table tr{break-inside:avoid}
         [base, t],
       )
 
+      const pickFiles = useCallback(() => {
+        if (busy !== null) return
+        const input = fileInputRef.current
+        if (input === null) return
+        // Reset first so choosing the same file twice still fires `change`.
+        input.value = ''
+        input.click()
+      }, [busy])
+
+      const onFileInputChange = useCallback(
+        (event) => {
+          // Copy the FileList before resetting the input: resetting clears the
+          // live list and would import nothing.
+          const files = Array.from(event.currentTarget.files || [])
+          event.currentTarget.value = ''
+          void importFiles(files)
+        },
+        [importFiles],
+      )
+
       const removeBook = useCallback(
         async (book) => {
           setDeleting(true)
@@ -4749,13 +4885,31 @@ html.bb-paged body table tr{break-inside:avoid}
         'div',
         {
           className: 'bs-shelf bs-root',
-          onDragOver: (event) => event.preventDefault(),
-          onDrop: (event) => {
-            event.preventDefault()
-            setNotice({ kind: 'error', text: t('linkDropHint') })
-          },
+          onDragEnter,
+          onDragOver,
+          onDragLeave,
+          onDrop,
         },
         h('style', { key: 'style' }, CSS),
+        h('input', {
+          key: 'file-input',
+          ref: fileInputRef,
+          className: 'bs-file-input',
+          type: 'file',
+          accept: '.epub,.pdf,application/pdf,application/epub+zip',
+          multiple: true,
+          tabIndex: -1,
+          'aria-hidden': 'true',
+          onChange: onFileInputChange,
+        }),
+        dragging
+          ? h(
+              'div',
+              { className: 'bs-drop', key: 'drop' },
+              h(PlusIcon, { size: 22 }),
+              h('span', null, t('dropHint')),
+            )
+          : null,
         h(
           'header',
           { className: 'bs-header' },
@@ -4793,17 +4947,13 @@ html.bb-paged body table tr{break-inside:avoid}
                   h('span', { className: 'bs-apple-button-label' }, t('appleBooks')),
                 )
               : null,
-            h(
-              'button',
-              {
-                type: 'button',
-                className: 'bs-button bs-button-primary',
-                onClick: () => setLinkOpen(true),
-                disabled: isBusy,
-              },
-              isBusy ? h(Spinner, { small: true }) : h(PlusIcon),
-              h('span', null, isBusy ? t('importing') : t('import')),
-            ),
+            h(ImportMenu, {
+              t,
+              disabled: isBusy,
+              busy: isBusy,
+              onPickFiles: pickFiles,
+              onLinkFolder: () => setLinkOpen(true),
+            }),
             h(
               'button',
               {
@@ -4908,14 +5058,14 @@ html.bb-paged body table tr{break-inside:avoid}
                     h('h2', { className: 'bs-empty-title' }, t('emptyTitle')),
                     h('p', { className: 'bs-empty-text' }, t('emptyHint')),
                     h(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'bs-button bs-button-primary',
-                        onClick: () => setLinkOpen(true),
-                      },
-                      h(PlusIcon),
-                      h('span', null, t('import')),
+                      'div',
+                      { className: 'bs-empty-actions' },
+                      h(ImportMenu, {
+                        t,
+                        busy: isBusy,
+                        onPickFiles: pickFiles,
+                        onLinkFolder: () => setLinkOpen(true),
+                      }),
                     ),
                   )
                 : showNoResults
@@ -5065,9 +5215,9 @@ html.bb-paged body table tr{break-inside:avoid}
       appleBooks: 'Apple Books',
       more: 'More',
       addLocalBooks: 'Add local books',
-      linkImportHint: 'Choose a folder with EPUB or PDF files. Only soft links are created; files are not copied.',
+      linkImportHint: 'Choose a folder with EPUB or PDF books. Each book is soft-linked when the system allows it; otherwise the shelf stores a copy. The original is never deleted.',
       linkChooseTitle: 'Link books from a folder',
-      linkPickHint: 'Pick the folder that contains your books. The shelf stores a soft link and never deletes the original when an entry is removed.',
+      linkPickHint: 'Pick the folder that contains your books. The shelf links each book when possible and falls back to a copy on Windows; removing an entry never deletes the original.',
       linkPickFolder: 'Choose folder…',
       linkPicking: 'Waiting for the folder picker…',
       linkPickCancelled: 'No folder selected',
@@ -5083,9 +5233,10 @@ html.bb-paged body table tr{break-inside:avoid}
       linkDone: 'Done',
       linkFailed: 'Could not add: {message}',
       linkFileCount: '{count} files',
-      linkSoftNote: 'Soft links only; removing a shelf entry never deletes the original.',
+      linkSoftNote: 'Soft links when supported; otherwise shelf copies. Removing an entry never deletes the original.',
       linkSoftShort: 'soft link',
-      linkDropHint: 'Dragging a file would copy it. Use Import to choose a folder and keep a soft link.',
+      linkCopyShort: 'copy',
+      linkAddedCopy: 'Copied “{title}” into the shelf; a symbolic link was not available.',
       rename: 'Rename',
       bookTitleLabel: 'Title',
       bookAuthorLabel: 'Author',
@@ -5119,6 +5270,10 @@ html.bb-paged body table tr{break-inside:avoid}
       noResultsHint: 'Try a different title, author, or file name.',
       clearFilters: 'Clear search and sorting',
       import: 'Import books',
+      importFilesMenu: 'Import book files…',
+      importFilesHint: 'Choose one or more EPUB or PDF files to copy into the shelf',
+      importFolderMenu: 'Link a folder…',
+      importFolderHint: 'Soft-link every book in a folder; copies when links are unavailable',
       importing: 'Importing…',
       importingFile: 'Importing {name}…',
       importedCount: 'Imported {count} books.',
@@ -5129,7 +5284,7 @@ html.bb-paged body table tr{break-inside:avoid}
       loadFailedTitle: 'The bookshelf is unavailable',
       loading: 'Loading bookshelf…',
       emptyTitle: 'Your bookshelf is empty',
-      emptyHint: 'Import a PDF or EPUB file to start reading.',
+      emptyHint: 'Import a PDF or EPUB file, or link a folder, to start reading.',
       dropHint: 'Drop to import',
       serviceHint: 'The local bookshelf service must be running. Reload the page if this keeps happening.',
       serviceUnreachable: 'The local bookshelf service is unreachable.',
@@ -5285,9 +5440,9 @@ html.bb-paged body table tr{break-inside:avoid}
       appleBooks: 'Apple Books',
       more: '更多',
       addLocalBooks: '添加本地书籍',
-      linkImportHint: '选择包含 EPUB 或 PDF 的文件夹；只创建软链接，不复制文件。',
+      linkImportHint: '选择包含 EPUB 或 PDF 的文件夹；系统允许时创建软链接，否则保存一份副本。原文件不会被删除。',
       linkChooseTitle: '从文件夹软链接导入',
-      linkPickHint: '选择书籍所在的文件夹。书架只保存软链接，删除书架条目不会删除原文件。',
+      linkPickHint: '选择书籍所在的文件夹。书架会尽可能创建软链接，在 Windows 无法创建时自动保存副本；删除书架条目不会删除原文件。',
       linkPickFolder: '选择文件夹…',
       linkPicking: '请在系统窗口中选择文件夹…',
       linkPickCancelled: '未选择文件夹',
@@ -5303,9 +5458,10 @@ html.bb-paged body table tr{break-inside:avoid}
       linkDone: '完成',
       linkFailed: '添加失败：{message}',
       linkFileCount: '{count} 个文件',
-      linkSoftNote: '只创建软链接；删除书架条目不会删除原文件。',
+      linkSoftNote: '支持软链接时只创建软链接，否则保存副本；删除书架条目不会删除原文件。',
       linkSoftShort: '软链接',
-      linkDropHint: '拖放文件会变成复制导入；请点击“导入”选择文件夹，以保留软链接。',
+      linkCopyShort: '副本',
+      linkAddedCopy: '已将《{title}》保存为书架副本；系统不允许创建软链接。',
       rename: '重命名',
       bookTitleLabel: '书名',
       bookAuthorLabel: '作者',
@@ -5339,6 +5495,10 @@ html.bb-paged body table tr{break-inside:avoid}
       noResultsHint: '换一个书名、作者或文件名试试。',
       clearFilters: '清除搜索和排序',
       import: '导入书籍',
+      importFilesMenu: '导入书籍文件…',
+      importFilesHint: '选择一个或多个 EPUB / PDF 文件并复制到书架',
+      importFolderMenu: '软链接文件夹…',
+      importFolderHint: '为文件夹中的书建立软链接；系统不允许时保存副本',
       importing: '正在导入…',
       importingFile: '正在导入 {name}…',
       importedCount: '已导入 {count} 本书。',
@@ -5349,7 +5509,7 @@ html.bb-paged body table tr{break-inside:avoid}
       loadFailedTitle: '书架暂时不可用',
       loading: '正在载入书架…',
       emptyTitle: '书架还是空的',
-      emptyHint: '导入一本 PDF 或 EPUB，开始阅读。',
+      emptyHint: '导入一本 PDF 或 EPUB，或软链接一个文件夹，开始阅读。',
       dropHint: '松开即可导入',
       serviceHint: '请确认本地书架服务正在运行。如果一直如此，请刷新页面。',
       serviceUnreachable: '无法连接本地书架服务。',

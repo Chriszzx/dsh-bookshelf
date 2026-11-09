@@ -2,15 +2,24 @@
 
 A local bookshelf panel for the DSH Web GUI. It adds a **书架 / Bookshelf** entry to the
 left sidebar above the Workspace browser; selecting it opens the shelf in the main
-panel. Books are linked from local folders or Apple Books under `$DSH_HOME/bookshelf`,
-so the library does not depend on browser storage and survives page reloads and restarts.
+panel. Books come from local files, linked local folders, or the Apple Books
+library; the shelf keeps its own library under `$DSH_HOME/bookshelf`, so it does
+not depend on browser storage and survives page reloads and restarts.
 This is a desktop DSH plugin; reading pagination is tuned for desktop windows and
 keyboard/mouse navigation, not mobile or touch layouts.
 
 ## Features
 
+- Import one or several EPUB and PDF files directly with the browser file
+  picker, or drag them onto the shelf. File imports copy the book into
+  `$DSH_HOME/bookshelf`, so the shelf copy stays readable if the original moves;
+  removing the shelf entry deletes only that copy.
 - Link EPUB and PDF books from a folder chosen through the native folder
-  picker. Imports are soft links: the shelf never copies or deletes originals.
+  picker. Folder imports are soft links when the OS allows them; on Windows
+  without the symbolic-link privilege the shelf falls back to a regular copy
+  instead of failing. The original is never deleted.
+- Both modes live under one **Import books** menu: **Import book files…** and
+  **Link a folder…**.
 - Import EPUB and PDF books from the local Apple Books library, with search,
   download availability, and duplicate detection against the shelf. Apple
   Books imports are soft links too (EPUB source folders are packed on demand).
@@ -135,18 +144,49 @@ state. The source book is never deleted or modified.
 
 ## Platform compatibility
 
-| Platform | Shelf, readers and Books (Shelf) sidebar | Apple Books import |
-|---|---|---|
-| macOS | Supported | Available; enabled by default and can be turned off in Bookshelf settings |
-| Windows | Supported | Hidden and unavailable |
-| Linux | Not declared in `package.json` | Hidden |
+| Platform | Shelf, readers and Books (Shelf) sidebar | File import | Folder linking | Apple Books import |
+|---|---|---|---|---|
+| macOS | Supported | Supported | Supported (soft links) | Available; enabled by default and can be turned off in Bookshelf settings |
+| Windows | Supported | Supported | Supported; soft links with Developer Mode, automatic copy otherwise | Hidden and unavailable |
+| Linux | Not declared in `package.json` | Not declared | Not declared | Hidden |
 
 The package declares `os: ["darwin", "win32"]`. The core bookshelf, EPUB/PDF
 readers and page-snapshot sidebar are platform-neutral; only the Apple Books
-import is macOS-specific. On Windows the Host routes return `501` and the
-client hides the Apple Books button and its setting. On macOS the feature is
+import is macOS-specific. On Windows the Apple Books routes return `501` and the
+client hides the Apple Books button and its setting. On macOS that feature is
 on by default; turning it off hides the button until it is re-enabled in
 Bookshelf settings.
+
+### Windows and symbolic links
+
+Folder linking first tries to create a symbolic link under
+`$DSH_HOME/bookshelf/books`. Windows only allows an ordinary process to create
+symbolic links when it holds `SeCreateSymbolicLinkPrivilege`. If Windows denies
+the link (`EPERM` or `EACCES`), the Host automatically falls back to a regular
+copy, stages it next to the target and publishes it with a rename. The import
+dialog labels the result as a copy, so folder import works without Developer
+Mode or an elevated process.
+
+To get true soft links and avoid the extra shelf copy, do one of the following:
+
+- Turn on **Settings → Privacy & security → For developers → Developer Mode**,
+  then sign out and back in (or reboot) before retrying. Developer Mode grants
+  the symbolic-link privilege to ordinary user processes.
+- Run DSH from an elevated (administrator) process. This works but is not
+  recommended for everyday use.
+
+Unrelated link failures (for example `EIO`) are still reported instead of being
+silently converted to a copy, and a failed copy removes its staging file. File
+import and drag-and-drop always write a regular copy and never need a symbolic
+link. Reading, cover extraction, renaming and deleting shelf books work
+normally in every case. Windows **Controlled Folder Access** or another
+endpoint-protection product can also block writes under the user profile; if
+both file import and folder linking fail, allow DSH in that product as well.
+
+This repository is developed and verified on macOS. The fallback is covered by
+simulated-link-failure tests, but the real Windows denial path has not been
+exercised on Windows hardware here. See
+[Verification limits](#verification-limits).
 
 ## Scope
 
@@ -173,7 +213,8 @@ its tools are permitted to do so.
 The pure Host/bridge tests need only Node:
 
 ```text
-node --test tests/sidebar-snapshot.mjs tests/discussion-bridge.mjs tests/platform-compatibility.mjs
+node --test tests/sidebar-snapshot.mjs tests/discussion-bridge.mjs \
+  tests/platform-compatibility.mjs tests/link-fallback.mjs tests/link-import-mode.mjs
 ```
 
 The browser regressions need Chrome and React UMD fixtures. Set
@@ -181,9 +222,10 @@ The browser regressions need Chrome and React UMD fixtures. Set
 `node_modules/react/umd/react.development.js` and
 `node_modules/react-dom/umd/react-dom.development.js`; set `CHROME_BIN` if
 Chrome is not at its default macOS path. Run `node tests/pagination-geometry.mjs`,
-`node tests/tab-persistence.mjs`, `node tests/reading-snapshot.mjs`, or
-`node tests/discussion-handoff.mjs`. They use isolated temporary homes and
-Chrome profiles and do not touch a personal library.
+`node tests/tab-persistence.mjs`, `node tests/reading-snapshot.mjs`,
+`node tests/file-import.mjs`, or `node tests/discussion-handoff.mjs`. They use
+isolated temporary homes and Chrome profiles and do not touch a personal
+library.
 
 ## Third-party notices
 
@@ -224,17 +266,17 @@ The Host half stores the library under `$DSH_HOME/bookshelf`:
 ```text
 $DSH_HOME/bookshelf/
   library.json        # metadata, link descriptors, cover metadata
-  books/<id>.<pdf|epub>  # symlink for linked imports; legacy copies stay regular files
+  books/<id>.<pdf|epub>  # symlink for linked imports; copy for file imports or link fallback
   state.json          # per-book progress, bookmarks, and reading settings
   defaults.json       # shelf-level default EPUB reading settings
   covers/<id>.<jpg|png|gif|webp|svg>
 ```
 
 `DSH_HOME` defaults to `~/.dsh`. Deleting a book from the shelf removes its
-record, a symbolic link or legacy shelf copy, its cover copy, and its reading
-state. It never follows or removes a linked source. The HTTP surface is
-registered under `/bookshelf` on the local Web carrier and only reflects
-loopback origins; it is not part of `/api` and needs no browser session cookie.
+record, its shelf file (a copy or a symbolic link), its cover copy, and its
+reading state. It never follows or removes a linked source. The HTTP surface is registered under `/bookshelf` on
+the local Web carrier and only reflects loopback origins; it is not part of
+`/api` and needs no browser session cookie.
 
 ## API
 
@@ -242,9 +284,9 @@ loopback origins; it is not part of `/api` and needs no browser session cookie.
 |---|---|
 | `GET /bookshelf/api/capabilities` | Report the Host platform and whether Apple Books import is available. |
 | `GET /bookshelf/api/books` | List imported books. |
-| `POST /bookshelf/api/books?name=&title=&author=&format=` | Legacy body-upload import (not used by the current UI; copies bytes). |
+| `POST /bookshelf/api/books?name=&title=&author=&format=` | Import one uploaded file from the file picker or drag-and-drop; copies bytes into the shelf. |
 | `POST /bookshelf/api/links/pick` | Open the native folder picker and list EPUB/PDF files. |
-| `POST /bookshelf/api/links/import` | Create a soft link for one file in the chosen folder. |
+| `POST /bookshelf/api/links/import` | Create a soft link for one file in the chosen folder; a copy on Windows when the link is denied. |
 | `PATCH /bookshelf/api/books/<id>` | Rename the shelf title/author without touching the file. |
 | `GET /bookshelf/api/books/<id>/file` | Serve the file; EPUB responses expose `X-Bookshelf-Source-Revision`, PDF supports byte ranges. |
 | `GET /bookshelf/api/apple-books?query=&offset=&limit=` | List local Apple Books metadata (no book content). |
@@ -275,3 +317,11 @@ The package is a plain-JavaScript Local bundle. Syntax and manifest checks cover
 bundle itself; the rendering of the shelf and readers is verified in the running Web
 GUI. Client files are not rebuilt by a Host-only reload: reload the Web page after
 replacing `client.js` or a served asset.
+
+Windows folder linking depends on the symbolic-link privilege described above.
+The copy fallback is covered by `tests/link-fallback.mjs` with simulated
+`EPERM`/`EACCES` failures and by `tests/link-import-mode.mjs`, which drives the
+real Host route with a simulated Windows denial and verifies the resulting
+regular shelf copy. File import is covered by `tests/file-import.mjs` in
+headless Chrome. This checkout was developed and tested on macOS only; the real
+Windows denial path has not been exercised on Windows hardware.

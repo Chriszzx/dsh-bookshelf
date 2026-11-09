@@ -307,7 +307,7 @@ async function writePageFile(cwd, snapshot, sourceInfo = {}) {
     '# Before answering / 回答前请先确认',
     '',
     originalPath === '' ? 'Original book file: (unavailable)' : `Original book file: ${originalPath}`,
-    ...(shelfPath === '' ? [] : [`Shelf soft link: ${shelfPath}`]),
+    ...(shelfPath === '' ? [] : [`Shelf file: ${shelfPath}`]),
     '',
     'Ask the user these three questions before answering the page question:',
     '1. 是否允许使用联网工具？ / May I use web or network tools?',

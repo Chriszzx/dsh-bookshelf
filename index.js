@@ -6,6 +6,7 @@ import { homedir } from 'node:os'
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AppleBooksImportError, listAppleBooks, packEpubDirectory, readAppleBook } from './apple-books.js'
+import { createSourceLink } from './link-source.js'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
 
 /**
@@ -589,8 +590,10 @@ export function apply(ctx) {
     }
     const files = await listLinkableFiles(directory)
     const library = await readLibrary()
-    const linked = new Set(
-      library.books.filter((book) => book.link && book.link.kind === 'file').map((book) => book.link.path),
+    const linked = new Map(
+      library.books
+        .filter((book) => book.link && book.link.kind === 'file')
+        .map((book) => [book.link.path, book.link.mode === 'copy' ? 'copy' : 'symlink']),
     )
     const enriched = []
     for (const file of files) {
@@ -600,7 +603,8 @@ export function apply(ctx) {
       } catch {
         resolved = ''
       }
-      enriched.push({ ...file, linked: resolved !== '' && linked.has(resolved) })
+      const mode = resolved === '' ? undefined : linked.get(resolved)
+      enriched.push({ ...file, linked: mode !== undefined, mode: mode ?? '' })
     }
     pruneLinkSessions()
     const token = randomUUID()
@@ -648,14 +652,16 @@ export function apply(ctx) {
     const library = await readLibrary()
     const existing = library.books.find((book) => book.link && book.link.kind === 'file' && book.link.path === source)
     if (existing !== undefined) {
-      sendJson(request, response, 200, { book: publicBook(existing), duplicate: true })
+      const mode = existing.link.mode === 'copy' ? 'copy' : 'symlink'
+      sendJson(request, response, 200, { book: publicBook(existing), duplicate: true, mode })
       return
     }
     const id = randomUUID()
     await fs.mkdir(booksDir, { recursive: true })
     const target = join(booksDir, `${id}.${format}`)
     try {
-      await fs.symlink(source, target, 'file')
+      const mode = await createSourceLink(source, target)
+      if (mode === 'copy') ctx.logger.info('bookshelf: symbolic link denied; stored a shelf copy')
       const title = titleFromName(name)
       const record = {
         id,
@@ -665,12 +671,13 @@ export function apply(ctx) {
         bytes: info.size,
         name: cleanText(name, `${title}.${format}`, 300),
         addedAt: Date.now(),
-        link: { kind: 'file', path: source },
+        link: { kind: 'file', path: source, mode },
       }
       await updateLibrary((books) => [record, ...books.filter((book) => book.id !== id)])
-      sendJson(request, response, 201, { book: publicBook(record) })
+      sendJson(request, response, 201, { book: publicBook(record), mode })
     } catch (error) {
       await fs.unlink(target).catch(() => undefined)
+      await fs.unlink(`${target}.copy`).catch(() => undefined)
       throw error
     }
   }
