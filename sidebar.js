@@ -386,6 +386,7 @@ export class ShelfSidebarSnapshotController {
 export function createSidebarSnapshotCommand(controller) {
   return {
     name: SIDEBAR_COMMAND,
+    // Stable legacy id: existing session logs reference this command name.
     definitionId: '@local/dsh-bookshelf/snapshot',
     description: 'Write this bookshelf page to a workspace file and register it for the Books tab; no message is sent and no model context is injected.',
     input: { hint: 'JSON: {"action":"prepare","snapshot":{...}}' },

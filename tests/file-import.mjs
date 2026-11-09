@@ -218,7 +218,11 @@ try {
   console.log('single-file import: picker and drop import copies as regular files')
 } finally {
   try { socket?.close() } catch {}
-  if (chrome && chrome.exitCode === null) chrome.kill('SIGKILL')
+  if (chrome && chrome.exitCode === null) {
+    const exited = new Promise(resolve => chrome.once('exit', resolve))
+    chrome.kill('SIGKILL')
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 2000))])
+  }
   if (server) await new Promise(resolve => server.close(resolve))
-  await rm(temporary, { recursive: true, force: true })
+  await rm(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
 }

@@ -1,15 +1,41 @@
 {
-  "name": "@local/dsh-bookshelf",
-  "version": "0.2.2",
-  "private": true,
+  "name": "dsh-bookshelf",
+  "version": "0.3.0",
+  "description": "A local PDF and EPUB bookshelf for the DSH Web GUI with built-in readers and a shelf-owned Books sidebar.",
   "type": "module",
-  "description": "A local PDF and EPUB bookshelf in the DSH Web GUI, with built-in readers and a shelf-owned Books right sidebar.",
+  "icon": "icon.svg",
+  "author": "Chriszzx",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chriszzx/dsh-bookshelf.git"
+  },
+  "homepage": "https://github.com/Chriszzx/dsh-bookshelf#readme",
+  "bugs": {
+    "url": "https://github.com/Chriszzx/dsh-bookshelf/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "bookshelf",
+    "ebook",
+    "epub",
+    "pdf"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
@@ -26,8 +52,13 @@
     "LICENSE"
   ],
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": "./cordis.patch.yml",
+      "platforms": [
+        "darwin",
+        "win32"
+      ]
     },
     "client": {
       "platform": "web",
@@ -43,8 +74,6 @@
       ]
     }
   },
-  "license": "MIT",
-  "author": "Bookshelf DSH plugin contributors",
   "os": [
     "darwin",
     "win32"

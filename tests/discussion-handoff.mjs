@@ -75,7 +75,7 @@ function showShelf(){
 window.wait=ms=>new Promise(r=>setTimeout(r,ms));
 window.until=async(fn)=>{const start=Date.now();while(Date.now()-start<15000){if(fn())return;await wait(40)}throw Error('Timed out: '+fn)};
 window.ready=async()=>{
- const shelfPlugin=defs['@local/dsh-bookshelf'].factory(id=>{if(id==='react')return React;throw Error(id)});
+ const shelfPlugin=defs['dsh-bookshelf'].factory(id=>{if(id==='react')return React;throw Error(id)});
  if(!shelfPlugin.inject?.includes('remote.session'))throw Error('bookshelf client must inject remote.session');
  shelfPlugin.apply(shelfCtx);
  showShelf();

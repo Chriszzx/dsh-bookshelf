@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@local/dsh-bookshelf',
+  id: 'dsh-bookshelf',
   factory(require) {
     const React = require('react')
     const h = React.createElement
@@ -15,6 +15,8 @@ window.__ModuleLoader__.load({
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     const BOOKS_TAB_KIND = 'bookshelf-reader'
+    // Kept stable across the package rename so an open Books tab and existing
+    // page-snapshot sessions keep their ids.
     const SIDEBAR_TAB_ID = '@local/dsh-bookshelf/reader'
     const SIDEBAR_PROJECTION_KEY = 'shelfPageSnapshot'
     const DISCUSSION_BRIDGE_VERSION = 5
