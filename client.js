@@ -3286,7 +3286,9 @@ html.bb-paged body table tr{break-inside:avoid}
         probe.style.width = `${frameSize.width}px`
         probe.style.height = `${frameSize.height}px`
         const token = ++probeTokenRef.current
-        setBookPageCounts(null)
+        // Keep the last complete count while measuring its replacement. Switching
+        // to chapter-only labels can wrap a narrow toolbar, resize the frame,
+        // and restart measurement indefinitely. Initial/mode changes reset above.
         let cancelled = false
         let index = 0
         const counts = []

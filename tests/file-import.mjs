@@ -234,5 +234,5 @@ try {
     await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 2000))])
   }
   if (server) await new Promise(resolve => server.close(resolve))
-  await rm(temporary, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

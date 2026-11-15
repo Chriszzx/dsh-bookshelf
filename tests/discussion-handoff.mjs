@@ -261,5 +261,5 @@ try {
   if (chrome && chrome.exitCode === null) { const exited = once(chrome, 'exit'); chrome.kill('SIGTERM'); await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 3000))]) }
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
   assert.equal(await realpath(temporary), ownedPath)
-  await rm(ownedPath, { recursive: true, force: true })
+  await rm(ownedPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

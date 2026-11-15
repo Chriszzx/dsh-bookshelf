@@ -183,5 +183,5 @@ try {
   assert.equal(await realpath(temporary), owned)
   assert.equal(dirname(owned), await realpath(tmpdir()))
   assert.ok(basename(owned).startsWith('bookshelf-layout-fonts-'))
-  await rm(owned, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  await rm(owned, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

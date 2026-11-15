@@ -141,5 +141,5 @@ try {
   assert.equal(await realpath(temporary), ownedPath)
   assert.equal(dirname(ownedPath), parentPath)
   assert.ok(basename(ownedPath).startsWith('bookshelf-snapshot-'))
-  await rm(ownedPath, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+  await rm(ownedPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

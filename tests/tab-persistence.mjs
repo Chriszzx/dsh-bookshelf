@@ -146,5 +146,5 @@ try {
   if (server) { server.closeAllConnections(); await new Promise(r => server.close(r)) }
   // Delete only the exact temporary directory created and resolved above.
   assert.equal(await realpath(temporary), ownedPath)
-  await rm(ownedPath, { recursive: true, force: true })
+  await rm(ownedPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }

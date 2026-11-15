@@ -232,5 +232,5 @@ try {
  socket?.close()
  if(chrome&&chrome.exitCode===null){const exited=once(chrome,'exit');chrome.kill('SIGTERM');await exited}
  if(server){server.closeAllConnections();await new Promise(r=>server.close(r))}
- assert.equal(await realpath(temporary),ownedPath);await rm(ownedPath,{recursive:true,force:true})
+ assert.equal(await realpath(temporary),ownedPath);await rm(ownedPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
 }
