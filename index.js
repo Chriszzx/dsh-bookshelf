@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { AppleBooksImportError, listAppleBooks, packEpubDirectory, readAppleBook } from './apple-books.js'
 import { createSourceLink } from './link-source.js'
 import { sanitizeFontSettings } from './assets/reading-fonts.mjs'
+import { replaceFile } from './assets/atomic-file.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
 
 /**
@@ -152,7 +153,7 @@ export function apply(ctx) {
       await fs.mkdir(rootDir, { recursive: true })
       const temporary = `${indexPath}.${process.pid}.tmp`
       await fs.writeFile(temporary, JSON.stringify(next, null, 2))
-      await fs.rename(temporary, indexPath)
+      await replaceFile(temporary, indexPath)
     }
     const pending = pendingWrite.then(run, run)
     pendingWrite = pending.catch(() => undefined)
@@ -203,7 +204,7 @@ export function apply(ctx) {
       await fs.mkdir(rootDir, { recursive: true })
       const temporary = `${defaultsPath}.${process.pid}.tmp`
       await fs.writeFile(temporary, JSON.stringify({ version: 1, settings }, null, 2))
-      await fs.rename(temporary, defaultsPath)
+      await replaceFile(temporary, defaultsPath)
     }
     const pending = pendingDefaultsWrite.then(run, run)
     pendingDefaultsWrite = pending.catch(() => undefined)
@@ -217,7 +218,7 @@ export function apply(ctx) {
       await fs.mkdir(rootDir, { recursive: true })
       const temporary = `${statesPath}.${process.pid}.tmp`
       await fs.writeFile(temporary, JSON.stringify(next, null, 2))
-      await fs.rename(temporary, statesPath)
+      await replaceFile(temporary, statesPath)
     }
     const pending = pendingStateWrite.then(run, run)
     pendingStateWrite = pending.catch(() => undefined)
