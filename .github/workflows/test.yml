@@ -28,7 +28,7 @@ jobs:
         if: matrix.node == 24
         id: chrome
         with:
-          chrome-version: stable
+          chrome-version: '157'
       - run: pnpm run test:browser
         if: matrix.node == 24
         env:

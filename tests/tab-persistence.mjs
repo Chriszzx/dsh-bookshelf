@@ -39,7 +39,7 @@ window.labels=()=>[...document.querySelectorAll('.bs-control-label')].map(e=>e.t
 window.click=title=>{const node=document.querySelector('button[title="'+title+'"]');if(!node)throw Error('missing '+title);ReactDOM.flushSync(()=>node.click())};
 window.openBook=async(title)=>{await until(()=>[...document.querySelectorAll('.bs-book-title')].some(e=>e.textContent===title));const card=[...document.querySelectorAll('.bs-book-title')].find(e=>e.textContent===title).closest('.bs-card');ReactDOM.flushSync(()=>card.querySelector('.bs-cover').click())};
 window.check=(condition,message)=>{if(!condition)throw Error(message)};
-window.roundTrip=async()=>{unmount();await wait(25);mount();await wait(1800);check(!!document.querySelector('.bs-reader'),'reader lost after main-panel switch')};
+window.roundTrip=async()=>{const expected=labels();unmount();await wait(25);mount();await until(()=>{const frame=document.querySelector('.bs-epub-frame');const ready=frame?.contentDocument?.body?.childElementCount>0||[...document.querySelectorAll('.bs-pdf-page canvas')].some(canvas=>canvas.style.opacity==='1');return !!document.querySelector('.bs-reader')&&ready&&labels()===expected});await wait(100);check(labels()===expected,'restored reader did not settle on '+expected)};
 mount();
 </script></body></html>`
 let delayWrites = false

@@ -32,7 +32,7 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
   chrome = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
-    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', 'about:blank',
+    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', `${origin}/test.html`,
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserURL = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 15000)
@@ -66,28 +66,23 @@ try {
       socket.send(JSON.stringify({ id, method, params }))
     })
   }
-  // Attach before navigation, then wait for this document's load event instead
-  // of polling a global in a possibly obsolete startup execution context.
-  await command('Page.enable')
-  let loadTimer, loadListener
-  const loaded = new Promise((resolve, reject) => {
-    let navigated = false
-    loadListener = event => {
-      const message = JSON.parse(event.data)
-      if (message.method === 'Page.frameNavigated' && message.params.frame.url === `${origin}/test.html`) navigated = true
-      if (navigated && message.method === 'Page.loadEventFired') resolve()
+  // Use fresh, short evaluations while the startup document navigates. Holding
+  // one awaited promise in about:blank can keep observing an obsolete context.
+  // No test case is rerun: the page assigns and starts its result exactly once.
+  const startup = Date.now()
+  let readiness = null
+  while (true) {
+    try {
+      const state = await command('Runtime.evaluate', {
+        expression: '({url:location.href,started:Boolean(window.result)})', returnByValue: true,
+      })
+      readiness = state.result.value
+      if (readiness.url === `${origin}/test.html` && readiness.started) break
+    } catch (error) {
+      if (!error.message.includes('Execution context was destroyed')) throw error
     }
-    socket.addEventListener('message', loadListener)
-    loadTimer = setTimeout(() => reject(Error('Test document did not finish navigation')), 30000)
-  })
-  loaded.catch(() => {})
-  try {
-    const navigation = await command('Page.navigate', { url: `${origin}/test.html` })
-    assert.equal(navigation.errorText, undefined, navigation.errorText)
-    await loaded
-  } finally {
-    clearTimeout(loadTimer)
-    socket.removeEventListener('message', loadListener)
+    assert.ok(Date.now() - startup < 30000, `Test bootstrap not ready: ${JSON.stringify(readiness)}`)
+    await new Promise(resolve => setTimeout(resolve, 100))
   }
   const evaluated = await command('Runtime.evaluate', {
     expression: `(() => { if (!window.result) throw Error('Test bootstrap missing at ' + location.href); return window.result })()`,
