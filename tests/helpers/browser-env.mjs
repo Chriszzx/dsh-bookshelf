@@ -33,6 +33,28 @@ export async function findBrowser() {
     : 'Browser tests require Chrome, Chromium or Edge. Install one or set CHROME_BIN to its executable path.')
 }
 
+// Only generated localhost fixtures run in these owned CI browser profiles.
+export function browserLaunchArgs() {
+  return process.platform === 'win32' && process.env.CI ? ['--no-sandbox'] : []
+}
+
+export async function navigateTestPage(socket, url) {
+  const id = 2147483646
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); socket.removeEventListener('message', listener) }
+    const listener = event => {
+      const message = JSON.parse(event.data)
+      if (message.id !== id) return
+      cleanup()
+      if (message.error || message.result?.errorText) reject(Error('Test navigation failed: ' + JSON.stringify(message.error || message.result)))
+      else resolve(message.result)
+    }
+    const timer = setTimeout(() => { cleanup(); reject(Error('Test navigation timed out')) }, 30000)
+    socket.addEventListener('message', listener)
+    socket.send(JSON.stringify({ id, method: 'Page.navigate', params: { url } }))
+  })
+}
+
 function longEpub() {
   const paragraphs = Array.from({ length: 100 }, (_, index) =>
     `<p id="p${index}">${Array.from({ length: 24 }, () => `Paragraph ${index} keeps reading position stable across page turns and panel changes.`).join(' ')}</p>`).join('')

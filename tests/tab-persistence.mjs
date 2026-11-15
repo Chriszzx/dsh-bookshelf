@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
@@ -71,7 +71,7 @@ try {
   const pdfId = await importBook('PDF', 'pdf', 'mixed.pdf', { pdfView: 'single', pdfFit: 'page' }, { format: 'pdf', page: 2, percent: .4 })
   await importBook('Fresh', 'epub', 'paged-long.epub', undefined, undefined)
   assert.equal((await fetch(`${origin}/bookshelf/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ settings: { fontSize: 20, pageMode: 'paged', pageMargin: 'fill' } }) })).status, 200)
-  chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1400,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
+  chrome = spawn(chromePath, [...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1400,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 10000)
     let log = ''
@@ -80,10 +80,11 @@ try {
   })
   const debugOrigin = 'http://' + new URL(browserUrl).host
   const targets = await (await fetch(`${debugOrigin}/json`)).json()
-  const target = targets.find(p => p.url === `${origin}/test.html`)
+  const target = targets.find(p => p.url === 'about:blank')
   assert.ok(target, 'test target')
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((r, j) => { socket.onopen = r; socket.onerror = j })
+  await navigateTestPage(socket, `${origin}/test.html`)
   let sequence = 0
   async function evaluate(expression) {
     const id = ++sequence

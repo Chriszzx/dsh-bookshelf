@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
@@ -100,9 +100,9 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
 
   chrome = spawn(chromePath, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
+    ...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0',
-    '--window-size=1400,1000', `${origin}/test.html`,
+    '--window-size=1400,1000', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 10000)
@@ -116,10 +116,11 @@ try {
   })
   const debugOrigin = 'http://' + new URL(browserUrl).host
   const targets = await (await fetch(`${debugOrigin}/json`)).json()
-  const target = targets.find(entry => entry.url === `${origin}/test.html`)
+  const target = targets.find(entry => entry.url === 'about:blank')
   assert.ok(target, 'test target')
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
+  await navigateTestPage(socket, `${origin}/test.html`)
   let sequence = 0
   async function evaluate(expression) {
     const id = ++sequence

@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
@@ -87,10 +87,11 @@ try {
  const imported=await fetch(`${origin}/bookshelf/api/books?name=geometry.epub&title=Geometry&format=epub`,{method:'POST',body:archive});assert.equal(imported.status,201)
  const {book}=await imported.json()
  assert.equal((await fetch(`${origin}/bookshelf/api/books/${book.id}/state`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({settings:{pageMode:'paged',pageMargin:'standard',fontSize:19,pageSpread:'single'}})})).status,200)
- chrome=spawn(chromePath,['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking',`--user-data-dir=${join(temporary,'chrome')}`,'--remote-debugging-port=0','--window-size=1600,1000',`${origin}/test.html`],{stdio:['ignore','ignore','pipe']})
+ chrome=spawn(chromePath,[...browserLaunchArgs(), '--headless=new','--disable-gpu','--no-first-run','--disable-background-networking',`--user-data-dir=${join(temporary,'chrome')}`,'--remote-debugging-port=0','--window-size=1600,1000', 'about:blank'],{stdio:['ignore','ignore','pipe']})
  const browserUrl=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Chrome startup timeout')),10000);let log='';chrome.once('error',e=>{clearTimeout(timer);reject(e)});chrome.stderr.on('data',c=>{log+=c;const m=log.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(timer);resolve(m[1])}})})
- const targets=await(await fetch('http://'+new URL(browserUrl).host+'/json')).json();const target=targets.find(p=>p.url===`${origin}/test.html`);assert.ok(target)
+ const targets=await(await fetch('http://'+new URL(browserUrl).host+'/json')).json();const target=targets.find(p=>p.url=== 'about:blank');assert.ok(target)
  socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((r,j)=>{socket.onopen=r;socket.onerror=j})
+ await navigateTestPage(socket, `${origin}/test.html`)
  let sequence=0
  async function command(method,params){const id=++sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{socket.removeEventListener('message',listener);reject(Error('CDP timeout'))},45000);const listener=event=>{const m=JSON.parse(event.data);if(m.id!==id)return;clearTimeout(timer);socket.removeEventListener('message',listener);if(m.error||m.result?.exceptionDetails)reject(Error(JSON.stringify(m.error||m.result.exceptionDetails)));else resolve(m.result)};socket.addEventListener('message',listener);socket.send(JSON.stringify({id,method,params}))})}
  async function evaluate(expression){return (await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}))?.result?.value}
@@ -143,7 +144,7 @@ try {
     assert.ok(Math.abs(state.scroll/state.width-Math.round(state.scroll/state.width))<.002,'page scroll must align with viewport')
     assert.equal(Number(state.label.match(/total=(\d+)/)?.[1]),Math.ceil((state.scrollWidth-1)/state.width),'hidden probe and visible chapter agree on page count')
     if(turn===0)rows.push({margin,width:state.width,height:state.height,page:state.label})
-    await evaluate(`(async()=>{click('nextPage');await wait(60)})()`)
+    await evaluate(`(async()=>{click('nextPage');await settled()})()`)
    }
   }
  }

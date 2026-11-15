@@ -6,7 +6,7 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-snapshot-'))
@@ -34,7 +34,7 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
   chrome = spawn(chromePath, [
-    ...(process.platform === 'win32' && process.env.CI ? ['--no-sandbox'] : []),
+    ...browserLaunchArgs(),
     '--enable-logging=stderr', '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })

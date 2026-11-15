@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-layout-fonts-'))
@@ -70,7 +70,7 @@ try {
     assert.equal((await fetch(`${origin}/bookshelf/api/books/${book.id}/state`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ settings }) })).status, 200)
   }
   await fetch(`${origin}/bookshelf/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fontFamily: 'sans', pageMode: 'paged', pageSpread: 'single' }) })
-  chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1800,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
+  chrome = spawn(chromePath, [...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1800,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 10000)
     let output = ''
@@ -78,10 +78,11 @@ try {
     chrome.stderr.on('data', chunk => { output += chunk; const match = output.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (match) { clearTimeout(timer); resolve(match[1]) } })
   })
   const targets = await (await fetch('http://' + new URL(browserUrl).host + '/json')).json()
-  const target = targets.find(entry => entry.url === `${origin}/test.html`)
+  const target = targets.find(entry => entry.url === 'about:blank')
   assert.ok(target)
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
+  await navigateTestPage(socket, `${origin}/test.html`)
   let sequence = 0
   async function command(method, params) {
     const id = ++sequence

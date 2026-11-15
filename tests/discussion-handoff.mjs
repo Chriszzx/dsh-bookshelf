@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
-import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
+import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
@@ -165,7 +165,7 @@ try {
   const source = await fetch(`${origin}/bookshelf/api/books/${book.id}/file`)
   assert.ok(source.headers.get('x-bookshelf-source-revision')?.startsWith('shelf-file-v1:'), 'Host exposes the source revision')
 
-  chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1500,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
+  chrome = spawn(chromePath, [...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1500,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Chrome startup timeout')), 10000)
     let log = ''
@@ -173,10 +173,11 @@ try {
     chrome.stderr.on('data', chunk => { log += chunk; const match = log.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (match) { clearTimeout(timer); resolve(match[1]) } })
   })
   const targets = await (await fetch(`http://${new URL(browserUrl).host}/json`)).json()
-  const target = targets.find(value => value.url === `${origin}/test.html`)
+  const target = targets.find(value => value.url === 'about:blank')
   assert.ok(target)
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
+  await navigateTestPage(socket, `${origin}/test.html`)
   let sequence = 0
   async function command(method, params) {
     const id = ++sequence
