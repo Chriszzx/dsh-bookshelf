@@ -16,6 +16,7 @@ const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-import-'))
 process.env.DSH_HOME = join(temporary, 'home')
 const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
 let route, chrome, socket, server
+let delayedLibraryRead = false
 
 function epubBytes(title, author) {
   const container = `<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>`
@@ -86,6 +87,12 @@ try {
       }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
+      // The shell mounts before the initial library response. Exercise that
+      // state explicitly rather than depending on a fast local filesystem.
+      if (path === '/bookshelf/api/books' && req.method === 'GET' && !delayedLibraryRead) {
+        delayedLibraryRead = true
+        await new Promise(resolve => setTimeout(resolve, 250))
+      }
       await route.handler(req, res)
     } catch (error) { res.writeHead(500); res.end(String(error)) }
   })
@@ -142,6 +149,7 @@ try {
 
   // One Import button owns both entries in a dropdown menu.
   const picker = await evaluate(`(async()=>{
+    await until(()=>document.querySelector('.bs-empty-actions .bs-import-trigger'));
     const input=document.querySelector('.bs-file-input');
     window.__pickClicks=0;
     input.click=()=>{window.__pickClicks+=1};

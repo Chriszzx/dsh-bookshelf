@@ -44,9 +44,15 @@ try {
       if (match) { clearTimeout(timer); resolve(match[1]) }
     })
   })
-  const targets = await (await fetch(`http://${new URL(browserURL).host}/json`)).json()
-  const target = targets.find(page => page.type === 'page')
-  assert.ok(target, 'isolated test tab exists')
+  const discoveryStarted = Date.now()
+  let target, targets
+  while (!target) {
+    targets = await (await fetch(`http://${new URL(browserURL).host}/json`)).json()
+    target = targets.find(page => page.type === 'page' && page.url === `${origin}/test.html`)
+    if (target) break
+    assert.ok(Date.now() - discoveryStarted < 30000, `Test tab not found: ${JSON.stringify(targets.map(page => page.url))}`)
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
   let sequence = 0
