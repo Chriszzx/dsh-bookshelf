@@ -3,7 +3,7 @@ window.__ModuleLoader__.load({
   factory(require) {
     const React = require('react')
     const h = React.createElement
-    const { useCallback, useEffect, useMemo, useRef, useState } = React
+    const { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } = React
 
     const NS = 'bookshelf'
     const PANEL_ID = 'bookshelf'
@@ -1819,7 +1819,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const frameRef = useRef(0)
       const currentPageRef = useRef(1)
       const pdfDocumentRef = useRef(null)
-      const restorePageRef = useRef(1)
       const restoringRef = useRef(true)
       const pdfReadyRef = useRef(false)
       const settleTimerRef = useRef(0)
@@ -1956,7 +1955,6 @@ html.bb-paged body table tr{break-inside:avoid}
             const saved = readerState.stateRef.current && readerState.stateRef.current.progress
             const savedPage =
               saved && saved.format === 'pdf' && Number.isInteger(saved.page) ? Math.min(document.numPages, Math.max(1, saved.page)) : 1
-            restorePageRef.current = savedPage
             restoringRef.current = true
             currentPageRef.current = savedPage
             setCurrentPage(savedPage)
@@ -1993,22 +1991,6 @@ html.bb-paged body table tr{break-inside:avoid}
         },
         [savePdfProgress],
       )
-
-      useEffect(() => {
-        if (status !== 'ready' || !pdfDocument) return undefined
-        const target = Math.min(pdfDocument.numPages, Math.max(1, restorePageRef.current || 1))
-        const timer = setTimeout(() => {
-          scrollToPage(target)
-          settleTimerRef.current = setTimeout(() => {
-            restoringRef.current = false
-            savePdfProgress(target)
-          }, 180)
-        }, 90)
-        return () => {
-          clearTimeout(timer)
-          clearTimeout(settleTimerRef.current)
-        }
-      }, [status, pdfDocument, scrollToPage, savePdfProgress])
 
       useEffect(() => {
         if (status !== 'ready' || pdfDocument === null) return undefined
@@ -2076,26 +2058,46 @@ html.bb-paged body table tr{break-inside:avoid}
       }
       const toggleViewMode = () => {
         const next = viewMode === 'single' ? 'continuous' : 'single'
+        // Inserting preceding pages can emit a scroll before passive effects.
+        // Protect the selected page before changing the DOM.
+        restoringRef.current = true
         setViewMode(next)
         savePdfSettings({ pdfView: next })
       }
       const percent = pdfDocument ? Math.min(1, Math.max(0, currentPage / pdfDocument.numPages)) : 0
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready' || pdfDocument === null) return undefined
+        // Capture once, before layout-generated scroll events can replace it.
+        const target = Math.min(pdfDocument.numPages, Math.max(1, currentPageRef.current))
+        restoringRef.current = true
+        if (frameRef.current !== 0) {
+          cancelAnimationFrame(frameRef.current)
+          frameRef.current = 0
+        }
+        clearTimeout(jumpTimerRef.current)
+        jumpTimerRef.current = 0
         const timer = setTimeout(() => {
-          scrollToPage(currentPageRef.current)
+          scrollToPage(target)
+          settleTimerRef.current = setTimeout(() => {
+            scrollToPage(target)
+            restoringRef.current = false
+            savePdfProgress(target)
+          }, 180)
         }, 100)
-        return () => clearTimeout(timer)
-      }, [effectiveZoom, fitMode, viewMode, width, height, status, pdfDocument, scrollToPage])
+        return () => {
+          clearTimeout(timer)
+          clearTimeout(settleTimerRef.current)
+        }
+      }, [effectiveZoom, fitMode, viewMode, width, height, status, pdfDocument, scrollToPage, savePdfProgress])
 
       const onScroll = useCallback(() => {
-        if (viewMode === 'single') return
+        if (viewMode === 'single' || restoringRef.current) return
         if (frameRef.current !== 0) return
         frameRef.current = requestAnimationFrame(() => {
           frameRef.current = 0
           const node = scrollRef.current
-          if (node === null) return
+          if (node === null || restoringRef.current) return
           const rootTop = node.getBoundingClientRect().top
           const pages = node.querySelectorAll('[data-page-number]')
           let current = 1

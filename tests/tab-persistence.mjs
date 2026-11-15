@@ -114,7 +114,7 @@ try {
   delayWrites = true
   const pdf = await evaluate(`(async()=>{click('back');await openBook('PDF');await until(()=>document.querySelector('.bs-pdf-page'));await wait(1500);const before=labels();await roundTrip();check(labels()===before,'PDF initial page changed');click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'PDF immediate switch lost page: '+turned+' -> '+labels());return {before,after:labels()}})()`)
   console.log('PDF single + delayed writes', pdf)
-  const continuous = await evaluate(`(async()=>{click('pdfViewMode');await wait(600);const before=labels();await roundTrip();check(labels()===before,'PDF continuous page changed');check(document.querySelectorAll('.bs-pdf-page').length>1,'PDF view lost');return labels()})()`)
+  const continuous = await evaluate(`(async()=>{const before=labels();click('pdfViewMode');const scroller=document.querySelector('.bs-pdf-scroll');scroller.scrollTop=0;scroller.dispatchEvent(new Event('scroll'));await wait(600);check(labels()===before,'PDF mode switch lost current page: '+before+' -> '+labels());await roundTrip();check(labels()===before,'PDF continuous page changed');check(document.querySelectorAll('.bs-pdf-page').length>1,'PDF view lost');return labels()})()`)
   console.log('PDF continuous', continuous)
   delayWrites = false
   delayDefaults = true

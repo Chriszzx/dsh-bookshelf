@@ -27,6 +27,8 @@ jobs:
       - uses: browser-actions/setup-chrome@v1
         if: matrix.node == 24
         id: chrome
+        with:
+          chrome-version: stable
       - run: pnpm run test:browser
         if: matrix.node == 24
         env:

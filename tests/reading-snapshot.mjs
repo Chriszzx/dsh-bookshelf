@@ -23,7 +23,8 @@ try {
     }
     if (req.url === '/test.html') {
       res.setHeader('content-type', 'text/html')
-      res.end('<!doctype html><html><body><script type="module">import {run} from "/tests.mjs";window.result=run().then(value=>({ok:true,value}),error=>({ok:false,error:String(error),stack:error.stack}));</script></body></html>'); return
+      // Assign the promise immediately and include import failures in its result.
+      res.end('<!doctype html><html><body><script>window.result=import("/tests.mjs").then(module=>module.run()).then(value=>({ok:true,value}),error=>({ok:false,error:String(error),stack:error.stack}));</script></body></html>'); return
     }
     res.writeHead(404); res.end()
   })
@@ -31,7 +32,7 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
   chrome = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
-    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', `${origin}/test.html`,
+    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserURL = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 15000)
@@ -44,37 +45,55 @@ try {
     })
   })
   const targets = await (await fetch(`http://${new URL(browserURL).host}/json`)).json()
-  const target = targets.find(page => page.url === `${origin}/test.html`)
+  const target = targets.find(page => page.type === 'page')
   assert.ok(target, 'isolated test tab exists')
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject })
   let sequence = 0
-  const evaluate = () => new Promise((resolve, reject) => {
-    const id = ++sequence
-    const timer = setTimeout(() => { socket.removeEventListener('message', listener); reject(Error('Browser test timeout')) }, 45000)
-    const listener = event => {
-      const message = JSON.parse(event.data)
-      if (message.id !== id) return
-      clearTimeout(timer)
-      socket.removeEventListener('message', listener)
-      if (message.error || message.result?.exceptionDetails) reject(Error(JSON.stringify(message.error || message.result.exceptionDetails)))
-      else resolve(message.result.result.value)
-    }
-    socket.addEventListener('message', listener)
-    socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: {
-      expression: `(async()=>{const started=Date.now();while(!window.result){if(Date.now()-started>10000)throw Error('Test module failed to load');await new Promise(r=>setTimeout(r,25))}return await window.result})()`,
-      awaitPromise: true, returnByValue: true,
-    } }))
-  })
-  let result
-  const started = Date.now()
-  while (!result) {
-    try { result = await evaluate() } catch (error) {
-      // CDP may attach to the initial about:blank context just before navigation.
-      // Reattach only for that specific startup race, never rerun a failed case.
-      if (!error.message.includes('Execution context was destroyed') || Date.now() - started > 10000) throw error
-    }
+  function command(method, params = {}) {
+    return new Promise((resolve, reject) => {
+      const id = ++sequence
+      const timer = setTimeout(() => { socket.removeEventListener('message', listener); reject(Error(`Browser command timed out: ${method}`)) }, 45000)
+      const listener = event => {
+        const message = JSON.parse(event.data)
+        if (message.id !== id) return
+        clearTimeout(timer)
+        socket.removeEventListener('message', listener)
+        if (message.error || message.result?.exceptionDetails) reject(Error(JSON.stringify(message.error || message.result.exceptionDetails)))
+        else resolve(message.result)
+      }
+      socket.addEventListener('message', listener)
+      socket.send(JSON.stringify({ id, method, params }))
+    })
   }
+  // Attach before navigation, then wait for this document's load event instead
+  // of polling a global in a possibly obsolete startup execution context.
+  await command('Page.enable')
+  let loadTimer, loadListener
+  const loaded = new Promise((resolve, reject) => {
+    let navigated = false
+    loadListener = event => {
+      const message = JSON.parse(event.data)
+      if (message.method === 'Page.frameNavigated' && message.params.frame.url === `${origin}/test.html`) navigated = true
+      if (navigated && message.method === 'Page.loadEventFired') resolve()
+    }
+    socket.addEventListener('message', loadListener)
+    loadTimer = setTimeout(() => reject(Error('Test document did not finish navigation')), 30000)
+  })
+  loaded.catch(() => {})
+  try {
+    const navigation = await command('Page.navigate', { url: `${origin}/test.html` })
+    assert.equal(navigation.errorText, undefined, navigation.errorText)
+    await loaded
+  } finally {
+    clearTimeout(loadTimer)
+    socket.removeEventListener('message', loadListener)
+  }
+  const evaluated = await command('Runtime.evaluate', {
+    expression: `(() => { if (!window.result) throw Error('Test bootstrap missing at ' + location.href); return window.result })()`,
+    awaitPromise: true, returnByValue: true,
+  })
+  const result = evaluated.result.value
   assert.equal(result.ok, true, result.stack || result.error)
   console.log(JSON.stringify(result.value, null, 2))
   console.log(`PASS: ${result.value.count} isolated Chrome snapshot cases`)
