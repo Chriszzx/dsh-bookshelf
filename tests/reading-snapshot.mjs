@@ -72,25 +72,42 @@ try {
       socket.send(JSON.stringify({ id, method, params }))
     })
   }
-  // Use fresh, short evaluations while the startup document navigates. Holding
-  // one awaited promise in about:blank can keep observing an obsolete context.
-  // No test case is rerun: the page assigns and starts its result exactly once.
+  // Snapshot cases create iframe execution contexts while they run. Bind the
+  // result evaluation to the actual top-level document, never CDP's implicit
+  // context (which may still point at a startup or fixture document).
+  const contexts = new Map()
+  const contextListener = event => {
+    const message = JSON.parse(event.data)
+    if (message.method === 'Runtime.executionContextCreated') {
+      const context = message.params.context
+      if (context.auxData?.isDefault !== false) contexts.set(context.id, context)
+    } else if (message.method === 'Runtime.executionContextDestroyed') contexts.delete(message.params.executionContextId)
+    else if (message.method === 'Runtime.executionContextsCleared') contexts.clear()
+  }
+  socket.addEventListener('message', contextListener)
+  await command('Runtime.enable')
   const startup = Date.now()
-  let readiness = null
-  while (true) {
-    try {
-      const state = await command('Runtime.evaluate', {
-        expression: '({url:location.href,started:Boolean(window.result)})', returnByValue: true,
-      })
-      readiness = state.result.value
-      if (readiness.url === `${origin}/test.html` && readiness.started) break
-    } catch (error) {
-      if (!error.message.includes('Execution context was destroyed')) throw error
+  let mainContextId, readiness = []
+  while (mainContextId === undefined) {
+    readiness = []
+    for (const contextId of contexts.keys()) {
+      try {
+        const state = await command('Runtime.evaluate', {
+          contextId, expression: '({url:location.href,started:Boolean(window.result)})', returnByValue: true,
+        })
+        const value = state.result.value
+        readiness.push({ contextId, ...value })
+        if (value.url === `${origin}/test.html` && value.started) { mainContextId = contextId; break }
+      } catch (error) {
+        if (!/Execution context was destroyed|Cannot find context/.test(error.message)) throw error
+      }
     }
     assert.ok(Date.now() - startup < 30000, `Test bootstrap not ready: ${JSON.stringify(readiness)}`)
-    await new Promise(resolve => setTimeout(resolve, 100))
+    if (mainContextId === undefined) await new Promise(resolve => setTimeout(resolve, 100))
   }
+  socket.removeEventListener('message', contextListener)
   const evaluated = await command('Runtime.evaluate', {
+    contextId: mainContextId,
     expression: `(() => { if (!window.result) throw Error('Test bootstrap missing at ' + location.href); return window.result })()`,
     awaitPromise: true, returnByValue: true,
   })

@@ -46,7 +46,20 @@ window.inspect=()=>{
    const col=Math.floor((q.left-left+1)/step),colLeft=left+col*step,colRight=colLeft+step-parseFloat(s.columnGap);
    visible++;if(col<0||col>=columns||q.left<colLeft-1||q.right>colRight+1||q.top<top-1||q.bottom>bottom+1)leaks.push({left:q.left,right:q.right,top:q.top,bottom:q.bottom,text:node.textContent.slice(0,35)});
  }}
- return {width:b.getBoundingClientRect().width,height:b.getBoundingClientRect().height,left,right,gap:parseFloat(s.columnGap),columns,column:step-parseFloat(s.columnGap),padded:b.hasAttribute('data-bb-pad-spread'),scroll:b.scrollLeft,scrollWidth:b.scrollWidth,clientWidth:b.clientWidth,label:label(),visible,leaks:leaks.slice(0,4)};
+ return {rootScrollX:w.scrollX,rootScrollY:w.scrollY,width:b.getBoundingClientRect().width,height:b.getBoundingClientRect().height,left,right,gap:parseFloat(s.columnGap),columns,column:step-parseFloat(s.columnGap),padded:b.hasAttribute('data-bb-pad-spread'),scroll:b.scrollLeft,scrollWidth:b.scrollWidth,clientWidth:b.clientWidth,label:label(),visible,leaks:leaks.slice(0,4)};
+};
+window.settled=async()=>{
+ const start=Date.now();let stableAt=0,last='';
+ while(Date.now()-start<12000){
+  const s=inspect(),signature=JSON.stringify(s),step=s.width/s.columns;
+  const aligned=Math.abs(s.scroll/step-Math.round(s.scroll/step))<.002;
+  if(s.visible>0&&!s.leaks.length&&aligned&&s.label){
+   if(signature!==last)stableAt=Date.now();
+   else if(Date.now()-stableAt>=350)return s;
+  }else stableAt=Date.now();
+  last=signature;await wait(50);
+ }
+ throw Error('Paged layout did not settle: '+JSON.stringify(inspect()));
 };
 window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,s=w.getComputedStyle(d.body);const r=d.caretRangeFromPoint(parseFloat(s.paddingLeft)+3,parseFloat(s.paddingTop)+3);if(!r)throw Error('no anchor');window.anchor={node:r.startContainer,offset:r.startOffset};return {text:r.startContainer.textContent.slice(r.startOffset,r.startOffset+40)}};
 window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return {visible:q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1,left:q.left,top:q.top}};
@@ -119,7 +132,7 @@ try {
  for(const margin of ['Standard','Compact','Fill']){
   await evaluate(`(async()=>{if(!document.querySelector('.bs-reader-settings'))click('readingSettings');segment('margin${margin}');await wait(350)})()`)
   for(const [width,height] of [[1200,850],[807,701],[511,600],[1049.5,810.5]]){
-   await evaluate(`(async()=>{const root=document.getElementById('root');root.style.width='${width}px';root.style.height='${height}px';await wait(650)})()`)
+   await evaluate(`(async()=>{const root=document.getElementById('root');root.style.width='${width}px';root.style.height='${height}px';await settled()})()`)
    for(let turn=0;turn<3;turn++){
     const state=await evaluate('inspect()');assert.deepEqual(state.leaks,[],`${margin} ${width}x${height} page ${turn}: no adjacent/partial lines`);assert.ok(state.visible>0)
     assert.ok(Math.abs(state.column+state.gap-state.width)<.1,'column + gap must equal actual reading viewport')
@@ -130,10 +143,10 @@ try {
    }
   }
  }
- await evaluate(`(async()=>{segment('marginStandard');document.getElementById('root').style.width='1200px';await wait(650);click('nextPage');await wait(100)})()`)
+ await evaluate(`(async()=>{segment('marginStandard');document.getElementById('root').style.width='1200px';await settled();click('nextPage');await wait(100)})()`)
  const anchor=await evaluate('capture()')
  for(const [width,height] of [[819,650],[1333,940],[611,777]]){
-  await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';document.getElementById('root').style.height='${height}px';await wait(650)})()`)
+  await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';document.getElementById('root').style.height='${height}px';await settled()})()`)
   const result=await evaluate('anchorVisible()');assert.ok(result.visible,`same text anchor survives resize to ${width}x${height}: ${JSON.stringify(result)}`)
  }
  for(const action of ['fontLarger','fontLarger','fontLarger','toc','toc','fontSmaller','fontSmaller','fontSmaller']){
@@ -153,7 +166,7 @@ try {
  await checkProgressGeometry()
  const dualAnchor=await evaluate('capture()')
  for(const width of [1000,1500,1100,1500]){
-  await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await wait(650)})()`)
+  await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await settled()})()`)
   const state=await evaluate('inspect()');assert.equal(state.columns,width===1500?2:1)
   assert.ok((await evaluate('anchorVisible()')).visible,'same text remains visible through single/dual reflow');assert.deepEqual(state.leaks,[])
  }
@@ -163,13 +176,13 @@ try {
  for(let i=0;i<6;i++)await evaluate(`(async()=>{click('fontSmaller');await wait(60)})()`)
  await evaluate('wait(650)');assert.equal((await evaluate('inspect()')).columns,2);assert.ok((await evaluate('anchorVisible()')).visible)
  for(const choice of ['spreadSingle','spreadAuto']){
-  await evaluate(`(async()=>{segment('${choice}');await wait(650)})()`)
+  await evaluate(`(async()=>{segment('${choice}');await settled()})()`)
   assert.equal((await evaluate('inspect()')).columns,choice==='spreadSingle'?1:2)
   assert.ok((await evaluate('anchorVisible()')).visible)
  }
  const tailParities=new Set()
  for(let height=810;height<=950 && tailParities.size<2;height+=11){
-  await evaluate(`(async()=>{document.getElementById('root').style.height='${height}px';await wait(650);document.querySelector('.bs-progress').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));await wait(250)})()`)
+  await evaluate(`(async()=>{document.getElementById('root').style.height='${height}px';await settled();document.querySelector('.bs-progress').dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));await wait(250)})()`)
   const state=await evaluate('inspect()'),total=Number(state.label.match(/total=(\d+)/)?.[1]);tailParities.add(total%2)
   assert.equal(state.columns,2);assert.deepEqual(state.leaks,[],'tail is aligned without neighboring fragments')
   assert.ok(Math.abs(state.scroll/state.width-Math.round(state.scroll/state.width))<.002,'odd tail must not clamp between spreads')
