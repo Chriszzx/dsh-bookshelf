@@ -9,11 +9,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
-const fixtures = process.env.BOOKSHELF_TEST_FIXTURES || '/tmp/batch1-test'
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-handoff-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
@@ -136,6 +136,7 @@ window.diagnostics=()=>({createCalls,commandCalls,openCalls,openedKinds,draftWri
 </script></body></html>`
 
 try {
+  const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
   server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://test').pathname
@@ -164,7 +165,7 @@ try {
   const source = await fetch(`${origin}/bookshelf/api/books/${book.id}/file`)
   assert.ok(source.headers.get('x-bookshelf-source-revision')?.startsWith('shelf-file-v1:'), 'Host exposes the source revision')
 
-  chrome = spawn(process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1500,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
+  chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1500,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Chrome startup timeout')), 10000)
     let log = ''

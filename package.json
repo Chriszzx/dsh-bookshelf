@@ -29,6 +29,13 @@
     "node": "^22.19.0 || >=24.0.0",
     "dsh": ">=0.2.0-rc.2 <0.3.0"
   },
+  "packageManager": "pnpm@11.28.5",
+  "scripts": {
+    "test": "node scripts/run-checks.mjs unit",
+    "test:syntax": "node scripts/check-syntax.mjs",
+    "test:browser": "node tests/run-browser.mjs",
+    "test:all": "node scripts/run-checks.mjs all"
+  },
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -49,6 +56,7 @@
     "icon.svg",
     "assets/**",
     "README.md",
+    "docs/DEVELOPMENT.md",
     "LICENSE"
   ],
   "dsh": {
@@ -77,5 +85,9 @@
   "os": [
     "darwin",
     "win32"
-  ]
+  ],
+  "devDependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
 }

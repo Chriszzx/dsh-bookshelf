@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '5'
+    const ASSET_VERSION = '6'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     const BOOKS_TAB_KIND = 'bookshelf-reader'
@@ -23,11 +23,14 @@ window.__ModuleLoader__.load({
     const MAX_IMPORT_BYTES = 256 * 1024 * 1024
 
     const CSS = `
-.bs-root{box-sizing:border-box;position:relative;display:flex;flex-direction:column;height:100%;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
+.bs-root{--bs-top-clearance:0px;--bs-popover-top:calc(var(--bs-top-clearance) + 56px);box-sizing:border-box;position:relative;display:flex;flex-direction:column;container:bookshelf / inline-size;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
+/* Windows captions already sit above main; only macOS overlays its chrome. */
+:root[data-platform="darwin"] .bs-root{--bs-top-clearance:var(--dsh-frame-top-clearance,0px)}
+:root[data-platform] .bs-root:fullscreen{--bs-top-clearance:0px}
 .bs-root *,.bs-root *::before,.bs-root *::after{box-sizing:border-box}
 .bs-file-input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .bs-shelf{display:flex;flex-direction:column;height:100%;min-height:0}
-.bs-header{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:calc(var(--dsh-frame-top-clearance,0px) + 20px) 32px 16px}
+.bs-header{flex:none;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:calc(var(--bs-top-clearance,0px) + 20px) 24px 16px}
 .bs-heading{min-width:0}
 .bs-title{margin:0;font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em}
 .bs-subtitle{margin:4px 0 0;font-size:12.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
@@ -54,8 +57,8 @@ window.__ModuleLoader__.load({
 .bs-icon-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .bs-icon-button:disabled{opacity:.4;cursor:default}
 .bs-icon-button[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
-.bs-scroll{flex:1;min-height:0;overflow:auto;padding:6px 32px 56px;overscroll-behavior:contain}
-.bs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:24px 20px;max-width:1180px;margin:0 auto}
+.bs-scroll{flex:1;min-width:0;min-height:0;overflow:auto;padding:6px 24px 56px;overscroll-behavior:contain}
+.bs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(164px,100%),176px));justify-content:start;gap:24px 20px;min-width:0;width:100%;margin:0}
 .bs-card{position:relative;display:flex;flex-direction:column;gap:9px;min-width:0}
 .bs-cover{position:relative;display:block;width:100%;aspect-ratio:3/4;margin:0;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden;text-align:left;color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12),0 10px 24px -16px rgba(0,0,0,.55)}
 button.bs-cover{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}
@@ -64,7 +67,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-cover-wrap{position:relative;z-index:1;display:block}
 .bs-cover-frame{position:absolute;inset:0;display:flex;flex-direction:column;padding:34px 14px 13px}
 .bs-cover-frame::before{content:"";position:absolute;inset:8px;border:1px solid rgba(255,255,255,.2);border-radius:4px;pointer-events:none}
-.bs-cover-title{position:relative;padding-right:26px;font-family:'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif CJK SC',serif;font-size:15.5px;line-height:1.35;font-weight:600;letter-spacing:.01em;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.28)}
+.bs-cover-title{position:relative;padding-right:26px;font-family:'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif;font-size:15.5px;line-height:1.35;font-weight:600;letter-spacing:.01em;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.28)}
 .bs-cover-author{position:relative;margin-top:auto;padding-top:12px;padding-right:34px;font-size:11px;line-height:1.4;color:rgba(246,241,231,.76);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-cover-format{position:absolute;top:10px;left:10px;right:auto;padding:2px 5px;border-radius:3px;background:rgba(0,0,0,.3);color:rgba(255,255,255,.86);font-size:9px;font-weight:600;letter-spacing:.12em;line-height:1.4;z-index:3}
 .bs-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;opacity:0;background:var(--dsw-alias-bg-base);transition:opacity .18s ease}
@@ -72,7 +75,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-cover-frame::before{z-index:2}
 .bs-cover-format{z-index:3}
 .bs-cover-title,.bs-cover-author{z-index:0}
-.bs-shelf-tools{flex:none;display:flex;align-items:center;gap:10px;padding:9px 20px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
+.bs-shelf-tools{flex:none;display:flex;align-items:center;gap:10px;padding:9px 24px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
 .bs-search{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:32px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary)}
 .bs-search:focus-within{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-brand-primary) 14%,transparent)}
 .bs-search-input{flex:1;min-width:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;line-height:1.4;outline:none}
@@ -143,7 +146,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-empty-title{margin:0;font-size:16px;line-height:1.4;font-weight:600}
 .bs-empty-text{margin:0;max-width:34em;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
 .bs-empty-actions{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
-.bs-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 32px 10px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
+.bs-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 24px 10px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12.5px;line-height:1.5;overflow-wrap:anywhere}
 .bs-banner-error{border-color:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-state-error-primary)}
 .bs-banner-ok{border-color:var(--dsw-alias-state-success-primary);color:var(--dsw-alias-state-success-primary)}
 .bs-banner-close{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;flex:none;opacity:.75}
@@ -154,7 +157,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 @keyframes bs-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.bs-spinner{animation-duration:2.4s}button.bs-cover{transition:none}}
 .bs-reader{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base)}
-.bs-reader-bar{flex:none;display:flex;align-items:center;gap:8px;min-height:54px;padding:calc(var(--dsh-frame-top-clearance,0px) + 10px) 18px 10px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-reader-bar{flex:none;display:flex;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .bs-reader-title-wrap{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;padding:0 4px}
 .bs-reader-title{font-size:14px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-sub{font-size:11.5px;line-height:1.35;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -181,10 +184,10 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-bookmark-delete:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-error-primary)}
 .bs-bookmark-delete:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .bs-bookmark-empty{padding:12px 8px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
-.bs-bookmarks-panel{position:absolute;top:calc(var(--dsh-frame-top-clearance,0px) + 58px);right:16px;z-index:6;width:min(300px,calc(100vw - 40px));max-height:min(60vh,420px);overflow:auto;padding:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-overlay);box-shadow:0 18px 48px -20px rgba(0,0,0,.55)}
+.bs-bookmarks-panel{position:absolute;top:var(--bs-popover-top);right:16px;z-index:6;width:min(300px,calc(100vw - 40px));max-height:min(60vh,420px);overflow:auto;padding:12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-overlay);box-shadow:0 18px 48px -20px rgba(0,0,0,.55)}
 .bs-bookmarks-panel-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .bs-popover-backdrop{position:absolute;inset:0;z-index:8;background:transparent}
-.bs-reader-settings{position:absolute;top:calc(var(--dsh-frame-top-clearance,0px) + 58px);right:14px;z-index:9;width:min(332px,calc(100vw - 28px));max-height:calc(100vh - 110px);overflow:auto;padding:10px 13px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-reader-settings{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;width:min(332px,calc(100vw - 28px));max-height:calc(100% - var(--bs-popover-top) - 12px);overflow:auto;padding:10px 13px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
 .bs-settings-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 4px;padding:0 0 6px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .bs-settings-title{font-size:12.5px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .bs-setting-row{display:flex;flex-direction:column;gap:5px;padding:7px 0}
@@ -206,12 +209,14 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-stepper-button:disabled{opacity:.4;cursor:default}
 .bs-stepper-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .bs-stepper-value{min-width:26px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-primary)}
-.bs-focus-controls{position:absolute;top:calc(var(--dsh-frame-top-clearance,0px) + 10px);right:14px;z-index:7;display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-overlay);box-shadow:0 10px 30px -16px rgba(0,0,0,.55);opacity:.5;transition:opacity .15s ease}
+.bs-focus-controls{position:absolute;top:calc(var(--bs-top-clearance,0px) + 10px);right:14px;z-index:7;display:flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-overlay);box-shadow:0 10px 30px -16px rgba(0,0,0,.55);opacity:.5;transition:opacity .15s ease}
 .bs-focus-controls:hover,.bs-focus-controls:focus-within{opacity:1}
 .bs-reader:fullscreen{width:100vw;height:100vh;border-radius:0;background:var(--dsw-alias-bg-base)}
-.bs-reader:fullscreen .bs-reader-bar{padding-top:10px}
+.bs-reader:fullscreen .bs-reader-bar{padding-top:6px}
 .bs-reader:fullscreen .bs-focus-controls{top:10px}
-.bs-reader:fullscreen .bs-reader-settings{top:58px}
+.bs-settings-section{margin:12px 0 2px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.bs-font-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bs-font-status{margin:4px 0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
 .bs-divider{width:1px;height:16px;margin:0 5px;background:var(--dsw-alias-border-l1)}
 .bs-text-button{font:inherit;font-size:11.5px;line-height:1.4;padding:5px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap}
 .bs-text-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
@@ -245,15 +250,14 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-epub-frame-wrap{display:flex;flex:1;min-width:0;min-height:0;justify-content:center;overflow:hidden}
 .bs-epub-frame{display:block;width:100%;height:100%;border:0;background:transparent}
 .bs-epub-probe{position:fixed;left:-100000px;top:0;width:1px;height:1px;border:0;visibility:hidden;pointer-events:none}
-@media (max-width:720px){
-  .bs-header{padding-left:20px;padding-right:20px}
+@container bookshelf (max-width:720px){
+  .bs-header{padding-left:20px;padding-right:20px;flex-wrap:wrap;align-items:center}
   .bs-scroll{padding-left:20px;padding-right:20px}
   .bs-banner{margin-left:20px;margin-right:20px}
-  .bs-reader-sub{display:none}
   .bs-epub-toc{position:absolute;left:0;top:0;bottom:0;z-index:4;width:min(82vw,290px);background:var(--dsw-alias-bg-overlay);box-shadow:18px 0 40px -28px rgba(0,0,0,.8)}
-  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px}
-  .bs-reader-title-wrap{padding:0 2px}
-  .bs-reader-controls{gap:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:3px}
+  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;flex-wrap:wrap}
+  .bs-reader-title-wrap{padding:0 2px;min-width:120px}
+  .bs-reader-controls{gap:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:3px;width:100%}
   .bs-reader-controls .bs-divider{margin:0 2px}
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
@@ -294,7 +298,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
     const READING_CSS = `
 :root{color-scheme:var(--bb-scheme,light)}
 html,body{margin:0;padding:0;background:var(--bb-bg,transparent)}
-body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif CJK SC',serif);font-size:var(--bb-font-size,19px);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
+body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif);font-size:var(--bb-font-size,19px);font-weight:var(--bb-font-weight,normal);font-style:var(--bb-font-style,normal);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
 body > :first-child{margin-top:0}
 h1,h2,h3,h4,h5,h6{margin:1.55em 0 .65em;font-weight:600;line-height:1.35;text-align:left;text-wrap:balance}
 h1{font-size:1.6em}h2{font-size:1.34em}h3{font-size:1.16em}
@@ -346,7 +350,7 @@ html.bb-paged body table tr{break-inside:avoid}
 `
 
     const READER_FONTS = {
-      serif: "'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif CJK SC',serif",
+      serif: "'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif",
       sans: "-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
       mono: "ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace",
     }
@@ -361,6 +365,9 @@ html.bb-paged body table tr{break-inside:avoid}
 
     const DEFAULT_READING_SETTINGS = {
       fontFamily: 'serif',
+      fontName: '',
+      fontWeight: 0,
+      fontStyle: 'normal',
       fontSize: 19,
       lineHeight: 1.85,
       pageMargin: 'standard',
@@ -639,6 +646,21 @@ html.bb-paged body table tr{break-inside:avoid}
     let pdfjsPromise = null
     let epubModulePromise = null
     let readingSnapshotPromise = null
+    let readingFontsPromise = null
+    let readingFonts = null
+
+    function loadReadingFonts(base) {
+      if (readingFontsPromise === null) {
+        readingFontsPromise = import(absoluteServiceUrl(base, `${ASSET_ROOT}/reading-fonts.mjs?v=${ASSET_VERSION}`)).then(module => {
+          readingFonts = module
+          return module
+        }).catch(error => {
+          readingFontsPromise = null
+          throw error
+        })
+      }
+      return readingFontsPromise
+    }
 
     function loadReadingSnapshot(base) {
       if (readingSnapshotPromise === null) {
@@ -723,7 +745,7 @@ html.bb-paged body table tr{break-inside:avoid}
 .bsb-button:disabled{opacity:.5;cursor:default}
 .bsb-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
 .bsb-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:24px clamp(18px,4vw,30px) 40px}
-.bsb-segment{white-space:pre-wrap;overflow-wrap:break-word;font-family:'Iowan Old Style','Songti SC','STSong','Noto Serif CJK SC',serif;font-size:17px;line-height:1.8;margin:0 auto;max-width:38em;user-select:text}
+.bsb-segment{white-space:pre-wrap;overflow-wrap:break-word;font-family:'Iowan Old Style','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif;font-size:17px;line-height:1.8;margin:0 auto;max-width:38em;user-select:text}
 .bsb-message{font-size:13px;line-height:1.7;color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere}
 .bsb-picker{display:flex;flex-direction:column;gap:8px;padding:12px 16px;border-bottom:1px solid var(--dsw-alias-border-l1)}
 .bsb-picker-title{font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
@@ -1136,6 +1158,85 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    function ReadingFontSettings({ t, settings, onChange }) {
+      const [module, setModule] = useState(null)
+      const [catalog, setCatalog] = useState(null)
+      const [styles, setStyles] = useState({ known: false, weights: [], italic: false })
+      const [busy, setBusy] = useState(false)
+      const [message, setMessage] = useState('')
+      const mounted = useRef(false)
+      useEffect(() => {
+        mounted.current = true
+        loadReadingFonts(transportBase()).then(async value => {
+          if (!mounted.current) return
+          setModule(value)
+          const result = await value.getFontCatalog()
+          if (mounted.current) setCatalog(result)
+        }).catch(() => { if (mounted.current) setMessage('fontLoadFailed') })
+        return () => { mounted.current = false }
+      }, [])
+      useEffect(() => {
+        let cancelled = false
+        setStyles({ known: false, weights: [], italic: false })
+        if (module && settings.fontName) {
+          module.getFontStyles(settings.fontName).then(result => { if (!cancelled) setStyles(result) })
+        }
+        return () => { cancelled = true }
+      }, [module, catalog, settings.fontName])
+      const scan = () => {
+        if (!module || busy) return
+        // Do not await module loading here: preserve the click's user activation.
+        const request = module.scanSystemFonts()
+        setBusy(true)
+        setMessage('')
+        request.then(result => {
+          if (!mounted.current) return
+          setCatalog(result)
+          setMessage(result.fonts.length ? 'fontScanComplete' : 'fontScanEmpty')
+        }).catch(error => {
+          if (!mounted.current) return
+          setMessage(error.name === 'NotAllowedError' ? 'fontAccessDenied' : error.name === 'NotSupportedError' || error.name === 'SecurityError' ? 'fontAccessUnavailable' : 'fontScanFailed')
+        }).finally(() => { if (mounted.current) setBusy(false) })
+      }
+      const fonts = catalog?.fonts || []
+      const selected = settings.fontName || ''
+      const listed = fonts.some(font => font.family === selected)
+      const weights = [...new Set([...(selected ? (settings.fontStyle === 'italic' ? styles.italicWeights : styles.normalWeights) || [] : [400, 700]), ...(settings.fontWeight ? [settings.fontWeight] : [])])].sort((a, b) => a - b)
+      const row = (label, value, options, change) => h('label', { className: 'bs-setting-row' },
+        h('span', { className: 'bs-setting-label' }, t(label)),
+        h('select', { className: 'bs-setting-select', 'aria-label': t(label), value, onChange: event => change(event.target.value) },
+          options.map(option => h('option', { key: String(option.value), value: option.value }, option.label))))
+      return h(React.Fragment, null,
+        h('h3', { className: 'bs-settings-section' }, t('fontSection')),
+        row('fontFamily', selected ? `font:${selected}` : `preset:${settings.fontFamily || 'serif'}`, [
+          { value: 'preset:serif', label: t('fontDefaultSerif') },
+          { value: 'preset:sans', label: t('fontDefaultSans') },
+          { value: 'preset:mono', label: t('fontDefaultMono') },
+          ...(selected && !listed ? [{ value: `font:${selected}`, label: selected }] : []),
+          ...fonts.map(font => ({ value: `font:${font.family}`, label: font.family })),
+        ], value => {
+          onChange(value.startsWith('preset:')
+            ? { fontName: '', fontFamily: value.slice(7), fontWeight: 0, fontStyle: 'normal' }
+            : { fontName: value.slice(5), fontWeight: 0, fontStyle: 'normal' })
+        }),
+        h('div', { className: 'bs-font-actions' },
+          h('button', { type: 'button', className: 'bs-text-button', disabled: !module || busy, onClick: scan, 'aria-label': t('scanSystemFonts') }, busy ? t('fontScanning') : t('scanSystemFonts'))),
+        h('p', { className: 'bs-font-status', role: 'status' }, t(message || (catalog?.complete ? 'fontScanComplete' : 'fontCommonHint'))),
+        selected && catalog?.complete && !listed ? h('p', { className: 'bs-font-status', role: 'status' }, t('fontMissingHint')) : null,
+        h('div', { className: 'bs-settings-divider' }),
+        h('h3', { className: 'bs-settings-section' }, t('typographySection')),
+        row('fontWeight', settings.fontWeight || 0, [{ value: 0, label: t('fontWeightAuto') }, ...weights.map(weight => ({ value: weight, label: String(weight) }))], value => onChange({ fontWeight: Number(value) })),
+        row('fontStyle', settings.fontStyle || 'normal', [
+          { value: 'normal', label: t('fontStyleNormal') },
+          ...(!selected || styles.italic || settings.fontStyle === 'italic' ? [{ value: 'italic', label: t('fontStyleItalic') }] : []),
+        ], value => {
+          const supported = value === 'italic' ? styles.italicWeights : styles.normalWeights
+          onChange({ fontStyle: value, fontWeight: !selected || supported?.includes(settings.fontWeight) ? settings.fontWeight || 0 : 0 })
+        }),
+        selected && !styles.known ? h('p', { className: 'bs-font-status' }, t('fontStylesHint')) : null,
+      )
+    }
+
     function ReaderSettingsPopover({ t, settings, onChange, onClose, title, hint, workspaces, discussionWorkspace, onDiscussionWorkspaceChange, appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange }) {
       const heading = title || t('readingSettings')
       const workspaceChoices = Array.isArray(workspaces) ? workspaces.filter((item) => item && typeof item.workspaceId === 'string') : null
@@ -1204,16 +1305,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 h('div', { className: 'bs-settings-divider' }),
               )
             : null,
-          h(ReadingSegmented, {
-            label: t('fontFamily'),
-            value: settings.fontFamily,
-            options: [
-              { value: 'serif', label: t('fontSerif') },
-              { value: 'sans', label: t('fontSans') },
-              { value: 'mono', label: t('fontMono') },
-            ],
-            onChange: (value) => onChange({ fontFamily: value }),
-          }),
+          h(ReadingFontSettings, { t, settings, onChange }),
           h(
             'div',
             { className: 'bs-setting-row' },
@@ -1302,6 +1394,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function ReaderShell({ t, book, onBack, controls, children, state, progress }) {
       const shellRef = useRef(null)
+      const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
       const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -1321,6 +1414,20 @@ html.bb-paged body table tr{break-inside:avoid}
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [focusMode])
+
+      useEffect(() => {
+        const shell = shellRef.current, chrome = chromeRef.current
+        if (!shell || !chrome) return undefined
+        const measure = () => {
+          const top = Math.ceil(chrome.getBoundingClientRect().bottom - shell.getBoundingClientRect().top + 8)
+          shell.style.setProperty('--bs-popover-top', `${top}px`)
+        }
+        measure()
+        if (typeof ResizeObserver === 'undefined') return undefined
+        const observer = new ResizeObserver(measure)
+        observer.observe(chrome)
+        return () => observer.disconnect()
+      }, [focusMode, isFullscreen])
 
       const toggleFullscreen = useCallback(() => {
         const node = shellRef.current
@@ -1345,7 +1452,7 @@ html.bb-paged body table tr{break-inside:avoid}
           ? null
           : h(
               'header',
-              { className: 'bs-reader-bar' },
+              { className: 'bs-reader-bar', ref: chromeRef },
               h(
                 'button',
                 {
@@ -1400,7 +1507,7 @@ html.bb-paged body table tr{break-inside:avoid}
         focusMode
           ? h(
               'div',
-              { className: 'bs-focus-controls' },
+              { className: 'bs-focus-controls', ref: chromeRef },
               h(
                 'button',
                 {
@@ -1472,7 +1579,9 @@ html.bb-paged body table tr{break-inside:avoid}
       const margins = PAGE_MARGINS[settings.pageMargin] || PAGE_MARGINS.standard
       const root = documentNode.documentElement
       const body = documentNode.body
-      root.style.setProperty('--bb-font-family', READER_FONTS[settings.fontFamily] || READER_FONTS.serif)
+      root.style.setProperty('--bb-font-family', readingFonts ? readingFonts.fontStack(settings) : READER_FONTS[settings.fontFamily] || READER_FONTS.serif)
+      root.style.setProperty('--bb-font-weight', settings.fontWeight ? String(settings.fontWeight) : 'normal')
+      root.style.setProperty('--bb-font-style', settings.fontStyle === 'italic' ? 'italic' : 'normal')
       root.style.setProperty('--bb-font-size', `${Math.min(30, Math.max(12, Math.round(settings.fontSize || 19)))}px`)
       root.style.setProperty('--bb-line-height', String(Math.min(2.5, Math.max(1.2, settings.lineHeight || 1.85))))
       root.style.setProperty('--bb-max-width', margins.maxWidth)
@@ -2657,6 +2766,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 if (!cancelled) setSnapshotLoadError(failure instanceof Error ? failure.message : String(failure))
                 return null
               }),
+              loadReadingFonts(base),
             ])
             const response = await fetch(resourceUrl(base, `${API_ROOT}/books/${book.id}/file`))
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -2672,6 +2782,13 @@ html.bb-paged body table tr{break-inside:avoid}
               ...DEFAULT_READING_SETTINGS,
               ...(defaultSettings || {}),
               ...stored,
+            }
+            // An old per-book preset is an explicit override, including when
+            // a newer global default now selects a named font or font style.
+            if (typeof stored.fontFamily === 'string' && typeof stored.fontName !== 'string') {
+              nextSettings.fontName = ''
+              nextSettings.fontWeight = 0
+              nextSettings.fontStyle = 'normal'
             }
             if (typeof stored.pageMargin !== 'string' && typeof stored.readingWidth === 'string') {
               nextSettings.pageMargin = stored.readingWidth === 'wide' ? 'compact' : 'standard'
@@ -3072,7 +3189,11 @@ html.bb-paged body table tr{break-inside:avoid}
             pageAnchorRef.current = null
             layoutPagedFrame(frame, { targetRatio: scrollRatioRef.current, save: true })
           }
-          return
+          let cancelled = false
+          if (documentNode.fonts?.ready) documentNode.fonts.ready.then(() => {
+            if (!cancelled && frame.contentDocument === documentNode && settingsRef.current.pageMode === 'paged') layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+          }).catch(() => undefined)
+          return () => { cancelled = true }
         }
         if (previousMode === 'paged') {
           clearPagedLayout(documentNode)
@@ -5348,6 +5469,27 @@ html.bb-paged body table tr{break-inside:avoid}
       defaultReadingSettingsHint: 'Used for books that have no individual reading settings.',
       defaultsSaveFailed: 'Could not save default settings: {message}',
       fontFamily: 'Typeface',
+      fontSection: 'Font',
+      typographySection: 'Typography',
+      fontDefaultSerif: 'System default · Serif',
+      fontDefaultSans: 'System default · Sans serif',
+      fontDefaultMono: 'System default · Monospace',
+      scanSystemFonts: 'Detect system fonts',
+      fontScanning: 'Detecting…',
+      fontCommonHint: 'Available common fonts are listed. Detect system fonts to include custom fonts; your browser may ask for access.',
+      fontScanComplete: 'System fonts detected. The list stays on this device.',
+      fontScanEmpty: 'No fonts were returned. Common fonts remain available.',
+      fontAccessDenied: 'Font access was not granted. You can keep using common fonts or try again.',
+      fontAccessUnavailable: 'This browser cannot list all fonts. Available common fonts are shown.',
+      fontScanFailed: 'Could not detect system fonts. Common fonts remain available; you can try again.',
+      fontLoadFailed: 'Could not load font options. Close settings and try again.',
+      fontMissingHint: 'The saved font is not available on this device. A fallback is used; your selection is preserved.',
+      fontStylesHint: 'Automatic style is available. Detect system fonts to read supported weights and italics.',
+      fontWeight: 'Weight',
+      fontWeightAuto: 'Automatic',
+      fontStyle: 'Style',
+      fontStyleNormal: 'Upright',
+      fontStyleItalic: 'Italic',
       fontSerif: 'Serif',
       fontSans: 'Sans',
       fontMono: 'Mono',
@@ -5573,6 +5715,27 @@ html.bb-paged body table tr{break-inside:avoid}
       defaultReadingSettingsHint: '应用于尚未单独设置阅读样式的书。',
       defaultsSaveFailed: '保存默认设置失败：{message}',
       fontFamily: '字体',
+      fontSection: '字体选择',
+      typographySection: '排版样式',
+      fontDefaultSerif: '系统默认 · 衬线',
+      fontDefaultSans: '系统默认 · 无衬线',
+      fontDefaultMono: '系统默认 · 等宽',
+      scanSystemFonts: '检测系统字体',
+      fontScanning: '正在检测…',
+      fontCommonHint: '已列出可用的常见字体。检测系统字体可加入自装字体；浏览器可能请求字体访问授权。',
+      fontScanComplete: '已读取系统字体，列表仅保留在当前设备。',
+      fontScanEmpty: '未返回系统字体，仍可使用常见字体。',
+      fontAccessDenied: '未获得字体访问授权，仍可使用常见字体，也可以重试。',
+      fontAccessUnavailable: '当前浏览器无法列出全部字体，已保留可用的常见字体。',
+      fontScanFailed: '系统字体检测失败，仍可使用常见字体，也可以重试。',
+      fontLoadFailed: '字体选项加载失败，请关闭设置后重试。',
+      fontMissingHint: '当前设备未找到已保存的字体，暂时使用回退字体，并保留原选择。',
+      fontStylesHint: '可使用自动样式；检测系统字体后可选择字体支持的字重与斜体。',
+      fontWeight: '字重',
+      fontWeightAuto: '自动',
+      fontStyle: '字形',
+      fontStyleNormal: '正体',
+      fontStyleItalic: '斜体',
       fontSerif: '衬线',
       fontSans: '无衬线',
       fontMono: '等宽',

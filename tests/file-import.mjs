@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
+import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
-const fixtures = process.env.BOOKSHELF_TEST_FIXTURES || '/tmp/batch1-test'
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-import-'))
 process.env.DSH_HOME = join(temporary, 'home')
 const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
@@ -75,6 +75,7 @@ mount();
 </script></body></html>`
 
 try {
+  const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
   server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://test').pathname
@@ -91,7 +92,7 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
 
-  chrome = spawn(process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
+  chrome = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0',
     '--window-size=1400,1000', `${origin}/test.html`,

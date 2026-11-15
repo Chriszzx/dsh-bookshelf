@@ -6,6 +6,7 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname, basename } from 'node:path'
 import { spawn } from 'node:child_process'
+import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-snapshot-'))
@@ -13,6 +14,7 @@ const ownedPath = await realpath(temporary)
 const parentPath = await realpath(tmpdir())
 let server, chrome, socket
 try {
+  const { chromePath } = await prepareBrowserEnvironment(temporary, { react: false })
   const module = await readFile(new URL('../assets/reading-snapshot.mjs', import.meta.url))
   const tests = await readFile(new URL('./reading-snapshot.browser.mjs', import.meta.url))
   server = createServer((req, res) => {
@@ -27,7 +29,7 @@ try {
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
-  chrome = spawn(process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
+  chrome = spawn(chromePath, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', `${origin}/test.html`,
   ], { stdio: ['ignore', 'ignore', 'pipe'] })

@@ -1,6 +1,6 @@
 // Functional browser regression of the installed reader's pagination geometry.
 // Uses an isolated Host and generated EPUB; does not inspect a personal browser
-// or claim to verify the live DSH shell. React UMD fixtures are supplied separately.
+// or claim to verify the live DSH shell. React fixtures come from pinned dev dependencies.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -8,11 +8,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
-const fixtures = process.env.BOOKSHELF_TEST_FIXTURES || '/tmp/batch1-test'
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-geometry-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
@@ -52,6 +52,7 @@ window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.content
 window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return {visible:q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1,left:q.left,top:q.top}};
 </script></body></html>`
 try {
+ const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
  server=createServer(async(req,res)=>{try{
   const path=new URL(req.url,'http://test').pathname
   const files={'/react.js':join(fixtures,'node_modules/react/umd/react.development.js'),'/react-dom.js':join(fixtures,'node_modules/react-dom/umd/react-dom.development.js'),'/client.js':join(pluginDir,'client.js')}
@@ -69,7 +70,7 @@ try {
  const imported=await fetch(`${origin}/bookshelf/api/books?name=geometry.epub&title=Geometry&format=epub`,{method:'POST',body:archive});assert.equal(imported.status,201)
  const {book}=await imported.json()
  assert.equal((await fetch(`${origin}/bookshelf/api/books/${book.id}/state`,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({settings:{pageMode:'paged',pageMargin:'standard',fontSize:19,pageSpread:'single'}})})).status,200)
- chrome=spawn(process.env.CHROME_BIN||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking',`--user-data-dir=${join(temporary,'chrome')}`,'--remote-debugging-port=0','--window-size=1600,1000',`${origin}/test.html`],{stdio:['ignore','ignore','pipe']})
+ chrome=spawn(chromePath,['--headless=new','--disable-gpu','--no-first-run','--disable-background-networking',`--user-data-dir=${join(temporary,'chrome')}`,'--remote-debugging-port=0','--window-size=1600,1000',`${origin}/test.html`],{stdio:['ignore','ignore','pipe']})
  const browserUrl=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('Chrome startup timeout')),10000);let log='';chrome.once('error',e=>{clearTimeout(timer);reject(e)});chrome.stderr.on('data',c=>{log+=c;const m=log.match(/DevTools listening on (ws:\/\/[^\s]+)/);if(m){clearTimeout(timer);resolve(m[1])}})})
  const targets=await(await fetch('http://'+new URL(browserUrl).host+'/json')).json();const target=targets.find(p=>p.url===`${origin}/test.html`);assert.ok(target)
  socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((r,j)=>{socket.onopen=r;socket.onerror=j})

@@ -33,7 +33,15 @@ test('falls back only for Windows link-permission failures', () => {
 
 test('creates a symbolic link when the platform allows it', async t => {
   const { source, target } = await fixture(t)
-  assert.equal(await createSourceLink(source, target, { platform: 'darwin' }), 'symlink')
+  try {
+    assert.equal(await createSourceLink(source, target, { platform: 'darwin' }), 'symlink')
+  } catch (error) {
+    if (shouldCopyOnLinkFailure(error, process.platform)) {
+      t.skip('This Windows process lacks symbolic-link privileges; copy fallback is tested separately.')
+      return
+    }
+    throw error
+  }
   assert.equal((await lstat(target)).isSymbolicLink(), true)
   assert.equal(await readFile(target, 'utf8'), 'book bytes')
 })

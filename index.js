@@ -7,6 +7,7 @@ import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AppleBooksImportError, listAppleBooks, packEpubDirectory, readAppleBook } from './apple-books.js'
 import { createSourceLink } from './link-source.js'
+import { sanitizeFontSettings } from './assets/reading-fonts.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
 
 /**
@@ -40,7 +41,6 @@ const COVER_TYPES = new Map([
   ['image/svg+xml', '.svg'],
 ])
 const SETTING_THEMES = new Set(['auto', 'light', 'dark'])
-const SETTING_FONTS = new Set(['serif', 'sans', 'mono'])
 const SETTING_PAGE_MARGINS = new Set(['standard', 'compact', 'fill'])
 const SETTING_PAGE_MODES = new Set(['scroll', 'paged'])
 const SETTING_PDF_FITS = new Set(['page', 'width', 'custom'])
@@ -314,8 +314,7 @@ export function apply(ctx) {
 
   function sanitizeSettings(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-    const settings = {}
-    if (SETTING_FONTS.has(value.fontFamily)) settings.fontFamily = value.fontFamily
+    const settings = sanitizeFontSettings(value)
     const fontSize = clampNumber(value.fontSize, 12, 30)
     if (fontSize !== undefined) settings.fontSize = Math.round(fontSize)
     const lineHeight = clampNumber(value.lineHeight, 1.2, 2.5)

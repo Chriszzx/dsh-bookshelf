@@ -2,7 +2,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createSourceLink } from '../link-source.js'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sourceRevision } from '../source-revision.js'
@@ -126,8 +127,9 @@ test('the real registered source provides the original and shelf addresses', asy
   const source = join(root, 'original.epub')
   await writeFile(source, 'synthetic EPUB')
   await mkdir(join(root, 'books'), { recursive: true })
-  await symlink(source, join(root, 'books', `${bookId}.epub`))
-  await writeFile(join(root, 'library.json'), JSON.stringify({ version: 1, books: [{ id: bookId, format: 'epub', link: { kind: 'file', path: source } }] }))
+  const shelfFile = join(root, 'books', `${bookId}.epub`)
+  const mode = await createSourceLink(source, shelfFile)
+  await writeFile(join(root, 'library.json'), JSON.stringify({ version: 1, books: [{ id: bookId, format: 'epub', link: { kind: 'file', path: source, mode } }] }))
   const value = snapshot({ sourceRevision: await sourceRevision(source) })
   let state = projection.init()
   const projections = { stateOf: () => state }
@@ -141,5 +143,5 @@ test('the real registered source provides the original and shelf addresses', asy
   assert.equal(result.kind, 'success')
   const content = await readFile(join(root, '.dsh-bookshelf', `${value.snapshotId}.md`), 'utf8')
   assert.match(content, new RegExp(`Original book file: ${source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`))
-  assert.match(content, new RegExp(`Shelf file: .*books/${bookId}\\.epub`))
+  assert.ok(content.includes(`Shelf file: ${shelfFile}`), 'page file records the native shelf path')
 })

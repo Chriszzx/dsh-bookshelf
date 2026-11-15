@@ -1,6 +1,6 @@
 // Functional lifecycle regression, not a visual preview of DSH.
-// Requires Chrome and React 18 UMD files + paged-long.epub/mixed.pdf fixtures.
-// BOOKSHELF_TEST_FIXTURES defaults to the existing /tmp/batch1-test harness.
+// Uses a detected Chromium browser, pinned React dev dependencies and generated books.
+// BOOKSHELF_TEST_FIXTURES can override the generated fixtures.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
+import { prepareBrowserEnvironment } from './helpers/browser-env.mjs'
 import { once } from 'node:events'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
-const fixtures = process.env.BOOKSHELF_TEST_FIXTURES || '/tmp/batch1-test'
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-tab-test-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
@@ -45,6 +45,7 @@ mount();
 let delayWrites = false
 let delayDefaults = false
 try {
+  const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
   server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://test').pathname
@@ -70,7 +71,6 @@ try {
   const pdfId = await importBook('PDF', 'pdf', 'mixed.pdf', { pdfView: 'single', pdfFit: 'page' }, { format: 'pdf', page: 2, percent: .4 })
   await importBook('Fresh', 'epub', 'paged-long.epub', undefined, undefined)
   assert.equal((await fetch(`${origin}/bookshelf/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ settings: { fontSize: 20, pageMode: 'paged', pageMargin: 'fill' } }) })).status, 200)
-  const chromePath = process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
   chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1400,1000', `${origin}/test.html`], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 10000)
