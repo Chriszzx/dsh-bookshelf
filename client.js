@@ -3309,7 +3309,7 @@ html.bb-paged body table tr{break-inside:avoid}
           } catch {
             html = '<!doctype html><html><body></body></html>'
           }
-          probe.onload = () => {
+          probe.onload = async () => {
             if (cancelled || token !== probeTokenRef.current) return
             const documentNode = probe.contentDocument
             const windowNode = probe.contentWindow
@@ -3321,12 +3321,19 @@ html.bb-paged body table tr{break-inside:avoid}
                 ensurePagedStyle(documentNode)
                 documentNode.documentElement.classList.add('bb-paged')
                 configurePagedColumns(documentNode, settingsRef.current)
+                // Match visible-frame pagination after font metrics and layout
+                // have settled, including newly selected native font faces.
+                if (documentNode.fonts) await documentNode.fonts.ready
+                await new Promise(resolve => requestAnimationFrame(resolve))
+                if (cancelled || token !== probeTokenRef.current || probe.contentDocument !== documentNode) return
+                configurePagedColumns(documentNode, settingsRef.current)
                 const info = pagedMetrics(documentNode, windowNode)
                 if (info !== null) pages = info.pages
               }
             } catch {
               pages = 1
             }
+            if (cancelled || token !== probeTokenRef.current) return
             counts.push(pages)
             index += 1
             setTimeout(measureChapter, 0)

@@ -13,11 +13,14 @@ const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-snapshot-'))
 const ownedPath = await realpath(temporary)
 const parentPath = await realpath(tmpdir())
 let server, chrome, socket
+let browserLog = ''
+const requests = []
 try {
   const { chromePath } = await prepareBrowserEnvironment(temporary, { react: false })
   const module = await readFile(new URL('../assets/reading-snapshot.mjs', import.meta.url))
   const tests = await readFile(new URL('./reading-snapshot.browser.mjs', import.meta.url))
   server = createServer((req, res) => {
+    requests.push(req.url)
     if (req.url === '/reading-snapshot.mjs' || req.url === '/tests.mjs') {
       res.setHeader('content-type', 'text/javascript'); res.end(req.url === '/tests.mjs' ? tests : module); return
     }
@@ -31,8 +34,9 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
   chrome = spawn(chromePath, [
-    '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
-    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', `${origin}/test.html`,
+    ...(process.platform === 'win32' && process.env.CI ? ['--no-sandbox'] : []),
+    '--enable-logging=stderr', '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--no-default-browser-check',
+    `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1000,800', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserURL = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 15000)
@@ -40,6 +44,7 @@ try {
     chrome.once('error', error => { clearTimeout(timer); reject(error) })
     chrome.stderr.on('data', chunk => {
       log = (log + chunk).slice(-32000)
+      browserLog = (browserLog + chunk).slice(-16000)
       const match = log.match(/DevTools listening on (ws:\/\/[^\s]+)/)
       if (match) { clearTimeout(timer); resolve(match[1]) }
     })
@@ -48,7 +53,7 @@ try {
   let target, targets
   while (!target) {
     targets = await (await fetch(`http://${new URL(browserURL).host}/json`)).json()
-    target = targets.find(page => page.type === 'page' && page.url === `${origin}/test.html`)
+    target = targets.find(page => page.type === 'page' && page.url === 'about:blank')
     if (target) break
     assert.ok(Date.now() - discoveryStarted < 30000, `Test tab not found: ${JSON.stringify(targets.map(page => page.url))}`)
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -85,6 +90,8 @@ try {
     else if (message.method === 'Runtime.executionContextsCleared') contexts.clear()
   }
   socket.addEventListener('message', contextListener)
+  const navigation = await command('Page.navigate', { url: `${origin}/test.html` })
+  assert.equal(navigation.errorText, undefined, navigation.errorText)
   await command('Runtime.enable')
   const startup = Date.now()
   let mainContextId, readiness = []
@@ -115,6 +122,10 @@ try {
   assert.equal(result.ok, true, result.stack || result.error)
   console.log(JSON.stringify(result.value, null, 2))
   console.log(`PASS: ${result.value.count} isolated Chrome snapshot cases`)
+} catch (error) {
+  console.error('Snapshot requests:', JSON.stringify(requests))
+  console.error('Snapshot Chrome diagnostics:', browserLog)
+  throw error
 } finally {
   socket?.close()
   if (chrome && chrome.exitCode === null && chrome.pid) {

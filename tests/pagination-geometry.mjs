@@ -53,7 +53,11 @@ window.settled=async()=>{
  while(Date.now()-start<12000){
   const s=inspect(),signature=JSON.stringify(s),step=s.width/s.columns;
   const aligned=Math.abs(s.scroll/step-Math.round(s.scroll/step))<.002;
-  if(s.visible>0&&!s.leaks.length&&aligned&&s.label){
+  // This resize matrix uses one spine entry: the asynchronous book count
+  // must catch up with the visible chapter before comparing them.
+  const total=Number(s.label.match(/total=([0-9]+)/)?.[1]);
+  const counted=total===Math.ceil((s.scrollWidth-1)/step)-(s.padded?1:0);
+  if(s.visible>0&&!s.leaks.length&&aligned&&counted){
    if(signature!==last)stableAt=Date.now();
    else if(Date.now()-stableAt>=350)return s;
   }else stableAt=Date.now();
