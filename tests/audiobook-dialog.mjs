@@ -208,12 +208,39 @@ try {
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF')
   assert.equal(bytes.readUInt32LE(40), 24 * 2)
 
-  const closed = await evaluate(`(async()=>{
-    document.querySelector('.bs-audiobook-dialog [aria-label="dismiss"]').click();
-    await until(()=>!dialog());
+  const switched = await evaluate(`(async()=>{
+    const select=document.querySelector('.bs-audiobook-dialog select[aria-label="audiobookProviderLabel"]');
+    check(!!select,'provider select');
+    const setter=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value').set;
+    setter.call(select,'edge');select.dispatchEvent(new Event('change',{bubbles:true}));
+    await until(()=>document.querySelector('.bs-audiobook-dialog').textContent.includes('audiobookUnpricedHint'));
+    const text=document.querySelector('.bs-audiobook-dialog').textContent;
+    return {
+      hasCost:text.includes('audiobookCost'),
+      hasBilled:text.includes('audiobookBilled'),
+      hasUnpriced:text.includes('audiobookUnpricedHint'),
+      hasLink:text.includes('audiobookSettingsLink'),
+    };
+  })()`)
+  assert.equal(switched.hasCost, false, 'non-DeepSeek services hide the cost estimate')
+  assert.equal(switched.hasBilled, false, 'non-DeepSeek services hide billed characters')
+  assert.equal(switched.hasUnpriced, true)
+  assert.equal(switched.hasLink, true)
+  assert.equal(providerCalls.length, 3, 'switching the service does not synthesise')
+
+  const jumped = await evaluate(`(async()=>{
+    [...document.querySelectorAll('.bs-audiobook-dialog button')].find(node=>node.textContent==='audiobookSettingsLink').click();
+    await until(()=>document.querySelector('.bs-settings-dialog'));
+    const active=document.querySelector('.bs-settings-tab[aria-selected="true"]');
+    return {dialogGone:!dialog(), tab:active?active.textContent:null};
+  })()`)
+  assert.equal(jumped.dialogGone, true)
+  assert.equal(jumped.tab, 'settingsTabSpeech')
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-settings-dialog [aria-label="dismiss"]').click();
+    await until(()=>!document.querySelector('.bs-settings-dialog'));
     return true;
   })()`)
-  assert.equal(closed, true)
   assert.deepEqual(await evaluate('window.errors'), [])
   console.log('audiobook dialog: menu entry, estimate, stubbed render and WAV download')
 } finally {

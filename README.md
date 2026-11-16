@@ -35,15 +35,15 @@ The **Test** button aborts after 12 seconds and sentence requests time out as we
 
 ## Whole-book audio / 整书语音
 
-Each book's **More** menu offers **Generate audiobook**. The dialog extracts the whole book (EPUB or PDF), then shows the character and sentence counts, estimated length and file size, and the estimated DeepSeek bill before anything is rendered. Choose a DeepSeek voice and speed, then **Generate**; the Host synthesises sentence by sentence into one 24 kHz mono WAV under `$DSH_HOME/bookshelf/audiobooks/<book id>/book.wav`. Rendering runs on the Host, so the dialog may be closed; reopen it to watch progress or download the finished file.
+Each book's **More** menu offers **Generate audiobook**. The dialog extracts the whole book (EPUB or PDF), then shows the character and sentence counts, estimated length and file size. **Speech service** defaults to DeepSeek TTS; system voices, Edge and OpenAI-compatible services are selectable too, and **Change voice settings…** jumps to the Read-aloud tab of Shelf settings. Only DeepSeek shows an estimated bill and billed characters, because only it publishes a per-character price. **Generate** renders the book sentence by sentence on the Host into one file under `$DSH_HOME/bookshelf/audiobooks/<book id>/` — WAV for DeepSeek/system voices, MP3 for Edge/OpenAI-compatible services. Rendering runs on the Host, so the dialog may be closed; reopen it to watch progress or download the finished file.
 
-Once a book has a rendered WAV, the reader's read-aloud menu offers **Play generated audio** after a confirmation. It plays the single file without following pages, and switching back to live read-aloud stops the file again.
+Once a book has rendered audio, the reader's read-aloud menu offers **Play generated audio** after a confirmation. It plays the single file without following pages, and switching back to live read-aloud stops the file again.
 
 生成后打开这本书的阅读器，朗读菜单会出现「播放已生成音频」；确认后直接播放该文件，不跟随页码，也可随时切回逐句朗读。
 
 Billing follows the official rules: a Chinese character counts as two billed characters, and pricing is ¥1.5 per 10,000 billed characters at the current limited-time 50% rate (list ¥3). The estimate is approximate; actual duration, size and bill may differ.
 
-每本书的**「更多」**菜单里有**「生成整书语音」**。弹窗会先提取整本 EPUB/PDF 文本，展示字数、句数、预计时长与文件大小，以及 DeepSeek 的预估费用，确认后才开始合成。选择音色与语速后点**「开始生成」**，Host 逐句合成并合并为一个 24kHz 单声道 WAV，保存在 `$DSH_HOME/bookshelf/audiobooks/<书籍 id>/book.wav`。生成在 Host 后台进行，可以关闭弹窗；再次打开同一个弹窗可查看进度或下载成品。
+每本书的**「更多」**菜单里有**「生成整书语音」**。弹窗先提取整本 EPUB/PDF 文本，展示字数、句数、预计时长与文件大小。**语音服务**默认 DeepSeek TTS，也可选系统音色、Edge 或 OpenAI 兼容服务；**「修改朗读设置…」**会跳到书架设置的朗读标签页。只有 DeepSeek 显示预估费用和计费字符，因为只有它公开按字符计价。点**「开始生成」**后 Host 逐句合成并合并为一个文件，保存在 `$DSH_HOME/bookshelf/audiobooks/<书籍 id>/`——DeepSeek 与系统音色输出 WAV，Edge/OpenAI 兼容服务输出 MP3。生成在 Host 后台进行，可以关闭弹窗；再次打开可查看进度或下载成品。
 
 计费按官方规则：一个汉字计为 2 个计费字符；当前限时 5 折为 ¥1.5/万计费字符（原价 ¥3）。估算仅供参考，实际时长、体积和账单可能略有差异。
 

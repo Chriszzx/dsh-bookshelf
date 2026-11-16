@@ -10,6 +10,7 @@ import {
   estimateAudiobook,
   mergeWavBuffers,
   createAudiobookService,
+  sanitizeAudiobookProvider,
 } from '../audiobook.js'
 import { splitSentences } from '../assets/tts-sentences.mjs'
 
@@ -88,6 +89,22 @@ test('estimate rejects empty text', () => {
   assert.throws(() => estimateAudiobook({ text: '   \n  ' }), /没有可朗读的文字/)
 })
 
+test('only DeepSeek estimates a bill; other services stay unpriced', () => {
+  const edge = estimateAudiobook({ text: '你好世界。', provider: 'edge' })
+  assert.equal(edge.provider, 'edge')
+  assert.equal(edge.priced, false)
+  assert.equal(edge.cost, null)
+  assert.equal(edge.listCost, null)
+  assert.equal(edge.format, 'mp3')
+  assert.ok(edge.bytes > 0)
+  const openai = estimateAudiobook({ text: 'Hello.', provider: 'openai' })
+  assert.equal(openai.priced, false)
+  assert.equal(openai.format, 'mp3')
+  assert.equal(openai.billedCharacters, 6)
+  assert.equal(sanitizeAudiobookProvider('local'), 'deepseek')
+  assert.equal(sanitizeAudiobookProvider('windows'), 'windows')
+})
+
 test('mergeWavBuffers writes one canonical PCM WAV', () => {
   const merged = mergeWavBuffers([makeWav(3), makeWav(5)])
   assert.equal(merged.toString('ascii', 0, 4), 'RIFF')
@@ -135,6 +152,38 @@ test('service plans, renders and serves one WAV without a real provider', async 
 
     await service.remove('book-1')
     assert.equal(await service.file('book-1'), null)
+  })
+})
+
+test('service merges MP3 provider chunks into one .mp3 file', async () => {
+  await withService(async (root) => {
+    let calls = 0
+    const tts = {
+      async synthesize() {
+        calls += 1
+        const id3 = Buffer.alloc(10)
+        id3.write('ID3', 0, 'ascii')
+        id3[3] = 4
+        return { audio: Buffer.concat([id3, Buffer.from([0xff, 0xfb, 0x90, 0x64, calls])]), mime: 'audio/mpeg', ext: '.mp3' }
+      },
+    }
+    const service = createAudiobookService({ rootDir: root, tts, logger: { warn() {} } })
+    await service.plan('book-mp3', { text: '第一句。第二句。', provider: 'edge', voice: '', speed: 1 })
+    await service.start('book-mp3', { provider: 'edge', voice: '', speed: 1 })
+    let state
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      state = await service.state('book-mp3')
+      if (state.status === 'done' || state.status === 'failed') break
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+    assert.equal(state.status, 'done', state.error)
+    const file = await service.file('book-mp3')
+    assert.equal(file.ext, '.mp3')
+    assert.equal(file.mime, 'audio/mpeg')
+    const audio = await readFile(file.path)
+    assert.equal(audio.length, 10)
+    assert.deepEqual([...audio.subarray(0, 4)], [0xff, 0xfb, 0x90, 0x64])
+    assert.equal(state.audio.ext, '.mp3')
   })
 })
 

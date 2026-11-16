@@ -8,13 +8,21 @@ import { DEEPSEEK_VOICES } from './tts.js'
  * Whole-book audiobook rendering on the Host.
  *
  * The browser extracts the book text once and posts it here; the Host stores it
- * next to the book's audio, estimates billing from the official DeepSeek rules
- * and synthesises sentence by sentence into a single WAV. Jobs run in-process
- * because the shelf is a local single-user app: a Map plus a small state file
- * is enough, and a crash simply leaves an idle plan that can be started again.
+ * next to the book's audio, estimates duration/size (and DeepSeek billing when
+ * DeepSeek is chosen) and synthesises sentence by sentence into one file. Jobs
+ * run in-process because the shelf is a local single-user app: a Map plus a
+ * small state file is enough, and a crash simply leaves an idle plan that can be
+ * started again.
  */
 
 export const AUDIOBOOK_PROVIDER = 'deepseek'
+// System voices and Edge/OpenAI are also useful for a whole book, but only
+// DeepSeek publishes a per-character price, so only it shows a cost estimate.
+export const AUDIOBOOK_PROVIDERS = Object.freeze(['deepseek', 'edge', 'openai', 'windows', 'macos'])
+const PROVIDER_FORMAT = Object.freeze({ deepseek: 'wav', macos: 'wav', windows: 'wav', edge: 'mp3', openai: 'mp3' })
+// WAV is 24 kHz/16-bit/mono; Edge returns 48 kbps MP3 and the OpenAI-compatible
+// services commonly return a similar low-bitrate MP3. Used only for estimates.
+const BYTES_PER_SECOND = Object.freeze({ wav: 48_000, 'mp3-edge': 6_000, 'mp3-openai': 16_000 })
 
 export const AUDIOBOOK_LIMITS = Object.freeze({
   maxTextChars: 2_000_000,
@@ -59,7 +67,8 @@ export function billedCharacters(text) {
   return total
 }
 
-export function estimateAudiobook({ text, speed = 1 } = {}) {
+export function estimateAudiobook({ text, speed = 1, provider = AUDIOBOOK_PROVIDER } = {}) {
+  const chosen = AUDIOBOOK_PROVIDERS.includes(provider) ? provider : AUDIOBOOK_PROVIDER
   const normalized = normalizeSpeakText(String(text || ''))
   const sentences = splitSentences(normalized)
   if (sentences.length === 0) throw new AudiobookError(400, '没有可朗读的文字')
@@ -86,22 +95,28 @@ export function estimateAudiobook({ text, speed = 1 } = {}) {
     seconds += cjk / CJK_CHARS_PER_SECOND + other / LATIN_CHARS_PER_SECOND
   }
   seconds = Math.max(0.5, seconds / rate)
-  const bytes = Math.round(44 + seconds * DEEPSEEK_TTS_PRICING.sampleRate * DEEPSEEK_TTS_PRICING.channels * (DEEPSEEK_TTS_PRICING.bitsPerSample / 8))
+  const format = PROVIDER_FORMAT[chosen]
+  const bytesPerSecond = format === 'mp3' ? BYTES_PER_SECOND[`mp3-${chosen}`] : BYTES_PER_SECOND.wav
+  const bytes = Math.round((format === 'wav' ? 44 : 0) + seconds * bytesPerSecond)
+  // Only DeepSeek has a published price; other services must not show a fake one.
+  const priced = chosen === 'deepseek'
   const pricePer10k = DEEPSEEK_TTS_PRICING.promo ? DEEPSEEK_TTS_PRICING.promoPer10k : DEEPSEEK_TTS_PRICING.listPer10k
   return {
-    provider: AUDIOBOOK_PROVIDER,
+    provider: chosen,
     characters,
     billedCharacters: billed,
     sentences: sentences.length,
     durationSeconds: Math.round(seconds * 10) / 10,
     bytes,
-    cost: roundMoney((billed / 10_000) * pricePer10k),
-    listCost: roundMoney((billed / 10_000) * DEEPSEEK_TTS_PRICING.listPer10k),
-    currency: DEEPSEEK_TTS_PRICING.currency,
-    pricePer10k,
-    listPricePer10k: DEEPSEEK_TTS_PRICING.listPer10k,
-    promo: DEEPSEEK_TTS_PRICING.promo,
-    sampleRate: DEEPSEEK_TTS_PRICING.sampleRate,
+    format,
+    priced,
+    cost: priced ? roundMoney((billed / 10_000) * pricePer10k) : null,
+    listCost: priced ? roundMoney((billed / 10_000) * DEEPSEEK_TTS_PRICING.listPer10k) : null,
+    currency: priced ? DEEPSEEK_TTS_PRICING.currency : null,
+    pricePer10k: priced ? pricePer10k : null,
+    listPricePer10k: priced ? DEEPSEEK_TTS_PRICING.listPer10k : null,
+    promo: priced ? DEEPSEEK_TTS_PRICING.promo : false,
+    sampleRate: format === 'wav' ? DEEPSEEK_TTS_PRICING.sampleRate : null,
     speed: rate,
   }
 }
@@ -117,8 +132,18 @@ export function clampSpeed(value) {
   return Math.min(2, Math.max(0.5, Math.round(number * 100) / 100))
 }
 
-export function sanitizeVoice(value) {
-  return DEEPSEEK_VOICES.some((voice) => voice.id === value) ? value : DEEPSEEK_VOICES[0].id
+export function sanitizeAudiobookProvider(value) {
+  return AUDIOBOOK_PROVIDERS.includes(value) ? value : AUDIOBOOK_PROVIDER
+}
+
+export function sanitizeVoice(value, provider = AUDIOBOOK_PROVIDER) {
+  if (provider === 'deepseek') {
+    return DEEPSEEK_VOICES.some((voice) => voice.id === value) ? value : DEEPSEEK_VOICES[0].id
+  }
+  // Other providers accept a voice id or an empty string ("let the provider /
+  // saved settings choose"); strip control characters and bound the length.
+  if (typeof value !== 'string') return ''
+  return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, 64)
 }
 
 // --------------------------------------------------------------------- WAV I/O
@@ -190,6 +215,16 @@ export function mergeWavBuffers(buffers) {
   return Buffer.concat([wavHeader(format, dataBytes), ...parts])
 }
 
+// MP3 chunks from a provider can each carry an ID3v2 tag; keep the frames and
+// drop the tag so concatenated chunks stay one continuous stream.
+export function stripMp3Tags(buffer) {
+  if (buffer.length >= 10 && buffer.toString('ascii', 0, 3) === 'ID3') {
+    const size = ((buffer[6] & 0x7f) << 21) | ((buffer[7] & 0x7f) << 14) | ((buffer[8] & 0x7f) << 7) | (buffer[9] & 0x7f)
+    return buffer.subarray(Math.min(buffer.length, 10 + size))
+  }
+  return buffer
+}
+
 // ---------------------------------------------------------------------- service
 
 export function createAudiobookService({ rootDir, tts, logger = console } = {}) {
@@ -201,7 +236,7 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
   const bookDir = (id) => join(root, id)
   const sourcePath = (id) => join(bookDir(id), 'source.txt')
   const planPath = (id) => join(bookDir(id), 'plan.json')
-  const audioPath = (id) => join(bookDir(id), 'book.wav')
+  const audioPath = (id, ext) => join(bookDir(id), `book${ext}`)
   const metaPath = (id) => join(bookDir(id), 'book.json')
 
   async function readJson(path) {
@@ -229,17 +264,18 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     }
   }
 
-  async function plan(id, { text, voice, speed } = {}) {
+  async function plan(id, { text, voice, speed, provider } = {}) {
+    const chosenProvider = sanitizeAudiobookProvider(provider)
     let normalized = typeof text === 'string' ? normalizeSpeakText(text) : ''
     if (normalized === '') normalized = (await readSource(id)) || ''
     if (normalized === '') throw new AudiobookError(400, '缺少要朗读的书籍文本')
     if (normalized.length > AUDIOBOOK_LIMITS.maxTextChars) {
       throw new AudiobookError(413, `整书语音最多支持 ${AUDIOBOOK_LIMITS.maxTextChars} 个字符`)
     }
-    const estimate = estimateAudiobook({ text: normalized, speed })
+    const estimate = estimateAudiobook({ text: normalized, speed, provider: chosenProvider })
     const value = {
       ...estimate,
-      voice: sanitizeVoice(voice),
+      voice: sanitizeVoice(voice, chosenProvider),
       updatedAt: new Date().toISOString(),
     }
     await fs.mkdir(bookDir(id), { recursive: true })
@@ -252,16 +288,45 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     return value
   }
 
+  // Older renders wrote book.wav with a meta file that had no extension; keep
+  // those playable instead of forgetting them after the format field appeared.
+  async function resolveAudio(id) {
+    const meta = await readJson(metaPath(id))
+    let ext = meta && (meta.ext === '.wav' || meta.ext === '.mp3') ? meta.ext : null
+    if (ext === null) {
+      try {
+        await fs.stat(audioPath(id, '.wav'))
+        ext = '.wav'
+      } catch (error) {
+        if (!error || error.code !== 'ENOENT') throw error
+        return null
+      }
+    }
+    try {
+      const info = await fs.stat(audioPath(id, ext))
+      return { info, ext, meta }
+    } catch (error) {
+      if (error && error.code === 'ENOENT') return null
+      throw error
+    }
+  }
+
   async function jobState(id) {
     const job = jobs.get(id)
     const planValue = await readJson(planPath(id))
     let audio = null
-    try {
-      const info = await fs.stat(audioPath(id))
-      const meta = await readJson(metaPath(id))
-      audio = { bytes: info.size, name: `${id}.wav`, updatedAt: (meta && meta.finishedAt) || info.mtime.toISOString(), seconds: meta && Number.isFinite(meta.seconds) ? meta.seconds : null }
-    } catch (error) {
-      if (!error || error.code !== 'ENOENT') throw error
+    const resolved = await resolveAudio(id)
+    if (resolved !== null) {
+      const { info, ext, meta } = resolved
+      audio = {
+        bytes: info.size,
+        name: `${id}${ext}`,
+        ext,
+        mime: (meta && meta.mime) || (ext === '.wav' ? 'audio/wav' : 'audio/mpeg'),
+        provider: (meta && meta.provider) || '',
+        updatedAt: (meta && meta.finishedAt) || info.mtime.toISOString(),
+        seconds: meta && Number.isFinite(meta.seconds) ? meta.seconds : null,
+      }
     }
     if (job) {
       return {
@@ -295,7 +360,7 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     }
   }
 
-  async function start(id, { voice, speed } = {}) {
+  async function start(id, { voice, speed, provider } = {}) {
     const running = jobs.get(id)
     if (running && (running.status === 'running' || running.status === 'cancelling')) {
       throw new AudiobookError(409, '这本书的整书语音正在生成')
@@ -306,14 +371,16 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     if (sentences.length === 0) throw new AudiobookError(400, '没有可朗读的文字')
     if (sentences.length > AUDIOBOOK_LIMITS.maxSentences) throw new AudiobookError(413, '整书语音句子过多')
     const rate = clampSpeed(speed)
-    const chosenVoice = sanitizeVoice(voice)
+    const chosenProvider = sanitizeAudiobookProvider(provider)
+    const chosenVoice = sanitizeVoice(voice, chosenProvider)
     const job = {
       status: 'running',
       done: 0,
       total: sentences.length,
       characters: 0,
-      bytes: 44,
+      bytes: 0,
       error: '',
+      provider: chosenProvider,
       voice: chosenVoice,
       speed: rate,
       startedAt: new Date().toISOString(),
@@ -328,45 +395,79 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
   }
 
   async function render(id, sentences, job) {
-    const temporary = join(bookDir(id), 'book.tmp.wav')
+    const temporary = join(bookDir(id), 'book.tmp')
+    const planValue = await readJson(planPath(id))
     let handle = null
-    let format = null
+    let ext = null
+    let wavFormat = null
     let dataBytes = 0
     try {
       await fs.mkdir(bookDir(id), { recursive: true })
       handle = await fs.open(temporary, 'w')
-      await handle.write(Buffer.alloc(44))
       for (let index = 0; index < sentences.length; index += 1) {
         if (job.cancelled) throw new AudiobookError(499, '已取消')
         const result = await tts.synthesize({
-          provider: AUDIOBOOK_PROVIDER,
+          provider: job.provider,
           voice: job.voice,
           speed: job.speed,
           text: sentences[index],
         })
-        const parsed = readWav(result.audio)
-        if (format === null) format = parsed.format
-        if (parsed.pcm.length > 0) {
-          await handle.write(parsed.pcm)
-          dataBytes += parsed.pcm.length
+        const chunkExt = result.mime === 'audio/mpeg' || result.ext === '.mp3' ? '.mp3' : '.wav'
+        if (ext === null) {
+          ext = chunkExt
+          if (ext === '.wav') {
+            wavFormat = readWav(result.audio).format
+            await handle.write(Buffer.alloc(44))
+          }
+        } else if (ext !== chunkExt) {
+          throw new AudiobookError(502, '语音服务返回了混合格式，无法合并')
+        }
+        if (ext === '.wav') {
+          const parsed = readWav(result.audio)
+          if (parsed.format.channels !== wavFormat.channels || parsed.format.sampleRate !== wavFormat.sampleRate || parsed.format.bitsPerSample !== wavFormat.bitsPerSample) {
+            throw new AudiobookError(502, '语音片段格式不一致，无法合并')
+          }
+          if (parsed.pcm.length > 0) {
+            await handle.write(parsed.pcm)
+            dataBytes += parsed.pcm.length
+          }
+        } else {
+          const payload = stripMp3Tags(result.audio)
+          if (payload.length > 0) {
+            await handle.write(payload)
+            dataBytes += payload.length
+          }
         }
         job.done = index + 1
         job.characters += [...sentences[index]].length
-        job.bytes = 44 + dataBytes
+        job.bytes = (ext === '.wav' ? 44 : 0) + dataBytes
       }
-      await handle.write(wavHeader(format, dataBytes), 0, 44, 0)
+      if (ext === null) throw new AudiobookError(502, '没有可合并的语音')
+      if (ext === '.wav') {
+        await handle.write(wavHeader(wavFormat, dataBytes), 0, 44, 0)
+        job.bytes = 44 + dataBytes
+      } else {
+        job.bytes = dataBytes
+      }
       await handle.close()
       handle = null
-      await replaceFile(temporary, audioPath(id))
+      await fs.rm(audioPath(id, ext === '.wav' ? '.mp3' : '.wav'), { force: true }).catch(() => undefined)
+      await replaceFile(temporary, audioPath(id, ext))
       job.status = 'done'
       job.finishedAt = new Date().toISOString()
-      job.bytes = 44 + dataBytes
+      const seconds = ext === '.wav' && wavFormat
+        ? Math.round((dataBytes / (wavFormat.sampleRate * wavFormat.channels * (wavFormat.bitsPerSample / 8))) * 10) / 10
+        : planValue && Number.isFinite(planValue.durationSeconds) ? planValue.durationSeconds : null
       await writeJson(metaPath(id), {
+        provider: job.provider,
         voice: job.voice,
         speed: job.speed,
         sentences: sentences.length,
-        bytes: 44 + dataBytes,
-        seconds: format ? Math.round((dataBytes / (format.sampleRate * format.channels * (format.bitsPerSample / 8))) * 10) / 10 : null,
+        bytes: job.bytes,
+        seconds,
+        ext,
+        mime: ext === '.wav' ? 'audio/wav' : 'audio/mpeg',
+        format: ext.slice(1),
         finishedAt: job.finishedAt,
       })
     } catch (error) {
@@ -388,12 +489,16 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
   }
 
   async function file(id) {
-    try {
-      const info = await fs.stat(audioPath(id))
-      return { path: audioPath(id), bytes: info.size }
-    } catch (error) {
-      if (error && error.code === 'ENOENT') return null
-      throw error
+    const resolved = await resolveAudio(id)
+    if (resolved === null) return null
+    const { info, ext, meta } = resolved
+    return {
+      path: audioPath(id, ext),
+      bytes: info.size,
+      ext,
+      mime: (meta && meta.mime) || (ext === '.wav' ? 'audio/wav' : 'audio/mpeg'),
+      name: `${id}${ext}`,
+      seconds: meta && Number.isFinite(meta.seconds) ? meta.seconds : null,
     }
   }
 

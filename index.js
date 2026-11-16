@@ -1353,7 +1353,8 @@ export function apply(ctx, options = {}) {
         if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid audiobook plan')
         const plan = await audiobooks.plan(record.id, {
           text: typeof body.text === 'string' ? body.text : '',
-          voice: cleanText(body.voice, '', 40),
+          voice: cleanText(body.voice, '', 64),
+          provider: cleanText(body.provider, '', 20),
           speed: body.speed,
         })
         sendJson(request, response, 200, { plan })
@@ -1365,7 +1366,11 @@ export function apply(ctx, options = {}) {
         const record = await findBook(audiobookStart[1])
         const body = await readJsonBody(request, 16 * 1024)
         if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid audiobook request')
-        const state = await audiobooks.start(record.id, { voice: cleanText(body.voice, '', 40), speed: body.speed })
+        const state = await audiobooks.start(record.id, {
+          voice: cleanText(body.voice, '', 64),
+          provider: cleanText(body.provider, '', 20),
+          speed: body.speed,
+        })
         sendJson(request, response, 200, { state })
         return
       }
@@ -1403,10 +1408,10 @@ export function apply(ctx, options = {}) {
         }
         const headers = {
           ...baseHeaders(request),
-          'Content-Type': 'audio/wav',
+          'Content-Type': file.mime,
           'Accept-Ranges': 'bytes',
           'Content-Length': end - start + 1,
-          'Content-Disposition': `inline; filename="${record.id}.wav"`,
+          'Content-Disposition': `inline; filename="${file.name}"`,
           'Cache-Control': 'no-store',
         }
         if (status === 206) headers['Content-Range'] = `bytes ${start}-${end}/${size}`

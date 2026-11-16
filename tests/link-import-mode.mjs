@@ -55,7 +55,15 @@ test('folder listing and duplicate import report the copy fallback', async t => 
   assert.equal(typeof route?.handler, 'function')
 
   const server = createServer((request, response) => route.handler(request, response))
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  // Node refuses to fetch a few "bad ports" (IRC and similar) that the OS can
+  // still hand out for an ephemeral listener; retry with another one.
+  const blocked = new Set([2049, 3659, 4045, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697, 10080])
+  for (let attempt = 0; ; attempt += 1) {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+    if (!blocked.has(server.address().port)) break
+    await new Promise((resolve, reject) => server.close(error => (error ? reject(error) : resolve())))
+    assert.ok(attempt < 10, 'could not get a fetchable test port')
+  }
   t.after(() => new Promise(resolve => server.close(resolve)))
   const origin = `http://127.0.0.1:${server.address().port}`
 

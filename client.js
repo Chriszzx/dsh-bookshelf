@@ -415,6 +415,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-audiobook-label{font-size:11px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
 .bs-audiobook-value{font-size:13px;line-height:1.4;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-audiobook-hint{display:flex;align-items:center;gap:6px;margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.bs-audiobook-link{padding:0;border:0;background:none;font:inherit;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-brand-primary);text-decoration:underline;cursor:pointer}
 .bs-audiobook-progress{height:6px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
 .bs-audiobook-progress-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);transition:width .2s ease}
 .bs-audiobook-done{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
@@ -2669,8 +2670,9 @@ html.bb-paged body table tr{break-inside:avoid}
     function ShelfSettingsDialog({
       t, base, onClose, defaults, onDefaultsChange, workspaces, discussionWorkspace,
       onDiscussionWorkspaceChange, appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange,
+      initialTab = 'reading',
     }) {
-      const [tab, setTab] = useState('reading')
+      const [tab, setTab] = useState(initialTab === 'speech' ? 'speech' : 'reading')
       const [panel, setPanel] = useState(null)
       const [draft, setDraft] = useState(null)
       const [saving, setSaving] = useState(false)
@@ -6268,10 +6270,11 @@ html.bb-paged body table tr{break-inside:avoid}
     // DeepSeek renders a book into one WAV. The dialog shows the estimate before
     // anything is synthesised; the render then runs in the Host, so closing the
     // dialog does not stop it.
-    function AudiobookDialog({ t, base, book, onClose }) {
+    function AudiobookDialog({ t, base, book, onClose, onOpenSettings }) {
       const [phase, setPhase] = useState('extracting')
       const [plan, setPlan] = useState(null)
-      const [voices, setVoices] = useState([])
+      const [providers, setProviders] = useState([])
+      const [provider, setProvider] = useState('deepseek')
       const [voice, setVoice] = useState('stella')
       const [speed, setSpeed] = useState(1)
       const [job, setJob] = useState(null)
@@ -6296,16 +6299,17 @@ html.bb-paged body table tr{break-inside:avoid}
         ;(async () => {
           try {
             const capabilities = await requestJson(base, '/tts/capabilities')
-            const provider = (capabilities.providers || []).find((item) => item.id === 'deepseek')
+            const available = (capabilities.providers || []).filter((item) => item.available !== false)
+            const selected = available.find((item) => item.id === 'deepseek')
             if (cancelled) return
-            if (provider && Array.isArray(provider.voices) && provider.voices.length > 0) setVoices(provider.voices)
-            if (provider && provider.configured === false) setError(t('audiobookNoKey'))
+            setProviders(available)
+            if (selected && selected.configured === false) setError(t('audiobookNoKey'))
             const text = await extractBookText(base, book)
             if (cancelled) return
             if (text.trim() === '') throw new Error(t('audiobookNoText'))
             const payload = await requestJson(base, `/books/${book.id}/audio/plan`, {
               method: 'POST',
-              body: JSON.stringify({ text, voice: 'stella', speed: 1 }),
+              body: JSON.stringify({ text, voice: 'stella', speed: 1, provider: 'deepseek' }),
             })
             if (cancelled) return
             setPlan(payload.plan)
@@ -6344,13 +6348,15 @@ html.bb-paged body table tr{break-inside:avoid}
         return () => { cancelled = true; clearInterval(timer) }
       }, [phase, base, book.id, t])
 
-      const replan = async (nextVoice, nextSpeed) => {
+      const replan = async (nextProvider, nextVoice, nextSpeed) => {
+        setProvider(nextProvider)
         setVoice(nextVoice)
         setSpeed(nextSpeed)
+        setError('')
         try {
           const payload = await requestJson(base, `/books/${book.id}/audio/plan`, {
             method: 'POST',
-            body: JSON.stringify({ voice: nextVoice, speed: nextSpeed }),
+            body: JSON.stringify({ provider: nextProvider, voice: nextVoice, speed: nextSpeed }),
           })
           if (aliveRef.current) setPlan(payload.plan)
         } catch (failure) {
@@ -6364,7 +6370,7 @@ html.bb-paged body table tr{break-inside:avoid}
         try {
           const payload = await requestJson(base, `/books/${book.id}/audio/start`, {
             method: 'POST',
-            body: JSON.stringify({ voice, speed }),
+            body: JSON.stringify({ provider, voice, speed }),
           })
           if (aliveRef.current) setJob(payload.state)
         } catch (failure) {
@@ -6385,13 +6391,41 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }
 
-      const voiceOptions = voices.length > 0
-        ? voices
-        : [{ id: 'stella', label: '海星 · 女声' }, { id: 'tide', label: '暗潮 · 男声' }]
+      const providerOptions = providers.length > 0
+        ? providers
+        : [{ id: 'deepseek', label: 'DeepSeek 语音', voices: [], configured: true }]
+      const currentProvider = providerOptions.find((item) => item.id === provider) || providerOptions[0]
+      const voiceOptions = provider === 'deepseek'
+        ? (Array.isArray(currentProvider.voices) && currentProvider.voices.length > 0
+            ? currentProvider.voices
+            : [{ id: 'stella', label: '海星 · 女声' }, { id: 'tide', label: '暗潮 · 男声' }])
+        : [{ id: '', label: t('audiobookDefaultVoice') }].concat(
+            (Array.isArray(currentProvider.voices) ? currentProvider.voices : []).map((item) => ({ id: item.id, label: item.label || item.id })),
+          )
+      const changeProvider = (nextProvider) => {
+        void replan(nextProvider, nextProvider === 'deepseek' ? 'stella' : '', speed)
+      }
       const estimate = plan
       const percent = job && job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0
       const downloadUrl = resourceUrl(base, `${API_ROOT}/books/${book.id}/audio/file`)
       const busy = phase === 'extracting' || phase === 'running'
+      const downloadExt = (job && job.audio && job.audio.ext) || (estimate && estimate.format === 'mp3' ? '.mp3' : '.wav')
+      // Only DeepSeek has a published per-character price; other services keep
+      // the estimate free of cost and billed-character rows.
+      const costItems = estimate && estimate.priced
+        ? [
+            h('div', { className: 'bs-audiobook-item', key: 'billed' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookBilled')), h('span', { className: 'bs-audiobook-value' }, estimate.billedCharacters.toLocaleString())),
+            h(
+              'div',
+              { className: 'bs-audiobook-item', key: 'cost' },
+              h('span', { className: 'bs-audiobook-label' }, t('audiobookCost')),
+              h('span', { className: 'bs-audiobook-value' }, `¥${formatMoney(estimate.cost)}`),
+              estimate.promo
+                ? h('span', { className: 'bs-audiobook-label' }, t('audiobookPromo', { price: formatMoney(estimate.listCost) }))
+                : null,
+            ),
+          ]
+        : []
 
       return h(
         React.Fragment,
@@ -6436,13 +6470,25 @@ html.bb-paged body table tr{break-inside:avoid}
                     h(
                       'label',
                       { className: 'bs-rename-field' },
+                      h('span', { className: 'bs-rename-label' }, t('audiobookProviderLabel')),
+                      h('select', {
+                        className: 'bs-tts-select',
+                        'aria-label': t('audiobookProviderLabel'),
+                        value: provider,
+                        disabled: busy,
+                        onChange: (event) => changeProvider(event.target.value),
+                      }, providerOptions.map((item) => h('option', { key: item.id, value: item.id }, item.label || item.id))),
+                    ),
+                    h(
+                      'label',
+                      { className: 'bs-rename-field' },
                       h('span', { className: 'bs-rename-label' }, t('audiobookVoiceLabel')),
                       h('select', {
                         className: 'bs-tts-select',
                         'aria-label': t('audiobookVoiceLabel'),
                         value: voice,
                         disabled: busy,
-                        onChange: (event) => { void replan(event.target.value, speed) },
+                        onChange: (event) => { void replan(provider, event.target.value, speed) },
                       }, voiceOptions.map((item) => h('option', { key: item.id, value: item.id }, item.label || item.id))),
                     ),
                     h(
@@ -6454,9 +6500,14 @@ html.bb-paged body table tr{break-inside:avoid}
                         'aria-label': t('audiobookSpeedLabel'),
                         value: String(speed),
                         disabled: busy,
-                        onChange: (event) => { void replan(voice, Number(event.target.value)) },
+                        onChange: (event) => { void replan(provider, voice, Number(event.target.value)) },
                       }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, `${value}×`))),
                     ),
+                  ),
+                  h(
+                    'p',
+                    { className: 'bs-audiobook-hint' },
+                    h('button', { type: 'button', className: 'bs-audiobook-link', onClick: onOpenSettings }, t('audiobookSettingsLink')),
                   ),
                   h(
                     'div',
@@ -6465,18 +6516,10 @@ html.bb-paged body table tr{break-inside:avoid}
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSentences')), h('span', { className: 'bs-audiobook-value' }, estimate.sentences.toLocaleString())),
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookDuration')), h('span', { className: 'bs-audiobook-value' }, `≈ ${formatDuration(estimate.durationSeconds)}`)),
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSize')), h('span', { className: 'bs-audiobook-value' }, formatBytes(estimate.bytes))),
-                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookBilled')), h('span', { className: 'bs-audiobook-value' }, estimate.billedCharacters.toLocaleString())),
-                    h(
-                      'div',
-                      { className: 'bs-audiobook-item' },
-                      h('span', { className: 'bs-audiobook-label' }, t('audiobookCost')),
-                      h('span', { className: 'bs-audiobook-value' }, `¥${formatMoney(estimate.cost)}`),
-                      estimate.promo
-                        ? h('span', { className: 'bs-audiobook-label' }, t('audiobookPromo', { price: formatMoney(estimate.listCost) }))
-                        : null,
-                    ),
+                    ...costItems,
                   ),
                   h('p', { className: 'bs-audiobook-hint' }, t('audiobookHint')),
+                  estimate.priced ? null : h('p', { className: 'bs-audiobook-hint' }, t('audiobookUnpricedHint')),
                 )
               : null,
             job !== null && (phase === 'running' || phase === 'done')
@@ -6497,7 +6540,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   'div',
                   { className: 'bs-audiobook-done' },
                   h('p', { className: 'bs-audiobook-hint' }, t('audiobookDone', { size: formatBytes(job.audio.bytes), seconds: job.audio.seconds ? formatDuration(job.audio.seconds) : formatDuration(estimate ? estimate.durationSeconds : 0) })),
-                  h('a', { className: 'bs-button bs-button-primary', href: downloadUrl, download: `${book.title || book.id}.wav` }, t('audiobookDownload')),
+                  h('a', { className: 'bs-button bs-button-primary', href: downloadUrl, download: `${book.title || book.id}${downloadExt}` }, t('audiobookDownload')),
                 )
               : null,
             phase === 'running'
@@ -7502,6 +7545,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [finishError, setFinishError] = useState('')
       const [tagTarget, setTagTarget] = useState(null)
       const [audioBook, setAudioBook] = useState(null)
+      const [settingsInitialTab, setSettingsInitialTab] = useState('reading')
       const [tagSaving, setTagSaving] = useState(false)
       const [tagError, setTagError] = useState('')
       const [tagsOpen, setTagsOpen] = useState(false)
@@ -8164,7 +8208,10 @@ html.bb-paged body table tr{break-inside:avoid}
               {
                 type: 'button',
                 className: 'bs-icon-button',
-                onClick: () => setSettingsOpen(true),
+                onClick: () => {
+                  setSettingsInitialTab('reading')
+                  setSettingsOpen(true)
+                },
                 'aria-haspopup': 'dialog',
                 'aria-expanded': settingsOpen,
                 title: t('shelfSettings'),
@@ -8401,6 +8448,7 @@ html.bb-paged body table tr{break-inside:avoid}
               appleBooksAvailable,
               appleBooksEnabled,
               onAppleBooksEnabledChange: updateAppleBooksEnabled,
+              initialTab: settingsInitialTab,
             })
           : null,
         renameState !== null
@@ -8440,6 +8488,11 @@ html.bb-paged body table tr{break-inside:avoid}
               base,
               book: audioBook,
               onClose: () => setAudioBook(null),
+              onOpenSettings: () => {
+                setAudioBook(null)
+                setSettingsInitialTab('speech')
+                setSettingsOpen(true)
+              },
             })
           : null,
         finishPrompt !== null
@@ -8616,6 +8669,9 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookTitle: 'Whole-book audio',
       audiobookMenu: 'Generate audiobook…',
       audiobookVoiceLabel: 'Voice',
+      audiobookDefaultVoice: 'Default voice',
+      audiobookProviderLabel: 'Speech service',
+      audiobookSettingsLink: 'Change voice settings…',
       audiobookSpeedLabel: 'Speed',
       audiobookCharacters: 'Characters',
       audiobookSentences: 'Sentences',
@@ -8624,7 +8680,8 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookBilled: 'Billed characters',
       audiobookCost: 'Estimated cost',
       audiobookPromo: 'list ¥{price} · 50% off',
-      audiobookHint: 'Estimate only: DeepSeek counts a Chinese character as two, and output is a 24 kHz mono WAV. Final duration, size and bill may differ.',
+      audiobookHint: 'Estimate only; actual duration and size may differ.',
+      audiobookUnpricedHint: 'This service does not publish a per-character price, so no cost estimate is shown.',
       audiobookStart: 'Generate',
       audiobookRegenerate: 'Regenerate',
       audiobookCancel: 'Cancel render',
@@ -8984,6 +9041,9 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookTitle: '整书语音',
       audiobookMenu: '生成整书语音…',
       audiobookVoiceLabel: '音色',
+      audiobookDefaultVoice: '默认音色',
+      audiobookProviderLabel: '语音服务',
+      audiobookSettingsLink: '修改朗读设置…',
       audiobookSpeedLabel: '语速',
       audiobookCharacters: '字数',
       audiobookSentences: '句数',
@@ -8992,7 +9052,8 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookBilled: '计费字符',
       audiobookCost: '预计费用',
       audiobookPromo: '原价 ¥{price} · 限时 5 折',
-      audiobookHint: '仅为估算：DeepSeek 将一个汉字计为 2 个计费字符，输出为 24kHz 单声道 WAV；实际时长、体积和账单可能略有差异。',
+      audiobookHint: '仅为估算，实际时长和体积可能略有差异。',
+      audiobookUnpricedHint: '该语音服务没有按字符计价的公开价格，因此不显示费用估算。',
       audiobookStart: '开始生成',
       audiobookRegenerate: '重新生成',
       audiobookCancel: '取消生成',

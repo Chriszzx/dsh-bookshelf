@@ -119,6 +119,18 @@ test('audiobook routes plan, render, download and delete with a stubbed provider
   assert.equal(replanned.payload.plan.sentences, 2)
   assert.ok(replanned.payload.plan.durationSeconds < planned.payload.plan.durationSeconds)
 
+  // A non-DeepSeek service is available for preview but must not invent a bill.
+  const unpriced = await json(`/books/${book.id}/audio/plan`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ provider: 'windows', voice: '', speed: 1 }),
+  })
+  assert.equal(unpriced.status, 200)
+  assert.equal(unpriced.payload.plan.provider, 'windows')
+  assert.equal(unpriced.payload.plan.priced, false)
+  assert.equal(unpriced.payload.plan.cost, null)
+  assert.equal(unpriced.payload.plan.format, 'wav')
+
   assert.equal((await json(`/books/${book.id}/audio/start`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
