@@ -54,6 +54,8 @@
     "source-revision.js",
     "tags.js",
     "tts.js",
+    "host/**",
+    "tts/**",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
