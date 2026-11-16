@@ -49,6 +49,7 @@
     "client.js",
     "sidebar.js",
     "apple-books.js",
+    "audiobook.js",
     "link-source.js",
     "source-revision.js",
     "tags.js",

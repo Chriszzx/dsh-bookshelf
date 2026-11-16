@@ -33,6 +33,16 @@ The **Test** button aborts after 12 seconds and sentence requests time out as we
 
 「测试」按钮 12 秒超时中断，单句请求也有超时保护；失败原因直接显示在播放条，不会卡住。
 
+## Whole-book audio / 整书语音
+
+Each book's **More** menu offers **Generate audiobook**. The dialog extracts the whole book (EPUB or PDF), then shows the character and sentence counts, estimated length and file size, and the estimated DeepSeek bill before anything is rendered. Choose a DeepSeek voice and speed, then **Generate**; the Host synthesises sentence by sentence into one 24 kHz mono WAV under `$DSH_HOME/bookshelf/audiobooks/<book id>/book.wav`. Rendering runs on the Host, so the dialog may be closed; reopen it to watch progress or download the finished file.
+
+Billing follows the official rules: a Chinese character counts as two billed characters, and pricing is ¥1.5 per 10,000 billed characters at the current limited-time 50% rate (list ¥3). The estimate is approximate; actual duration, size and bill may differ.
+
+每本书的**「更多」**菜单里有**「生成整书语音」**。弹窗会先提取整本 EPUB/PDF 文本，展示字数、句数、预计时长与文件大小，以及 DeepSeek 的预估费用，确认后才开始合成。选择音色与语速后点**「开始生成」**，Host 逐句合成并合并为一个 24kHz 单声道 WAV，保存在 `$DSH_HOME/bookshelf/audiobooks/<书籍 id>/book.wav`。生成在 Host 后台进行，可以关闭弹窗；再次打开同一个弹窗可查看进度或下载成品。
+
+计费按官方规则：一个汉字计为 2 个计费字符；当前限时 5 折为 ¥1.5/万计费字符（原价 ¥3）。估算仅供参考，实际时长、体积和账单可能略有差异。
+
 ## Install / 安装
 
 Requires DSH `>=0.2.0-rc.2 <0.3.0`, Node `^22.19.0 || >=24.0.0`, on macOS or Windows.

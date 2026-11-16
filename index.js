@@ -11,6 +11,7 @@ import { sanitizeFontSettings } from './assets/reading-fonts.mjs'
 import { replaceFile } from './assets/atomic-file.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
 import { createTtsService, TtsError } from './tts.js'
+import { AudiobookError, createAudiobookService } from './audiobook.js'
 import {
   createTagStore,
   FINISHED_PERCENT,
@@ -140,6 +141,7 @@ export function apply(ctx, options = {}) {
     return ''
   }
   const tts = createTtsService({ rootDir, resolveSecret: resolveTtsSecret, logger: ctx.logger, ...(options.tts || {}) })
+  const audiobooks = createAudiobookService({ rootDir, tts, logger: ctx.logger })
 
   let pendingWrite = Promise.resolve()
   let pendingStateWrite = Promise.resolve()
@@ -960,6 +962,13 @@ export function apply(ctx, options = {}) {
     })
   }
 
+  async function findBook(id) {
+    const library = await readLibrary()
+    const record = library.books.find((book) => book.id === id)
+    if (record === undefined) throw new HttpError(404, 'book not found')
+    return record
+  }
+
   async function deleteBook(request, response, id) {
     const library = await readLibrary()
     const record = library.books.find((book) => book.id === id)
@@ -979,6 +988,7 @@ export function apply(ctx, options = {}) {
       await fs.unlink(file).catch(() => undefined)
     }
     await removeCover(record)
+    await audiobooks.remove(id).catch((error) => ctx.logger.warn(error instanceof Error ? error : new Error(String(error))))
     await updateStates((books) => {
       const next = { ...books }
       delete next[id]
@@ -1335,6 +1345,78 @@ export function apply(ctx, options = {}) {
         }
         throw new HttpError(405, 'method not allowed')
       }
+      const audiobookPlan = new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/audio/plan$`).exec(pathname)
+      if (audiobookPlan !== null) {
+        if (request.method !== 'POST') throw new HttpError(405, 'method not allowed')
+        const record = await findBook(audiobookPlan[1])
+        const body = await readJsonBody(request, 8 * 1024 * 1024)
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid audiobook plan')
+        const plan = await audiobooks.plan(record.id, {
+          text: typeof body.text === 'string' ? body.text : '',
+          voice: cleanText(body.voice, '', 40),
+          speed: body.speed,
+        })
+        sendJson(request, response, 200, { plan })
+        return
+      }
+      const audiobookStart = new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/audio/start$`).exec(pathname)
+      if (audiobookStart !== null) {
+        if (request.method !== 'POST') throw new HttpError(405, 'method not allowed')
+        const record = await findBook(audiobookStart[1])
+        const body = await readJsonBody(request, 16 * 1024)
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid audiobook request')
+        const state = await audiobooks.start(record.id, { voice: cleanText(body.voice, '', 40), speed: body.speed })
+        sendJson(request, response, 200, { state })
+        return
+      }
+      const audiobookCancel = new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/audio/cancel$`).exec(pathname)
+      if (audiobookCancel !== null) {
+        if (request.method !== 'POST') throw new HttpError(405, 'method not allowed')
+        const record = await findBook(audiobookCancel[1])
+        sendJson(request, response, 200, { state: await audiobooks.cancel(record.id) })
+        return
+      }
+      const audiobookFile = new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/audio/file$`).exec(pathname)
+      if (audiobookFile !== null) {
+        if (request.method !== 'GET' && request.method !== 'HEAD') throw new HttpError(405, 'method not allowed')
+        const record = await findBook(audiobookFile[1])
+        const file = await audiobooks.file(record.id)
+        if (file === null) throw new HttpError(404, 'audio not found')
+        response.writeHead(200, {
+          ...baseHeaders(request),
+          'Content-Type': 'audio/wav',
+          'Content-Length': file.bytes,
+          'Content-Disposition': `attachment; filename="${record.id}.wav"`,
+          'Cache-Control': 'no-store',
+        })
+        if (request.method === 'HEAD') {
+          response.end()
+          return
+        }
+        await new Promise((resolve, reject) => {
+          const stream = createReadStream(file.path)
+          stream.once('error', reject)
+          response.once('close', resolve)
+          response.once('finish', resolve)
+          stream.pipe(response)
+        })
+        return
+      }
+      const audiobookState = new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/audio$`).exec(pathname)
+      if (audiobookState !== null) {
+        if (request.method === 'GET') {
+          const record = await findBook(audiobookState[1])
+          sendJson(request, response, 200, { state: await audiobooks.state(record.id) })
+          return
+        }
+        if (request.method === 'DELETE') {
+          const record = await findBook(audiobookState[1])
+          await audiobooks.remove(record.id)
+          sendJson(request, response, 200, { ok: true })
+          return
+        }
+        throw new HttpError(405, 'method not allowed')
+      }
       if (pathname === `${API_PREFIX}/books` || pathname === `${API_PREFIX}/books/`) {
         if (request.method === 'GET') {
           await listBooks(request, response)
@@ -1400,7 +1482,9 @@ export function apply(ctx, options = {}) {
             ? error.status
             : error instanceof TtsError
               ? error.status
-              : error instanceof AppleBooksImportError
+              : error instanceof AudiobookError
+                ? error.status
+                : error instanceof AppleBooksImportError
                 ? error.status
                 : 500
       if (status >= 500) ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))

@@ -231,7 +231,11 @@ test('edge does not retry a removed voice', async t => {
   }
   const { service } = await withService(t, { platform: 'linux', websocket: FakeSocket })
   const synth = service.synthesize({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', text: '你好。', speed: 1 })
-  await new Promise(resolve => setTimeout(resolve, 0))
+  // The provider fetches a token and waits for settings before it opens the
+  // socket; a single macrotask is not enough under a loaded test runner.
+  const started = Date.now()
+  while (sockets.length === 0 && Date.now() - started < 5000) await new Promise(resolve => setTimeout(resolve, 5))
+  assert.ok(sockets[0], 'edge socket was created')
   sockets[0].onclose({ code: 1007, reason: 'Unsupported voice' })
   await assert.rejects(() => synth, /Unsupported voice|1007/)
   assert.equal(sockets.length, 1)

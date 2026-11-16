@@ -402,6 +402,19 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-rename-input:focus{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-brand-primary) 14%,transparent)}
 .bs-rename-error{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}
 .bs-rename-foot{justify-content:flex-end}
+.bs-apple-sub{margin:2px 0 0;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-audiobook-dialog{width:min(540px,calc(100vw - 28px));max-height:calc(100vh - 40px)}
+.bs-audiobook-body{display:flex;flex-direction:column;gap:12px;padding:10px 18px 14px;min-height:0;overflow:auto}
+.bs-audiobook-fields{display:flex;flex-wrap:wrap;gap:10px}
+.bs-audiobook-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px}
+.bs-audiobook-item{display:flex;flex-direction:column;gap:2px;min-width:0;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.bs-audiobook-label{font-size:11px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
+.bs-audiobook-value{font-size:13px;line-height:1.4;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-audiobook-hint{display:flex;align-items:center;gap:6px;margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.bs-audiobook-progress{height:6px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
+.bs-audiobook-progress-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);transition:width .2s ease}
+.bs-audiobook-done{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.bs-audiobook-done .bs-button{text-decoration:none}
 @media (hover:none){.bs-more{opacity:1}}
 @media (hover:none){.bs-row-more{opacity:1}}
 `
@@ -6011,7 +6024,324 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    function BookCard({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags }) {
+    // Whole-book audio is rendered from text extracted here, because the Host
+    // has no DOM parser: EPUB uses the same parser as the reader, PDF reuses
+    // the reader's PDF.js. Only the resulting plain text crosses the wire.
+    async function extractBookText(base, book) {
+      const response = await fetch(resourceUrl(base, `${API_ROOT}/books/${book.id}/file`))
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const bytes = new Uint8Array(await response.arrayBuffer())
+      if (book.format === 'epub') {
+        const [module, speech] = await Promise.all([loadEpubModule(base), loadTtsSentences(base)])
+        const data = module.parseEpub(bytes)
+        const parts = []
+        for (const chapter of data.chapters || []) {
+          const text = speech.htmlToSpeakText((chapter && chapter.html) || '')
+          if (text !== '') parts.push(text)
+        }
+        return parts.join('\n\n')
+      }
+      if (book.format === 'pdf') {
+        const pdfjs = await loadPdfjs(base)
+        const loading = pdfjs.getDocument({
+          data: bytes,
+          cMapUrl: absoluteServiceUrl(base, `${ASSET_ROOT}/cmaps/`),
+          cMapPacked: true,
+          standardFontDataUrl: absoluteServiceUrl(base, `${ASSET_ROOT}/standard_fonts/`),
+          wasmUrl: absoluteServiceUrl(base, `${ASSET_ROOT}/wasm/`),
+          isEvalSupported: false,
+        })
+        const document = await loading.promise
+        try {
+          const parts = []
+          for (let number = 1; number <= document.numPages; number += 1) {
+            const page = await document.getPage(number)
+            const content = await page.getTextContent()
+            parts.push(joinPdfItems(content.items))
+          }
+          return parts.join('\n\n')
+        } finally {
+          void loading.destroy().catch(() => undefined)
+        }
+      }
+      return ''
+    }
+
+    function formatDuration(seconds) {
+      const total = Math.max(0, Math.round(Number(seconds) || 0))
+      const hours = Math.floor(total / 3600)
+      const minutes = Math.floor((total % 3600) / 60)
+      const rest = total % 60
+      if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`
+      return `${minutes}:${String(rest).padStart(2, '0')}`
+    }
+
+    function formatMoney(value) {
+      const number = Number(value) || 0
+      return number >= 0.01 ? number.toFixed(2) : number.toFixed(4)
+    }
+
+    // DeepSeek renders a book into one WAV. The dialog shows the estimate before
+    // anything is synthesised; the render then runs in the Host, so closing the
+    // dialog does not stop it.
+    function AudiobookDialog({ t, base, book, onClose }) {
+      const [phase, setPhase] = useState('extracting')
+      const [plan, setPlan] = useState(null)
+      const [voices, setVoices] = useState([])
+      const [voice, setVoice] = useState('stella')
+      const [speed, setSpeed] = useState(1)
+      const [job, setJob] = useState(null)
+      const [error, setError] = useState('')
+      const aliveRef = useRef(true)
+
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [onClose])
+
+      useEffect(() => () => { aliveRef.current = false }, [])
+
+      useEffect(() => {
+        let cancelled = false
+        ;(async () => {
+          try {
+            const capabilities = await requestJson(base, '/tts/capabilities')
+            const provider = (capabilities.providers || []).find((item) => item.id === 'deepseek')
+            if (cancelled) return
+            if (provider && Array.isArray(provider.voices) && provider.voices.length > 0) setVoices(provider.voices)
+            if (provider && provider.configured === false) setError(t('audiobookNoKey'))
+            const text = await extractBookText(base, book)
+            if (cancelled) return
+            if (text.trim() === '') throw new Error(t('audiobookNoText'))
+            const payload = await requestJson(base, `/books/${book.id}/audio/plan`, {
+              method: 'POST',
+              body: JSON.stringify({ text, voice: 'stella', speed: 1 }),
+            })
+            if (cancelled) return
+            setPlan(payload.plan)
+            const current = await requestJson(base, `/books/${book.id}/audio`)
+            if (cancelled) return
+            setJob(current.state)
+            setPhase(current.state.status === 'done' ? 'done' : current.state.status === 'running' ? 'running' : 'ready')
+          } catch (failure) {
+            if (cancelled) return
+            setError(failure instanceof Error ? failure.message : String(failure))
+            setPhase('error')
+          }
+        })()
+        return () => { cancelled = true }
+      }, [base, book, t])
+
+      useEffect(() => {
+        if (phase !== 'running') return undefined
+        let cancelled = false
+        const poll = async () => {
+          try {
+            const payload = await requestJson(base, `/books/${book.id}/audio`)
+            if (cancelled) return
+            setJob(payload.state)
+            if (payload.state.status === 'done') setPhase('done')
+            else if (payload.state.status === 'failed') {
+              setError(payload.state.error || t('audiobookFailed'))
+              setPhase('error')
+            } else if (payload.state.status === 'cancelled') setPhase('ready')
+          } catch {
+            // A transient poll failure must not discard a running render.
+          }
+        }
+        const timer = setInterval(() => { void poll() }, 1000)
+        void poll()
+        return () => { cancelled = true; clearInterval(timer) }
+      }, [phase, base, book.id, t])
+
+      const replan = async (nextVoice, nextSpeed) => {
+        setVoice(nextVoice)
+        setSpeed(nextSpeed)
+        try {
+          const payload = await requestJson(base, `/books/${book.id}/audio/plan`, {
+            method: 'POST',
+            body: JSON.stringify({ voice: nextVoice, speed: nextSpeed }),
+          })
+          if (aliveRef.current) setPlan(payload.plan)
+        } catch (failure) {
+          if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
+        }
+      }
+
+      const start = async () => {
+        setError('')
+        setPhase('running')
+        try {
+          const payload = await requestJson(base, `/books/${book.id}/audio/start`, {
+            method: 'POST',
+            body: JSON.stringify({ voice, speed }),
+          })
+          if (aliveRef.current) setJob(payload.state)
+        } catch (failure) {
+          if (!aliveRef.current) return
+          setError(failure instanceof Error ? failure.message : String(failure))
+          setPhase('error')
+        }
+      }
+
+      const cancel = async () => {
+        try {
+          const payload = await requestJson(base, `/books/${book.id}/audio/cancel`, { method: 'POST', body: '{}' })
+          if (!aliveRef.current) return
+          setJob(payload.state)
+          setPhase('ready')
+        } catch (failure) {
+          if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
+        }
+      }
+
+      const voiceOptions = voices.length > 0
+        ? voices
+        : [{ id: 'stella', label: '海星 · 女声' }, { id: 'tide', label: '暗潮 · 男声' }]
+      const estimate = plan
+      const percent = job && job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0
+      const downloadUrl = resourceUrl(base, `${API_ROOT}/books/${book.id}/audio/file`)
+      const busy = phase === 'extracting' || phase === 'running'
+
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-apple-backdrop', onClick: onClose }),
+        h(
+          'div',
+          {
+            className: 'bs-apple-dialog bs-audiobook-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('audiobookTitle'),
+            onClick: (event) => event.stopPropagation(),
+          },
+          h(
+            'header',
+            { className: 'bs-apple-head' },
+            h(
+              'div',
+              { className: 'bs-apple-heading' },
+              h('h2', { className: 'bs-apple-title' }, t('audiobookTitle')),
+              h('p', { className: 'bs-apple-sub' }, book.title || t('untitled')),
+            ),
+            h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
+          ),
+          h(
+            'div',
+            { className: 'bs-audiobook-body' },
+            phase === 'extracting'
+              ? h('p', { className: 'bs-audiobook-hint' }, h(Spinner, { small: true }), ' ', t('audiobookParsing'))
+              : null,
+            error !== ''
+              ? h('p', { className: 'bs-rename-error', role: 'alert' }, error)
+              : null,
+            estimate !== null
+              ? h(
+                  React.Fragment,
+                  null,
+                  h(
+                    'div',
+                    { className: 'bs-audiobook-fields' },
+                    h(
+                      'label',
+                      { className: 'bs-rename-field' },
+                      h('span', { className: 'bs-rename-label' }, t('audiobookVoiceLabel')),
+                      h('select', {
+                        className: 'bs-tts-select',
+                        'aria-label': t('audiobookVoiceLabel'),
+                        value: voice,
+                        disabled: busy,
+                        onChange: (event) => { void replan(event.target.value, speed) },
+                      }, voiceOptions.map((item) => h('option', { key: item.id, value: item.id }, item.label || item.id))),
+                    ),
+                    h(
+                      'label',
+                      { className: 'bs-rename-field' },
+                      h('span', { className: 'bs-rename-label' }, t('audiobookSpeedLabel')),
+                      h('select', {
+                        className: 'bs-tts-select',
+                        'aria-label': t('audiobookSpeedLabel'),
+                        value: String(speed),
+                        disabled: busy,
+                        onChange: (event) => { void replan(voice, Number(event.target.value)) },
+                      }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, `${value}×`))),
+                    ),
+                  ),
+                  h(
+                    'div',
+                    { className: 'bs-audiobook-grid' },
+                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookCharacters')), h('span', { className: 'bs-audiobook-value' }, estimate.characters.toLocaleString())),
+                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSentences')), h('span', { className: 'bs-audiobook-value' }, estimate.sentences.toLocaleString())),
+                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookDuration')), h('span', { className: 'bs-audiobook-value' }, `≈ ${formatDuration(estimate.durationSeconds)}`)),
+                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSize')), h('span', { className: 'bs-audiobook-value' }, formatBytes(estimate.bytes))),
+                    h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookBilled')), h('span', { className: 'bs-audiobook-value' }, estimate.billedCharacters.toLocaleString())),
+                    h(
+                      'div',
+                      { className: 'bs-audiobook-item' },
+                      h('span', { className: 'bs-audiobook-label' }, t('audiobookCost')),
+                      h('span', { className: 'bs-audiobook-value' }, `¥${formatMoney(estimate.cost)}`),
+                      estimate.promo
+                        ? h('span', { className: 'bs-audiobook-label' }, t('audiobookPromo', { price: formatMoney(estimate.listCost) }))
+                        : null,
+                    ),
+                  ),
+                  h('p', { className: 'bs-audiobook-hint' }, t('audiobookHint')),
+                )
+              : null,
+            job !== null && (phase === 'running' || phase === 'done')
+              ? h(
+                  'div',
+                  { className: 'bs-audiobook-progress' },
+                  h('div', {
+                    className: 'bs-audiobook-progress-fill',
+                    style: { width: `${phase === 'done' ? 100 : percent}%` },
+                  }),
+                )
+              : null,
+            job !== null && phase === 'running'
+              ? h('p', { className: 'bs-audiobook-hint' }, t('audiobookProgress', { done: job.done, total: job.total, size: formatBytes(job.bytes || 0) }))
+              : null,
+            phase === 'done' && job && job.audio
+              ? h(
+                  'div',
+                  { className: 'bs-audiobook-done' },
+                  h('p', { className: 'bs-audiobook-hint' }, t('audiobookDone', { size: formatBytes(job.audio.bytes), seconds: job.audio.seconds ? formatDuration(job.audio.seconds) : formatDuration(estimate ? estimate.durationSeconds : 0) })),
+                  h('a', { className: 'bs-button bs-button-primary', href: downloadUrl, download: `${book.title || book.id}.wav` }, t('audiobookDownload')),
+                )
+              : null,
+            phase === 'running'
+              ? h('p', { className: 'bs-audiobook-hint' }, t('audiobookBackground'))
+              : null,
+          ),
+          h(
+            'div',
+            { className: 'bs-apple-foot' },
+            h('button', { type: 'button', className: 'bs-button', onClick: onClose }, phase === 'done' ? t('dismiss') : t('cancel')),
+            phase === 'running'
+              ? h('button', { type: 'button', className: 'bs-button', onClick: () => { void cancel() } }, t('audiobookCancel'))
+              : h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'bs-button bs-button-primary',
+                    onClick: () => { void start() },
+                    disabled: estimate === null || phase === 'extracting',
+                  },
+                  phase === 'done' ? t('audiobookRegenerate') : t('audiobookStart'),
+                ),
+          ),
+        ),
+      )
+    }
+
+    function BookCard({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags, onGenerateAudio }) {
       // The Host sends the effective status (manual override or progress). The
       // card label must follow it, or a manual "finished" would still print the
       // percent-derived "continue reading".
@@ -6170,6 +6500,18 @@ html.bb-paged body table tr{break-inside:avoid}
                   },
                   t('bookTags'),
                 ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onGenerateAudio(book)
+                    },
+                  },
+                  t('audiobookMenu'),
+                ),
               ),
         ),
         h(
@@ -6200,7 +6542,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    function BookRow({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags }) {
+    function BookRow({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags, onGenerateAudio }) {
       const percent = bookPercent(book)
       const finished = bookStatus(book) === 'finished'
       const subParts = bookSubParts(book, t)
@@ -6361,6 +6703,18 @@ html.bb-paged body table tr{break-inside:avoid}
                     },
                   },
                   t('bookTags'),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onGenerateAudio(book)
+                    },
+                  },
+                  t('audiobookMenu'),
                 ),
                 h(
                   'button',
@@ -6963,6 +7317,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [finishSaving, setFinishSaving] = useState(false)
       const [finishError, setFinishError] = useState('')
       const [tagTarget, setTagTarget] = useState(null)
+      const [audioBook, setAudioBook] = useState(null)
       const [tagSaving, setTagSaving] = useState(false)
       const [tagError, setTagError] = useState('')
       const [tagsOpen, setTagsOpen] = useState(false)
@@ -7529,6 +7884,7 @@ html.bb-paged body table tr{break-inside:avoid}
         onCancelDelete: () => setDeleteTarget(null),
         onRename: openRename,
         onEditTags: openBookTags,
+        onGenerateAudio: (value) => setAudioBook(value),
         confirming: deleteTarget !== null && deleteTarget.id === book.id,
         deleting: deleting && deleteTarget !== null && deleteTarget.id === book.id,
       })
@@ -7894,6 +8250,14 @@ html.bb-paged body table tr{break-inside:avoid}
               onCreateTag: createTag,
             })
           : null,
+        audioBook !== null
+          ? h(AudiobookDialog, {
+              t,
+              base,
+              book: audioBook,
+              onClose: () => setAudioBook(null),
+            })
+          : null,
         finishPrompt !== null
           ? h(FinishBookDialog, {
               t,
@@ -8065,6 +8429,29 @@ html.bb-paged body table tr{break-inside:avoid}
       unknownAuthor: 'Unknown author',
       back: 'Back to bookshelf',
       readAloud: 'Read aloud',
+      audiobookTitle: 'Whole-book audio',
+      audiobookMenu: 'Generate audiobook…',
+      audiobookVoiceLabel: 'Voice',
+      audiobookSpeedLabel: 'Speed',
+      audiobookCharacters: 'Characters',
+      audiobookSentences: 'Sentences',
+      audiobookDuration: 'Estimated length',
+      audiobookSize: 'Estimated size',
+      audiobookBilled: 'Billed characters',
+      audiobookCost: 'Estimated cost',
+      audiobookPromo: 'list ¥{price} · 50% off',
+      audiobookHint: 'Estimate only: DeepSeek counts a Chinese character as two, and output is a 24 kHz mono WAV. Final duration, size and bill may differ.',
+      audiobookStart: 'Generate',
+      audiobookRegenerate: 'Regenerate',
+      audiobookCancel: 'Cancel render',
+      audiobookParsing: 'Extracting the book text…',
+      audiobookProgress: '{done} / {total} sentences · {size}',
+      audiobookDone: 'Ready · {size} · {seconds}',
+      audiobookDownload: 'Download WAV',
+      audiobookBackground: 'Rendering continues on the Host; you can close this window.',
+      audiobookNoText: 'This book has no readable text.',
+      audiobookNoKey: 'DeepSeek API key is not configured. Add it under Read aloud settings and reopen this window.',
+      audiobookFailed: 'Audiobook generation failed.',
       settingsTitle: 'Shelf settings',
       settingsHint: 'Reading, read-aloud and workspace options.',
       settingsTabReading: 'Reading',
@@ -8405,6 +8792,29 @@ html.bb-paged body table tr{break-inside:avoid}
       unknownAuthor: '未知作者',
       back: '返回书架',
       readAloud: '朗读',
+      audiobookTitle: '整书语音',
+      audiobookMenu: '生成整书语音…',
+      audiobookVoiceLabel: '音色',
+      audiobookSpeedLabel: '语速',
+      audiobookCharacters: '字数',
+      audiobookSentences: '句数',
+      audiobookDuration: '预计时长',
+      audiobookSize: '预计占用',
+      audiobookBilled: '计费字符',
+      audiobookCost: '预计费用',
+      audiobookPromo: '原价 ¥{price} · 限时 5 折',
+      audiobookHint: '仅为估算：DeepSeek 将一个汉字计为 2 个计费字符，输出为 24kHz 单声道 WAV；实际时长、体积和账单可能略有差异。',
+      audiobookStart: '开始生成',
+      audiobookRegenerate: '重新生成',
+      audiobookCancel: '取消生成',
+      audiobookParsing: '正在提取书籍文本…',
+      audiobookProgress: '{done} / {total} 句 · {size}',
+      audiobookDone: '已生成 · {size} · {seconds}',
+      audiobookDownload: '下载 WAV',
+      audiobookBackground: '生成在 Host 后台继续，可以关闭此窗口。',
+      audiobookNoText: '这本书没有可朗读的文本。',
+      audiobookNoKey: '尚未配置 DeepSeek API Key。请先在朗读设置里填写，再重新打开此窗口。',
+      audiobookFailed: '整书语音生成失败。',
       settingsTitle: '书架设置',
       settingsHint: '阅读、朗读与工作区设置。',
       settingsTabReading: '阅读',

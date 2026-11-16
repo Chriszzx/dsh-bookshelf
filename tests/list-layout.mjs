@@ -234,7 +234,7 @@ try {
     openRowMenu('Beta');
     await until(()=>document.querySelector('.bs-row-menu'));
     const items=[...document.querySelectorAll('.bs-row-menu button')].map(node=>node.textContent);
-    check(items.join(',')==='rename,bookTags,delete','row menu items');
+    check(items.join(',')==='rename,bookTags,audiobookMenu,delete','row menu items');
     menuItem('bookTags').click();
     await until(()=>document.querySelector('.bs-tag-dialog'));
     document.querySelector('.bs-tag-dialog [aria-label="dismiss"]').click();

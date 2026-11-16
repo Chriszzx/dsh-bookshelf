@@ -8,7 +8,7 @@ const tasks = {
   unit: ['--test',
     'tests/manifest.mjs', 'tests/sidebar-snapshot.mjs', 'tests/discussion-bridge.mjs',
     'tests/platform-compatibility.mjs', 'tests/link-fallback.mjs', 'tests/link-import-mode.mjs',
-    'tests/reading-fonts.mjs', 'tests/atomic-file.mjs', 'tests/tags.mjs', 'tests/tags-api.mjs',
+    'tests/reading-fonts.mjs', 'tests/atomic-file.mjs', 'tests/audiobook.mjs', 'tests/audiobook-api.mjs', 'tests/tags.mjs', 'tests/tags-api.mjs',
     'tests/tts-sentences.mjs', 'tests/tts-cache.mjs', 'tests/tts-providers.mjs', 'tests/tts-api.mjs',
     'tests/tts-native.mjs',
   ],
