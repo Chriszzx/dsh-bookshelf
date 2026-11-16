@@ -176,7 +176,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-settings-actions{display:flex;gap:8px}
 .bs-tts-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;display:flex;flex-direction:column;gap:8px;width:min(370px,calc(100vw - 28px));padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
 .bs-tts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
-.bs-tts-voice-readout{flex:none;max-width:190px;font-size:11px;line-height:1.4;padding:2px 6px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-voice-readout{flex:0 1 auto;min-width:0;max-width:100%;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-tts-caption{min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .bs-tts-error{color:var(--dsw-alias-state-error-primary)}
 .bs-tts-speed{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--dsw-alias-label-secondary);flex:none}
