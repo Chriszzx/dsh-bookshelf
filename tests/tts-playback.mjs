@@ -325,9 +325,10 @@ try {
     await until(()=>document.querySelector('.bs-selection-menu'));
     const menu=document.querySelector('.bs-selection-menu');
     check(menu.getAttribute('role')==='menu','menu role');
-    for(const label of ['selectionCopy','selectionCopyCite','selectionSelectAll','selectionSpeak']){
+    for(const label of ['selectionCopy','selectionCopyCite','selectionSpeak','selectionHighlight','selectionUnderline']){
       check(items().some(node=>node.textContent===label),'missing menu item '+label+': '+items().map(node=>node.textContent).join('|'));
     }
+    check(!items().some(node=>node.textContent==='selectionSelectAll'),'select-all item removed: '+items().map(node=>node.textContent).join('|'));
     const host=document.querySelector('.bs-epub-body').getBoundingClientRect();
     const menuRect=menu.getBoundingClientRect();
     check(menuRect.width>0&&menuRect.height>0,'menu is visible');
@@ -345,11 +346,8 @@ try {
     await until(()=>!document.querySelector('.bs-selection-menu'));
     openMenu();
     await until(()=>document.querySelector('.bs-selection-menu'));
-    clickItem('selectionSelectAll');
-    await wait(150);
-    const afterAll=current();
-    check(String(afterAll.window.getSelection()).includes('第二章第三句话'),'select all covers the chapter');
-    check(!document.querySelector('.bs-selection-menu'),'menu closes after an action');
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await until(()=>!document.querySelector('.bs-selection-menu'));
     const chapterBefore=document.querySelector('.bs-reader-sub').textContent;
     const plays=window.audioEvents('play').length;
     openMenu();
