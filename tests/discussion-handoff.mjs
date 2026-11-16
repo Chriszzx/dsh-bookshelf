@@ -88,15 +88,20 @@ window.ready=async()=>{
    const settingsButton=[...document.querySelectorAll('#root button')].find(b=>b.title==='shelfSettings');
    if(!settingsButton)throw Error('missing shelf settings');
    ReactDOM.flushSync(()=>settingsButton.click());
+   // The settings window keeps import toggles on its own tab.
+   await until(()=>document.querySelector('.bs-settings-dialog'));
+   const otherTab=[...document.querySelectorAll('.bs-settings-tab')].find(node=>node.textContent==='settingsTabOther');
+   if(!otherTab)throw Error('missing settings tabs');
+   ReactDOM.flushSync(()=>otherTab.click());
    await until(()=>document.querySelector('.bs-setting-toggle input'));
    const checkbox=document.querySelector('.bs-setting-toggle input');
    checkbox.click();await wait(80);
    platformUi.disabled=!appleButton();
    checkbox.click();await wait(80);
    platformUi.enabled=Boolean(appleButton());
-   const close=document.querySelector('.bs-reader-settings button[title="dismiss"]');
+   const close=document.querySelector('.bs-settings-dialog button[title="dismiss"]');
    if(close)close.click();
-   await until(()=>!document.querySelector('.bs-reader-settings'));
+   await until(()=>!document.querySelector('.bs-settings-dialog'));
  }
  window.__platformUi=platformUi;
  document.querySelector('.bs-cover').click();

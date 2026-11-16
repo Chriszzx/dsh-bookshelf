@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '6'
+    const ASSET_VERSION = '10'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -163,6 +163,29 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tag-danger{color:var(--dsw-alias-state-error-primary)}
 .bs-tag-body{flex:1;min-height:0;overflow:auto}
 .bs-tag-foot{justify-content:flex-end}
+.bs-settings-dialog{width:min(720px,calc(100vw - 32px));max-height:min(86vh,760px)}
+.bs-settings-tabs{flex:none;display:flex;gap:6px;padding:0 18px 10px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-settings-tab{font:inherit;font-size:12.5px;line-height:1.4;padding:6px 10px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.bs-settings-tab:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-settings-tab:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-settings-tab[aria-selected="true"]{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-primary)}
+.bs-settings-body{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:12px 18px}
+.bs-settings-cache{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
+.bs-settings-notice{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-success-primary)}
+.bs-settings-foot{justify-content:flex-end}
+.bs-settings-actions{display:flex;gap:8px}
+.bs-tts-bar{flex:none;display:flex;flex-direction:column;gap:6px;padding:6px 12px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
+.bs-tts-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.bs-tts-voice-readout{flex:none;max-width:190px;font-size:11px;line-height:1.4;padding:2px 6px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-caption{flex:1;min-width:0;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-error{color:var(--dsw-alias-state-error-primary)}
+.bs-tts-speed{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--dsw-alias-label-secondary);flex:none}
+.bs-tts-select{font:inherit;font-size:11.5px;line-height:1.4;padding:3px 5px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
+.bs-tts-voice{font-size:11.5px;padding:4px 8px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:none}
+.bs-tts-settings{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.bs-tts-field{display:flex;flex-direction:column;gap:3px;font-size:11px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
+.bs-tts-input{font:inherit;font-size:12px;line-height:1.4;padding:4px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);min-width:180px}
+.bs-tts-actions{display:flex;gap:6px;margin-left:auto}
 .bs-finish-body{margin:0;padding:0 18px 12px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-primary)}
 .bs-meta{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0 2px}
 .bs-book-title{font-size:13px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -302,6 +325,12 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
+  .bs-tts-bar{padding:4px 8px}
+  .bs-settings-dialog{width:calc(100vw - 16px);max-height:88vh}
+  .bs-settings-tabs{padding:0 12px 8px}
+  .bs-settings-body{padding:10px 12px}
+  .bs-tts-speed span{display:none}
+  .bs-tts-voice{max-width:96px}
   .bs-row-open{padding:8px 40px 8px 8px;gap:10px}
   .bs-row-thumb{width:40px;height:52px}
   .bs-row-confirming{padding:8px;gap:8px}
@@ -786,6 +815,18 @@ html.bb-paged body table tr{break-inside:avoid}
         })
       }
       return readingFontsPromise
+    }
+
+    let ttsSentencesPromise = null
+
+    function loadTtsSentences(base) {
+      if (ttsSentencesPromise === null) {
+        ttsSentencesPromise = import(absoluteServiceUrl(base, `${ASSET_ROOT}/tts-sentences.mjs?v=${ASSET_VERSION}`)).catch((error) => {
+          ttsSentencesPromise = null
+          throw error
+        })
+      }
+      return ttsSentencesPromise
     }
 
     function loadReadingSnapshot(base) {
@@ -1381,29 +1422,16 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    function ReaderSettingsPopover({ t, settings, onChange, onClose, title, hint, workspaces, discussionWorkspace, onDiscussionWorkspaceChange, appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange }) {
-      const heading = title || t('readingSettings')
+    function ReadingSettingsFields({
+      t, settings, onChange, includeExtras = true, workspaces, discussionWorkspace, onDiscussionWorkspaceChange,
+      appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange,
+    }) {
       const workspaceChoices = Array.isArray(workspaces) ? workspaces.filter((item) => item && typeof item.workspaceId === 'string') : null
       const selectedWorkspace = workspaceChoices !== null && workspaceChoices.some((item) => item.workspaceId === discussionWorkspace) ? discussionWorkspace : ''
       return h(
         React.Fragment,
         null,
-        h('div', { className: 'bs-popover-backdrop', onClick: onClose }),
-        h(
-          'div',
-          { className: 'bs-reader-settings', role: 'dialog', 'aria-label': heading },
-          h(
-            'div',
-            { className: 'bs-settings-head' },
-            h('span', { className: 'bs-settings-title' }, heading),
-            h(
-              'button',
-              { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') },
-              h(CloseIcon),
-            ),
-          ),
-          hint ? h('p', { className: 'bs-settings-hint' }, hint) : null,
-          workspaceChoices !== null && typeof onDiscussionWorkspaceChange === 'function'
+          includeExtras && workspaceChoices !== null && typeof onDiscussionWorkspaceChange === 'function'
             ? h(
                 React.Fragment,
                 null,
@@ -1427,7 +1455,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 h('div', { className: 'bs-settings-divider' }),
               )
             : null,
-          appleBooksAvailable === true && typeof onAppleBooksEnabledChange === 'function'
+          includeExtras && appleBooksAvailable === true && typeof onAppleBooksEnabledChange === 'function'
             ? h(
                 React.Fragment,
                 null,
@@ -1532,11 +1560,1243 @@ html.bb-paged body table tr{break-inside:avoid}
             ],
             onChange: (value) => onChange({ theme: value }),
           }),
+      )
+    }
+
+    function ReaderSettingsPopover({ t, settings, onChange, onClose, title, hint, workspaces, discussionWorkspace, onDiscussionWorkspaceChange, appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange }) {
+      const heading = title || t('readingSettings')
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-popover-backdrop', onClick: onClose }),
+        h(
+          'div',
+          { className: 'bs-reader-settings', role: 'dialog', 'aria-label': heading },
+          h(
+            'div',
+            { className: 'bs-settings-head' },
+            h('span', { className: 'bs-settings-title' }, heading),
+            h(
+              'button',
+              { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') },
+              h(CloseIcon),
+            ),
+          ),
+          hint ? h('p', { className: 'bs-settings-hint' }, hint) : null,
+          h(ReadingSettingsFields, {
+            t, settings, onChange, workspaces, discussionWorkspace, onDiscussionWorkspaceChange,
+            appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange,
+          }),
         ),
       )
     }
 
-    function ReaderShell({ t, book, onBack, controls, children, state, progress }) {
+    // ------------------------------------------------------------ read aloud
+    // The Host owns synthesis and caching; the browser walks the text into
+    // sentences, requests one utterance at a time, and follows along by turning
+    // pages and advancing chapters.
+    function SpeechIcon({ size = 16 }) {
+      return svgIcon(size, [
+        h('path', { key: 'a', d: 'M4 9.5h3l4-3.5v12l-4-3.5H4z' }),
+        h('path', { key: 'b', d: 'M15.5 8.5a4.5 4.5 0 0 1 0 7' }),
+        h('path', { key: 'c', d: 'M18 6a8 8 0 0 1 0 12' }),
+      ])
+    }
+
+    function PlayIcon({ size = 15 }) {
+      return svgIcon(size, [h('path', { key: 'a', d: 'M8 5.5v13l10-6.5z' })])
+    }
+
+    function PauseIcon({ size = 15 }) {
+      return svgIcon(size, [
+        h('path', { key: 'a', d: 'M9 5v14M15 5v14' }),
+      ])
+    }
+
+    // 40 ms of silence; playing it inside the click unlocks the audio element,
+    // so the sentence that arrives after an async fetch can still play.
+    const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAIA+AAABAAgAZGF0YQAAAAA='
+    // A stuck speech service must not leave the UI spinning forever.
+    const TTS_TEST_TIMEOUT_MS = 12_000
+    const TTS_SENTENCE_TIMEOUT_MS = 30_000
+    const isTimeoutFailure = (failure) => failure instanceof Error && (failure.name === 'TimeoutError' || failure.name === 'AbortError')
+
+    const SPEECH_SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'])
+    const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
+
+    // Join PDF text runs without inserting spaces between CJK characters.
+    function joinPdfItems(items) {
+      let out = ''
+      let previous = ''
+      for (const item of items || []) {
+        const value = typeof item.str === 'string' ? item.str : ''
+        if (value === '') continue
+        if (out !== '' && item.hasEOL) out += '\n'
+        else if (out !== '' && !CJK_RE.test(previous.slice(-1)) && !CJK_RE.test(value.slice(0, 1))) out += ' '
+        out += value
+        previous = value
+      }
+      return out
+    }
+
+    // Locate the first text node containing this sentence and return the range
+    // of its first characters; page positioning only needs the start.
+    function findTextRange(doc, sentence, startIndex = 0) {
+      const needle = sentence.slice(0, 24)
+      if (needle === '') return null
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+      let node
+      let position = 0
+      while ((node = walker.nextNode())) {
+        const parent = node.parentElement
+        if (parent !== null && SPEECH_SKIP.has(parent.tagName)) continue
+        const value = node.nodeValue || ''
+        const index = value.indexOf(needle)
+        if (index !== -1 && position >= startIndex) {
+          const range = doc.createRange()
+          range.setStart(node, index)
+          range.setEnd(node, Math.min(value.length, index + needle.length))
+          return range
+        }
+        position += value.length
+      }
+      return null
+    }
+
+    function buildSpeechBatches(doc, sentences) {
+      let cursor = 0
+      return sentences.map((sentence) => {
+        const range = findTextRange(doc, sentence, cursor)
+        if (range !== null) cursor = range.startOffset + (range.endOffset - range.startOffset)
+        return { text: sentence, range }
+      })
+    }
+
+    // Read-aloud follows the book's own language when the provider offers a
+    // matching voice: declared EPUB metadata wins, otherwise a cheap script
+    // count from the first chapter.
+    function detectSpeechLanguage(text) {
+      const value = String(text || '')
+      if (value === '') return ''
+      const kana = (value.match(/[\u3040-\u30ff]/g) || []).length
+      const hangul = (value.match(/[\uac00-\ud7af]/g) || []).length
+      const cjk = (value.match(/[\u3400-\u9fff]/g) || []).length
+      const latin = (value.match(/[A-Za-z]/g) || []).length
+      if (kana > 10 && kana * 4 > cjk) return 'ja'
+      if (hangul > 10 && hangul * 4 > cjk) return 'ko'
+      if (cjk > 0 && cjk * 5 >= latin) return 'zh'
+      if (latin > 20) return 'en'
+      return ''
+    }
+
+    function epubSpeechLanguage(data) {
+      if (data === null || data === undefined) return ''
+      const declared = String(data.language || '').trim()
+      if (declared !== '') return declared
+      try {
+        const container = document.createElement('div')
+        container.innerHTML = (data.chapters && data.chapters[0] && data.chapters[0].html) || ''
+        return detectSpeechLanguage(container.innerText || container.textContent || '')
+      } catch {
+        return ''
+      }
+    }
+
+    function rangePage(doc, win, range) {
+      if (range === null) return null
+      const info = pagedMetrics(doc, win)
+      if (info === null) return null
+      const rects = range.getClientRects()
+      const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect()
+      if (!Number.isFinite(rect.left)) return null
+      // Range rects are viewport-relative: add the current column offset, or a
+      // sentence two pages ahead would be computed as page 2 and the reader
+      // would jump back and forth between the same two pages.
+      const body = doc.body
+      const documentElement = doc.documentElement
+      const scrollLeft = Math.max(body ? body.scrollLeft : 0, documentElement ? documentElement.scrollLeft : 0)
+      return Math.max(0, Math.floor((rect.left + scrollLeft - info.padLeft + 1) / info.step))
+    }
+
+    function useReadAloud({ base, t, language = '' }) {
+      const [status, setStatus] = useState('idle')
+      const [caption, setCaption] = useState('')
+      const [error, setError] = useState('')
+      const [settings, setSettings] = useState(null)
+      const [providers, setProviders] = useState([])
+      const [secrets, setSecrets] = useState({})
+      const runRef = useRef(0)
+      const batchRef = useRef(null)
+      const indexRef = useRef(0)
+      const driverRef = useRef(null)
+      const audioRef = useRef(null)
+      const audioCacheRef = useRef(new Map())
+      const settingsRef = useRef(null)
+      const settingsReadyRef = useRef(null)
+      const providersRef = useRef([])
+      const defaultProviderRef = useRef('')
+      const languageRef = useRef(language)
+      const pausedRef = useRef(false)
+
+      useEffect(() => {
+        languageRef.current = language || ''
+      }, [language])
+
+      const setLanguage = useCallback((value) => {
+        languageRef.current = String(value || '')
+      }, [])
+
+      const applySettings = useCallback((next) => {
+        settingsRef.current = next
+        setSettings(next)
+        // A different provider, voice or speed means different audio bytes.
+        audioCacheRef.current.clear()
+      }, [])
+
+      useEffect(() => {
+        let cancelled = false
+        // Clicking read-aloud right after entering a book used to race this
+        // request; synthesis now waits for the settings instead of failing.
+        const task = requestJson(base, '/tts/capabilities')
+          .then((payload) => {
+            if (cancelled) return
+            setProviders(Array.isArray(payload.providers) ? payload.providers : [])
+            setSecrets(payload.secrets && typeof payload.secrets === 'object' ? payload.secrets : {})
+            providersRef.current = Array.isArray(payload.providers) ? payload.providers : []
+            defaultProviderRef.current = typeof payload.defaultProvider === 'string' ? payload.defaultProvider : ''
+            applySettings(payload.settings || null)
+          })
+          .catch(() => undefined)
+        settingsReadyRef.current = task
+        task.then(() => {
+          if (settingsReadyRef.current === task) settingsReadyRef.current = null
+        })
+        return () => { cancelled = true }
+      }, [base, applySettings])
+
+      useEffect(() => () => {
+        runRef.current += 1
+        const audio = audioRef.current
+        if (audio !== null) {
+          audio.pause()
+          audio.onended = null
+          audio.onerror = null
+        }
+        audioCacheRef.current.clear()
+      }, [])
+
+      const getAudio = useCallback(() => {
+        if (audioRef.current === null) audioRef.current = new Audio()
+        return audioRef.current
+      }, [])
+
+      // Must run synchronously from the click: Chromium only allows later
+      // programmatic playback once a gesture played something. A separate
+      // element is used so its end event never confuses the sentence queue.
+      const unlockRef = useRef(null)
+      const unlock = useCallback(() => {
+        if (unlockRef.current !== null) return
+        try {
+          const audio = new Audio(SILENT_WAV)
+          audio.volume = 0
+          const started = audio.play()
+          if (started && typeof started.catch === 'function') started.catch(() => undefined)
+          unlockRef.current = audio
+        } catch {
+          // Autoplay may still be blocked; playback errors surface in the bar.
+        }
+      }, [])
+
+      const audioFor = useCallback((text) => {
+        const pending = settingsReadyRef.current
+        if (pending) {
+          return Promise.resolve(pending).then(() => audioFor(text))
+        }
+        const current = settingsRef.current
+        if (current === null) return Promise.reject(new Error(t('ttsNotReady')))
+        const key = `${current.provider}\u0000${current.voice}\u0000${current.autoVoice}\u0000${languageRef.current}\u0000${current.speed}\u0000${text}`
+        const cache = audioCacheRef.current
+        const hit = cache.get(key)
+        if (hit !== undefined) return hit
+        const promise = (async () => {
+          const provider = resolveSpeechProvider(current, providersRef.current, defaultProviderRef.current)
+          const providerVoices = (providersRef.current.find((item) => item.id === provider) || {}).voices || []
+          const voice = resolveSpeechVoice({
+            provider,
+            voices: providerVoices,
+            settings: current,
+            language: languageRef.current,
+          })
+          let response
+          try {
+            response = await fetch(resourceUrl(base, `${API_ROOT}/tts/synthesize`), {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ provider, voice, text, speed: current.speed }),
+              signal: AbortSignal.timeout(TTS_SENTENCE_TIMEOUT_MS),
+            })
+          } catch (failure) {
+            if (isTimeoutFailure(failure)) throw new Error(t('ttsTimeout'))
+            throw failure
+          }
+          if (!response.ok) {
+            let message = `HTTP ${response.status}`
+            try {
+              const payload = await response.json()
+              if (payload && typeof payload.error === 'string') message = payload.error
+            } catch {
+              // Keep the status line.
+            }
+            throw new Error(message)
+          }
+          const payload = await response.json()
+          if (!payload || typeof payload.url !== 'string') throw new Error(t('ttsPlaybackFailed'))
+          return payload.url
+        })()
+        cache.set(key, promise)
+        promise.catch(() => cache.delete(key))
+        return promise
+      }, [base, t])
+
+      const playUrl = useCallback((url, run) => new Promise((resolve, reject) => {
+        const audio = getAudio()
+        let settled = false
+        const finish = (error) => {
+          if (settled) return
+          settled = true
+          audio.onended = null
+          audio.onerror = null
+          if (error) reject(error)
+          else resolve()
+        }
+        audio.onended = () => finish(null)
+        audio.onerror = () => finish(new Error(t('ttsPlaybackFailed')))
+        audio.src = resourceUrl(base, url)
+        audio.playbackRate = settingsRef.current ? settingsRef.current.speed : 1
+        if (pausedRef.current) return
+        const started = audio.play()
+        if (started && typeof started.catch === 'function') {
+          started.catch((error) => finish(new Error(
+            error && error.name === 'NotAllowedError' ? t('ttsPlaybackBlocked') : t('ttsPlaybackFailed'),
+          )))
+        }
+        void run
+      }), [base, getAudio, t])
+
+      const playBatch = useCallback(async (batch, startIndex) => {
+        const run = ++runRef.current
+        batchRef.current = batch
+        setStatus('loading')
+        setError('')
+        for (let index = startIndex; index < batch.length; index += 1) {
+          if (runRef.current !== run) return
+          indexRef.current = index
+          const item = batch[index]
+          setCaption(item.text)
+          const lookahead = batch[index + 1]
+          if (lookahead) audioFor(lookahead.text).catch(() => undefined)
+          if (typeof item.enter === 'function') await item.enter()
+          if (runRef.current !== run) return
+          let url
+          try {
+            url = await audioFor(item.text)
+          } catch (failure) {
+            if (runRef.current !== run) return
+            setError(failure instanceof Error ? failure.message : String(failure))
+            setStatus('error')
+            return
+          }
+          if (runRef.current !== run) return
+          setStatus('playing')
+          try {
+            await playUrl(url, run)
+          } catch (failure) {
+            if (runRef.current !== run) return
+            setError(failure instanceof Error ? failure.message : String(failure))
+            setStatus('error')
+            return
+          }
+          if (runRef.current !== run) return
+        }
+        // Batch finished; the reader decides what comes next (page or chapter).
+        const driver = driverRef.current
+        if (driver === null) { setStatus('idle'); setCaption(''); return }
+        setStatus('loading')
+        let nextBatch
+        try {
+          nextBatch = await driver.advance()
+        } catch (failure) {
+          if (runRef.current !== run) return
+          setError(failure instanceof Error ? failure.message : String(failure))
+          setStatus('error')
+          return
+        }
+        if (runRef.current !== run) return
+        if (nextBatch === null || nextBatch.length === 0) {
+          setStatus('idle')
+          setCaption('')
+          return
+        }
+        await playBatch(nextBatch, 0)
+      }, [audioFor, playUrl])
+
+      const start = useCallback(async (driver) => {
+        driverRef.current = driver
+        pausedRef.current = false
+        let batch
+        try {
+          batch = await driver.current()
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+          setStatus('error')
+          return
+        }
+        if (batch === null || batch.length === 0) {
+          setStatus('idle')
+          setCaption('')
+          return
+        }
+        await playBatch(batch, 0)
+      }, [playBatch])
+
+      const toggle = useCallback(() => {
+        if (status === 'playing') {
+          const audio = audioRef.current
+          if (audio !== null) audio.pause()
+          pausedRef.current = true
+          setStatus('paused')
+          return
+        }
+        if (status === 'paused') {
+          const audio = audioRef.current
+          pausedRef.current = false
+          setStatus('playing')
+          if (audio !== null) {
+            const started = audio.play()
+            if (started && typeof started.catch === 'function') started.catch(() => undefined)
+          }
+          return
+        }
+        if (status === 'error') {
+          // A playback failure is recoverable: retry the same utterance.
+          unlock()
+          const batch = batchRef.current
+          if (batch !== null) void playBatch(batch, Math.max(0, indexRef.current))
+          return
+        }
+        if (status === 'loading') return
+        // idle: restart from the reader's current position.
+        void start(driverRef.current && driverRef.current.restart ? driverRef.current.restart() : driverRef.current)
+      }, [status, start])
+
+      const stop = useCallback(() => {
+        runRef.current += 1
+        pausedRef.current = false
+        const audio = audioRef.current
+        if (audio !== null) {
+          audio.pause()
+          audio.onended = null
+          audio.onerror = null
+        }
+        batchRef.current = null
+        indexRef.current = 0
+        driverRef.current = null
+        setStatus('idle')
+        setCaption('')
+      }, [])
+
+      const step = useCallback((delta) => {
+        const batch = batchRef.current
+        if (batch === null) return
+        const target = Math.max(0, Math.min(batch.length - 1, indexRef.current + delta))
+        if (target === indexRef.current) return
+        const audio = audioRef.current
+        if (audio !== null) audio.pause()
+        pausedRef.current = false
+        void playBatch(batch, target)
+      }, [playBatch])
+
+      const activeVoiceLabel = (() => {
+        if (settings === null) return ''
+        const provider = resolveSpeechProvider(settings, providers, '')
+        const list = (providers.find((item) => item.id === provider) || {}).voices || []
+        const id = resolveSpeechVoice({ provider, voices: list, settings, language })
+        const found = list.find((voice) => voice.id === id)
+        if (found) return `${found.name || found.id} · ${speechLanguageName(found.lang)}`
+        return id
+      })()
+
+      const saveSettings = useCallback(async (patch, secretPatch) => {
+        const body = { settings: patch }
+        if (secretPatch && Object.keys(secretPatch).length > 0) body.secrets = secretPatch
+        const payload = await requestJson(base, '/tts/settings', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (payload && payload.settings) applySettings(payload.settings)
+        return payload
+      }, [base, applySettings])
+
+      const refresh = useCallback(async () => {
+        try {
+          const payload = await requestJson(base, '/tts/capabilities')
+          setProviders(Array.isArray(payload.providers) ? payload.providers : [])
+          setSecrets(payload.secrets && typeof payload.secrets === 'object' ? payload.secrets : {})
+          applySettings(payload.settings || settingsRef.current)
+        } catch {
+          // Keep the previous list when the service is briefly unavailable.
+        }
+      }, [applySettings])
+
+      return {
+        status, caption, error, settings, providers, secrets,
+        activeVoiceLabel, unlock, setLanguage, start, toggle, stop, prev: () => step(-1), next: () => step(1),
+        saveSettings, refresh, applySettings,
+        running: status === 'playing' || status === 'paused' || status === 'loading',
+      }
+    }
+
+    // Shared read-aloud settings fields: the in-reader panel and the shelf
+    // settings window render the same controls from the same draft shape.
+    const OPENAI_TTS_PRESETS = [
+      { id: 'siliconflow', label: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', model: 'FunAudioLLM/CosyVoice2-0.5B', voice: 'anna', format: 'mp3' },
+      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'tts-1', voice: 'alloy', format: 'mp3' },
+      { id: 'kokoro', label: '本地 Kokoro (localhost:8880)', baseUrl: 'http://127.0.0.1:8880/v1', model: 'kokoro', voice: 'af_heart', format: 'mp3' },
+    ]
+
+    function speechLanguageCode(value) {
+      return String(value || '').trim().toLowerCase().replace(/_/g, '-')
+    }
+
+    function speechLanguageName(code) {
+      const value = String(code || '').trim()
+      if (value === '') return '全部语言'
+      if (value === '*') return '通用'
+      try {
+        return new Intl.DisplayNames([navigator.language || 'zh-CN'], { type: 'language' }).of(value.replace(/_/g, '-')) || value
+      } catch {
+        return value
+      }
+    }
+
+    // Language-aware voice choice used by playback and by the settings preview.
+    function pickVoiceForLanguage(voices, language) {
+      if (!Array.isArray(voices) || voices.length === 0) return ''
+      const target = speechLanguageCode(language)
+      if (target === '') return ''
+      const exact = voices.find((voice) => speechLanguageCode(voice.lang) === target)
+      if (exact) return exact.id
+      const family = target.split('-')[0]
+      const sameFamily = voices.find((voice) => speechLanguageCode(voice.lang).split('-')[0] === family)
+      if (sameFamily) return sameFamily.id
+      if (family === 'zh') {
+        const chinese = voices.find((voice) => speechLanguageCode(voice.lang).startsWith('zh'))
+        if (chinese) return chinese.id
+      }
+      return ''
+    }
+
+    function resolveSpeechProvider(settings, providers, defaultProvider) {
+      if (!settings) return 'macos'
+      const entry = (providers || []).find((item) => item.id === settings.provider)
+      if (entry && entry.available !== false) return settings.provider
+      if (typeof defaultProvider === 'string' && defaultProvider !== '') return defaultProvider
+      const fallback = (providers || []).find((item) => item.available !== false)
+      return fallback ? fallback.id : settings.provider
+    }
+
+    function resolveSpeechVoice({ provider, voices, settings, language }) {
+      if (!settings) return ''
+      if (provider === 'deepseek') return settings.deepseek && settings.deepseek.voice ? settings.deepseek.voice : 'stella'
+      if (provider === 'openai') return settings.openai && settings.openai.voice ? settings.openai.voice : ''
+      if (provider === 'local') return settings.local && settings.local.voice ? settings.local.voice : ''
+      if (!settings.autoVoice) {
+        if (settings.voice) return settings.voice
+        if (provider === 'edge' && settings.edge && settings.edge.voice) return settings.edge.voice
+        return ''
+      }
+      const picked = pickVoiceForLanguage(voices, language)
+      if (picked !== '') return picked
+      if (settings.voice) return settings.voice
+      if (provider === 'edge' && settings.edge && settings.edge.voice) return settings.edge.voice
+      const list = Array.isArray(voices) ? voices : []
+      return list.length > 0 ? list[0].id : ''
+    }
+
+    function VoiceSelect({ t, provider, voices, value, defaultVoice, onChange }) {
+      const [language, setLanguage] = useState('')
+      const languages = [...new Set((voices || []).map((voice) => speechLanguageCode(voice.lang)).filter((code) => code !== ''))].sort()
+      const visible = languages.length === 0
+        ? (voices || [])
+        : (voices || []).filter((voice) => language === '' || speechLanguageCode(voice.lang) === language)
+      const ordered = visible.slice().sort((left, right) => {
+        const leftLang = speechLanguageCode(left.lang)
+        const rightLang = speechLanguageCode(right.lang)
+        if (leftLang !== rightLang) return leftLang < rightLang ? -1 : 1
+        return String(left.name || left.id) < String(right.name || right.id) ? -1 : 1
+      })
+      const fallback = defaultVoice || (ordered.length > 0 ? ordered[0].id : value)
+      // Empty value means "follow the book language", so it must survive even
+      // when the filtered list would otherwise fall back to its first voice.
+      const current = value === '' ? '' : ordered.some((voice) => voice.id === value) ? value : fallback
+      const describe = (voice) => `${voice.name || voice.id} · ${speechLanguageName(voice.lang)}`
+      return h(
+        React.Fragment,
+        null,
+        languages.length > 1
+          ? h(
+              'label',
+              { className: 'bs-tts-field' },
+              h('span', null, t('ttsLanguage')),
+              h('select', {
+                className: 'bs-tts-select',
+                value: language,
+                'aria-label': 'ttsLanguage',
+                onChange: (event) => setLanguage(event.target.value),
+              }, [h('option', { key: 'all', value: '' }, t('ttsAllLanguages'))].concat(
+                languages.map((code) => h('option', { key: code, value: code }, speechLanguageName(code))),
+              )),
+            )
+          : null,
+        h(
+          'label',
+          { className: 'bs-tts-field' },
+          h('span', null, t('ttsVoice')),
+          h('select', {
+            className: 'bs-tts-select',
+            value: current,
+            'aria-label': 'ttsVoice',
+            onChange: (event) => onChange(event.target.value),
+          }, [
+            h('option', { key: 'auto', value: '' }, t('ttsVoiceAuto')),
+          ].concat(ordered.length === 0
+            ? [h('option', { key: 'loading', value: '__none__', disabled: true }, t('ttsVoicesLoading'))]
+            : ordered.map((voice) => h('option', { key: voice.id, value: voice.id }, describe(voice))))),
+        ),
+      )
+    }
+
+    function TtsConfigFields({ t, providers, secrets, draft, onChange }) {
+      const provider = providers.find((item) => item.id === draft.provider)
+      const voices = provider ? provider.voices || [] : []
+      return h(
+        React.Fragment,
+        null,
+        h(
+          'label',
+          { className: 'bs-tts-field' },
+          h('span', null, t('ttsProvider')),
+          h('select', {
+            className: 'bs-tts-select',
+            value: draft.provider,
+            'aria-label': 'ttsProvider',
+            onChange: (event) => {
+              const id = event.target.value
+              const next = { ...draft, provider: id }
+              const providerVoices = providers.find((item) => item.id === id)?.voices || []
+              if ((id === 'macos' || id === 'windows') && !next.autoVoice && providerVoices.length > 0 && !providerVoices.some((voice) => voice.id === next.voice)) {
+                next.voice = providerVoices[0].id
+              }
+              if (id === 'edge' && !next.autoVoice && providerVoices.length > 0 && !providerVoices.some((voice) => voice.id === next.edge.voice)) {
+                next.edge = { ...next.edge, voice: providerVoices[0].id }
+              }
+              if (id === 'deepseek') next.deepseek = { ...next.deepseek, voice: 'stella' }
+              onChange(next)
+            },
+          }, providers.map((item) => h('option', {
+            key: item.id, value: item.id, disabled: item.available === false,
+          }, `${item.label}${item.available === false
+            ? `（${t('ttsUnavailableHere')}）`
+            : item.configured ? '' : `（${t('ttsNotConfigured')}）`}`))),
+        ),
+        (draft.provider === 'macos' || draft.provider === 'windows')
+          ? h(VoiceSelect, {
+              t,
+              provider: draft.provider,
+              voices,
+              value: draft.autoVoice ? '' : draft.voice,
+              defaultVoice: voices.length > 0 ? voices[0].id : '',
+              onChange: (value) => onChange({ ...draft, voice: value, autoVoice: value === '' }),
+            })
+          : null,
+        draft.provider === 'macos' || draft.provider === 'windows'
+          ? h('p', { className: 'bs-settings-hint' }, draft.autoVoice ? t('ttsVoiceAutoHint') : t('ttsMacosVoiceHint'))
+          : null,
+        draft.provider === 'edge'
+          ? h(
+              React.Fragment,
+              null,
+              h(VoiceSelect, {
+                t,
+                provider: 'edge',
+                voices,
+                value: draft.autoVoice ? '' : draft.edge.voice,
+                defaultVoice: voices.length > 0 ? voices[0].id : '',
+                onChange: (value) => onChange({ ...draft, edge: { ...draft.edge, voice: value }, autoVoice: value === '' }),
+              }),
+              h('p', { className: 'bs-settings-hint' }, draft.autoVoice ? t('ttsVoiceAutoHint') : t('ttsEdgeHint')),
+              h('p', { className: 'bs-settings-hint' }, t('ttsEdgeNote')),
+            )
+          : null,
+        draft.provider === 'deepseek'
+          ? h(
+              React.Fragment,
+              null,
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsVoice')),
+                h('select', {
+                  className: 'bs-tts-select',
+                  value: draft.deepseek.voice,
+                  onChange: (event) => onChange({ ...draft, deepseek: { ...draft.deepseek, voice: event.target.value } }),
+                }, (providers.find((item) => item.id === 'deepseek')?.voices || []).map((voice) => h('option', { key: voice.id, value: voice.id }, voice.label))),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, secrets.deepseek ? t('ttsKeySet') : t('ttsKeyLabel')),
+                h('input', {
+                  type: 'password', className: 'bs-tts-input', value: draft.deepseekKey,
+                  placeholder: secrets.deepseek ? '••••••••' : 'sk-…',
+                  onChange: (event) => onChange({ ...draft, deepseekKey: event.target.value }),
+                }),
+              ),
+            )
+          : null,
+        draft.provider === 'openai'
+          ? h(
+              React.Fragment,
+              null,
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsPreset')),
+                h('select', {
+                  className: 'bs-tts-select',
+                  value: '',
+                  'aria-label': 'ttsPreset',
+                  onChange: (event) => {
+                    const preset = OPENAI_TTS_PRESETS.find((item) => item.id === event.target.value)
+                    if (!preset) return
+                    onChange({
+                      ...draft,
+                      voice: preset.voice,
+                      openai: { ...draft.openai, baseUrl: preset.baseUrl, model: preset.model, voice: preset.voice, format: preset.format },
+                    })
+                  },
+                }, [h('option', { key: 'none', value: '' }, t('ttsPresetChoose'))].concat(
+                  OPENAI_TTS_PRESETS.map((preset) => h('option', { key: preset.id, value: preset.id }, preset.label)),
+                )),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsBaseUrl')),
+                h('input', {
+                  type: 'url', className: 'bs-tts-input', value: draft.openai.baseUrl,
+                  placeholder: 'https://api.siliconflow.cn/v1',
+                  onChange: (event) => onChange({ ...draft, openai: { ...draft.openai, baseUrl: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsModel')),
+                h('input', {
+                  type: 'text', className: 'bs-tts-input', value: draft.openai.model,
+                  placeholder: 'FunAudioLLM/CosyVoice2-0.5B',
+                  onChange: (event) => onChange({ ...draft, openai: { ...draft.openai, model: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsVoice')),
+                h('input', {
+                  type: 'text', className: 'bs-tts-input', value: draft.openai.voice,
+                  placeholder: 'anna',
+                  onChange: (event) => onChange({ ...draft, openai: { ...draft.openai, voice: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, secrets.openai ? t('ttsKeySet') : t('ttsKeyLabel')),
+                h('input', {
+                  type: 'password', className: 'bs-tts-input', value: draft.openaiKey,
+                  placeholder: secrets.openai ? '••••••••' : 'sk-…',
+                  onChange: (event) => onChange({ ...draft, openaiKey: event.target.value }),
+                }),
+              ),
+            )
+          : null,
+        draft.provider === 'local'
+          ? h(
+              React.Fragment,
+              null,
+              h('p', { className: 'bs-settings-hint' }, t('ttsLocalHint')),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsLocalEndpoint')),
+                h('input', {
+                  type: 'text', className: 'bs-tts-input', value: draft.local.endpoint,
+                  placeholder: 'http://127.0.0.1:8000',
+                  onChange: (event) => onChange({ ...draft, local: { ...draft.local, endpoint: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsLocalModel')),
+                h('input', {
+                  type: 'text', className: 'bs-tts-input', value: draft.local.model,
+                  placeholder: 'piper / kokoro / xtts',
+                  onChange: (event) => onChange({ ...draft, local: { ...draft.local, model: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsLocalVoice')),
+                h('input', {
+                  type: 'text', className: 'bs-tts-input', value: draft.local.voice,
+                  placeholder: 'default',
+                  onChange: (event) => onChange({ ...draft, local: { ...draft.local, voice: event.target.value } }),
+                }),
+              ),
+              h(
+                'label',
+                { className: 'bs-tts-field' },
+                h('span', null, t('ttsLocalDevice')),
+                h('select', {
+                  className: 'bs-tts-select',
+                  value: draft.local.device,
+                  onChange: (event) => onChange({ ...draft, local: { ...draft.local, device: event.target.value } }),
+                }, [h('option', { key: 'cpu', value: 'cpu' }, 'CPU'), h('option', { key: 'gpu', value: 'gpu' }, 'GPU')]),
+              ),
+            )
+          : null,
+        h(
+          'label',
+          { className: 'bs-tts-field' },
+          h('span', null, t('ttsSpeed')),
+          h('select', {
+            className: 'bs-tts-select',
+            value: String(draft.speed),
+            'aria-label': 'ttsSpeed',
+            onChange: (event) => onChange({ ...draft, speed: Number(event.target.value) }),
+          }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, `${value}×`))),
+        ),
+      )
+    }
+
+    function ttsDraftFrom(settings) {
+      return {
+        provider: settings ? settings.provider : 'macos',
+        voice: settings ? settings.voice : '',
+        speed: settings ? settings.speed : 1,
+        autoVoice: settings ? settings.autoVoice !== false : true,
+        openai: settings && settings.openai ? { ...settings.openai } : { baseUrl: '', model: '', voice: '', format: 'mp3' },
+        deepseek: settings && settings.deepseek ? { ...settings.deepseek } : { voice: 'stella' },
+        edge: settings && settings.edge ? { ...settings.edge } : { voice: '', pitch: 0 },
+        local: settings && settings.local
+          ? { ...settings.local }
+          : { endpoint: '', model: '', voice: '', device: 'cpu' },
+        deepseekKey: '',
+        openaiKey: '',
+      }
+    }
+
+    function ttsDraftVoice(draft) {
+      if (draft.provider === 'macos') return draft.voice
+      if (draft.provider === 'deepseek') return draft.deepseek.voice
+      if (draft.provider === 'edge') return draft.edge.voice
+      if (draft.provider === 'local') return draft.local.voice
+      return draft.openai.voice
+    }
+
+    function ttsSettingsPatch(draft, settings) {
+      const patch = {
+        provider: draft.provider,
+        speed: draft.speed,
+        autoVoice: draft.autoVoice !== false,
+        autoPageTurn: settings ? settings.autoPageTurn : true,
+        openai: draft.provider === 'openai' ? draft.openai : settings && settings.openai ? settings.openai : draft.openai,
+        deepseek: draft.provider === 'deepseek' ? draft.deepseek : settings && settings.deepseek ? settings.deepseek : draft.deepseek,
+        edge: draft.provider === 'edge' ? draft.edge : settings && settings.edge ? settings.edge : draft.edge,
+        local: draft.local ? draft.local : settings && settings.local ? settings.local : draft.local,
+      }
+      if (draft.provider === 'macos') patch.voice = draft.voice
+      else if (draft.provider === 'deepseek') patch.voice = draft.deepseek.voice
+      else if (draft.provider === 'openai') patch.voice = draft.openai.voice
+      else if (draft.provider === 'edge') patch.voice = draft.edge.voice
+      else if (draft.provider === 'local') patch.voice = draft.local.voice
+      else patch.voice = settings ? settings.voice : ''
+      return patch
+    }
+
+    function ttsSecretsPatch(draft) {
+      const secrets = {}
+      if (typeof draft.deepseekKey === 'string' && draft.deepseekKey.trim() !== '') secrets.deepseek = draft.deepseekKey.trim()
+      if (typeof draft.openaiKey === 'string' && draft.openaiKey.trim() !== '') secrets.openai = draft.openaiKey.trim()
+      return secrets
+    }
+
+    function ReadAloudBar({ t, readAloud, onClose }) {
+      const [voiceOpen, setVoiceOpen] = useState(false)
+      const settings = readAloud.settings
+      const provider = readAloud.providers.find((item) => item.id === (settings ? settings.provider : ''))
+      const speed = settings ? settings.speed : 1
+      const status = readAloud.status
+      const [draft, setDraft] = useState(null)
+      const [saving, setSaving] = useState(false)
+      const [saveError, setSaveError] = useState('')
+
+      const refreshRef = useRef(readAloud.refresh)
+      useEffect(() => {
+        refreshRef.current = readAloud.refresh
+      }, [readAloud.refresh])
+      // Initialise once per opening. Depending on the whole controller (a new
+      // object each render) used to reset the form on every keystroke, so every
+      // change snapped back to the saved settings.
+      useEffect(() => {
+        if (!voiceOpen) return
+        setSaveError('')
+        setDraft((current) => (current === null ? ttsDraftFrom(settings) : current))
+      }, [voiceOpen, settings])
+      useEffect(() => {
+        if (voiceOpen) refreshRef.current()
+        else setDraft(null)
+      }, [voiceOpen])
+
+      if (settings === null) {
+        return h('div', { className: 'bs-tts-bar', role: 'region', 'aria-label': t('readAloud') },
+          h('span', { className: 'bs-tts-caption' }, t('ttsLoading')),
+          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)))
+      }
+
+      const save = async () => {
+        if (draft === null || saving) return
+        setSaving(true)
+        setSaveError('')
+        try {
+          await readAloud.saveSettings(ttsSettingsPatch(draft, settings), ttsSecretsPatch(draft))
+          await readAloud.refresh()
+          setVoiceOpen(false)
+        } catch (failure) {
+          setSaveError(failure instanceof Error ? failure.message : String(failure))
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      const label = provider ? provider.label : (settings.provider || '')
+      return h(
+        'div',
+        { className: 'bs-tts-bar', role: 'region', 'aria-label': t('readAloud') },
+        h(
+          'div',
+          { className: 'bs-tts-controls' },
+          h('button', {
+            type: 'button', className: 'bs-icon-button', onClick: readAloud.toggle,
+            title: status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+            'aria-label': status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+          }, status === 'playing' ? h(PauseIcon) : h(PlayIcon)),
+          h('button', {
+            type: 'button', className: 'bs-icon-button', onClick: readAloud.prev,
+            title: t('ttsPrevious'), 'aria-label': t('ttsPrevious'),
+          }, h(ChevronLeftIcon, { size: 15 })),
+          h('button', {
+            type: 'button', className: 'bs-icon-button', onClick: readAloud.next,
+            title: t('ttsNext'), 'aria-label': t('ttsNext'),
+          }, h(ChevronRightIcon, { size: 15 })),
+          readAloud.activeVoiceLabel !== ''
+            ? h('span', { className: 'bs-tts-voice-readout', title: readAloud.activeVoiceLabel }, readAloud.activeVoiceLabel)
+            : null,
+          h('span', { className: 'bs-tts-caption', title: readAloud.caption }, status === 'error'
+            ? h('span', { className: 'bs-tts-error' }, `${t('ttsFailed')}: ${readAloud.error}`)
+            : status === 'loading' ? t('ttsLoading') : readAloud.caption || t('ttsIdle')),
+          h(
+            'label',
+            { className: 'bs-tts-speed' },
+            h('span', null, t('ttsSpeed')),
+            h('select', {
+              className: 'bs-tts-select',
+              value: String(speed),
+              'aria-label': t('ttsSpeed'),
+              onChange: (event) => { void readAloud.saveSettings({ speed: Number(event.target.value) }) },
+            }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, `${value}×`))),
+          ),
+          h('button', {
+            type: 'button', className: 'bs-button bs-tts-voice', onClick: () => setVoiceOpen((value) => !value),
+            title: t('ttsVoice'), 'aria-label': t('ttsVoice'), 'aria-expanded': voiceOpen,
+          }, label),
+          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
+        ),
+        voiceOpen && draft !== null
+          ? h(
+              'div',
+              { className: 'bs-tts-settings', role: 'dialog', 'aria-label': t('ttsVoice') },
+              h(TtsConfigFields, { t, providers: readAloud.providers, secrets: readAloud.secrets, draft, onChange: setDraft }),
+              saveError !== '' ? h('p', { className: 'bs-tts-error' }, saveError) : null,
+              h(
+                'div',
+                { className: 'bs-tts-actions' },
+                h('button', { type: 'button', className: 'bs-button', onClick: () => setVoiceOpen(false), disabled: saving }, t('cancel')),
+                h('button', { type: 'button', className: 'bs-button bs-button-primary', onClick: save, disabled: saving }, saving ? t('saving') : t('save')),
+              ),
+            )
+          : null,
+      )
+    }
+
+    // The shelf settings used to be a popover; it now opens as a window with
+    // tabs because reading, read-aloud and workspace options no longer fit.
+    function ShelfSettingsDialog({
+      t, base, onClose, defaults, onDefaultsChange, workspaces, discussionWorkspace,
+      onDiscussionWorkspaceChange, appleBooksAvailable, appleBooksEnabled, onAppleBooksEnabledChange,
+    }) {
+      const [tab, setTab] = useState('reading')
+      const [panel, setPanel] = useState(null)
+      const [draft, setDraft] = useState(null)
+      const [saving, setSaving] = useState(false)
+      const [error, setError] = useState('')
+      const [notice, setNotice] = useState('')
+      const [cache, setCache] = useState(null)
+      const workspaceChoices = Array.isArray(workspaces) ? workspaces.filter((item) => item && typeof item.workspaceId === 'string') : null
+      const selectedWorkspace = workspaceChoices !== null && workspaceChoices.some((item) => item.workspaceId === discussionWorkspace) ? discussionWorkspace : ''
+
+      useEffect(() => {
+        let cancelled = false
+        requestJson(base, '/tts/capabilities')
+          .then((payload) => {
+            if (cancelled) return
+            setPanel({ settings: payload.settings || null, providers: payload.providers || [], secrets: payload.secrets || {} })
+            setDraft(ttsDraftFrom(payload.settings || null))
+            setCache(payload.cache || null)
+          })
+          .catch(() => { if (!cancelled) setDraft(ttsDraftFrom(null)) })
+        return () => { cancelled = true }
+      }, [base])
+
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented || saving) return
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [onClose, saving])
+
+      const saveSpeech = async () => {
+        if (draft === null || saving) return
+        setSaving(true)
+        setError('')
+        setNotice('')
+        try {
+          const payload = await requestJson(base, '/tts/settings', {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ settings: ttsSettingsPatch(draft, panel ? panel.settings : null), secrets: ttsSecretsPatch(draft) }),
+          })
+          if (payload && payload.settings) {
+            setPanel({ settings: payload.settings, providers: panel ? panel.providers : [], secrets: panel ? panel.secrets : {} })
+            setDraft(ttsDraftFrom(payload.settings))
+            // Key flags live on the capabilities route; refresh them so the
+            // dialog shows that a pasted key is now stored.
+            try {
+              const capabilities = await requestJson(base, '/tts/capabilities')
+              setPanel({ settings: capabilities.settings || payload.settings, providers: capabilities.providers || [], secrets: capabilities.secrets || {} })
+            } catch {
+              // Keep the saved settings even if the refresh fails.
+            }
+          }
+          setNotice(t('settingsSaved'))
+        } catch (failure) {
+          setError(t('ttsSaveFailed', { message: failure instanceof Error ? failure.message : String(failure) }))
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      const testSpeech = async () => {
+        if (draft === null || saving) return
+        setSaving(true)
+        setError('')
+        setNotice('')
+        try {
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), TTS_TEST_TIMEOUT_MS)
+          try {
+            await requestJson(base, '/tts/synthesize', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                provider: draft.provider,
+                voice: ttsDraftVoice(draft),
+                speed: draft.speed,
+                text: t('ttsTestText'),
+              }),
+              signal: controller.signal,
+            })
+          } finally {
+            clearTimeout(timer)
+          }
+          setNotice(t('ttsTestOk'))
+        } catch (failure) {
+          const message = isTimeoutFailure(failure) ? t('ttsTimeout') : failure instanceof Error ? failure.message : String(failure)
+          setError(t('ttsTestFailed', { message }))
+        } finally {
+          setSaving(false)
+        }
+      }
+
+      const clearCache = async () => {
+        try {
+          await requestJson(base, '/tts/cache', { method: 'DELETE' })
+          setCache({ entries: 0, bytes: 0 })
+          setNotice(t('ttsCacheCleared'))
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure))
+        }
+      }
+
+      const tabs = [
+        ['reading', t('settingsTabReading')],
+        ['speech', t('settingsTabSpeech')],
+        ['other', t('settingsTabOther')],
+      ]
+
+      const body = tab === 'reading'
+        ? h(ReadingSettingsFields, { t, settings: defaults, onChange: onDefaultsChange, includeExtras: false })
+        : tab === 'speech'
+          ? h(
+              React.Fragment,
+              null,
+              draft === null || panel === null
+                ? h('p', { className: 'bs-settings-hint' }, t('ttsLoading'))
+                : h(TtsConfigFields, { t, providers: panel.providers, secrets: panel.secrets, draft, onChange: setDraft }),
+              h(
+                'div',
+                { className: 'bs-settings-cache' },
+                h('span', null, cache === null
+                  ? t('ttsCacheTitle')
+                  : t('ttsCacheStats', { count: cache.entries, size: formatBytes(cache.bytes) || '0 B' })),
+                h('button', { type: 'button', className: 'bs-button', onClick: clearCache, disabled: cache === null || cache.entries === 0 }, t('ttsCacheClear')),
+              ),
+              error !== '' ? h('p', { className: 'bs-rename-error', role: 'alert' }, error) : null,
+              notice !== '' ? h('p', { className: 'bs-settings-notice', role: 'status' }, notice) : null,
+            )
+          : h(
+              React.Fragment,
+              null,
+              workspaceChoices !== null && typeof onDiscussionWorkspaceChange === 'function'
+                ? h(
+                    'div',
+                    { className: 'bs-setting-row' },
+                    h('span', { className: 'bs-setting-label' }, t('discussionWorkspaceSetting')),
+                    h(
+                      'select',
+                      {
+                        className: 'bs-setting-select',
+                        value: selectedWorkspace,
+                        'aria-label': t('discussionWorkspaceSetting'),
+                        onChange: (event) => onDiscussionWorkspaceChange(event.target.value),
+                      },
+                      h('option', { value: '' }, t('discussionWorkspaceAsk')),
+                      workspaceChoices.map((item) => h('option', { key: item.workspaceId, value: item.workspaceId }, item.title || item.path || item.workspaceId)),
+                    ),
+                    h('p', { className: 'bs-settings-hint' }, t('discussionWorkspaceSettingHint')),
+                  )
+                : null,
+              appleBooksAvailable === true && typeof onAppleBooksEnabledChange === 'function'
+                ? h(
+                    'div',
+                    { className: 'bs-setting-row' },
+                    h(
+                      'label',
+                      { className: 'bs-setting-toggle' },
+                      h('input', {
+                        type: 'checkbox',
+                        checked: Boolean(appleBooksEnabled),
+                        onChange: (event) => onAppleBooksEnabledChange(event.target.checked),
+                      }),
+                      h('span', null, t('appleBooksImportToggle')),
+                    ),
+                    h('p', { className: 'bs-settings-hint' }, t('appleBooksImportToggleHint')),
+                  )
+                : null,
+              h('p', { className: 'bs-settings-hint' }, t('settingsOtherHint')),
+            )
+
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-apple-backdrop', onClick: saving ? undefined : onClose }),
+        h(
+          'div',
+          {
+            className: 'bs-apple-dialog bs-settings-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('settingsTitle'),
+            onClick: (event) => event.stopPropagation(),
+          },
+          h(
+            'header',
+            { className: 'bs-apple-head' },
+            h(
+              'div',
+              { className: 'bs-apple-heading' },
+              h('h2', { className: 'bs-apple-title' }, t('settingsTitle')),
+              h('p', { className: 'bs-apple-hint' }, t('settingsHint')),
+            ),
+            h(
+              'button',
+              { type: 'button', className: 'bs-icon-button', onClick: onClose, disabled: saving, title: t('dismiss'), 'aria-label': t('dismiss') },
+              h(CloseIcon),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'bs-settings-tabs', role: 'tablist' },
+            tabs.map(([key, label]) => h(
+              'button',
+              {
+                key,
+                type: 'button',
+                role: 'tab',
+                className: 'bs-settings-tab',
+                'aria-selected': tab === key,
+                onClick: () => { setNotice(''); setError('') ; setTab(key) },
+              },
+              label,
+            )),
+          ),
+          h('div', { className: 'bs-settings-body' }, body),
+          h(
+            'div',
+            { className: 'bs-apple-foot bs-settings-foot' },
+            tab === 'speech'
+              ? h(
+                  'div',
+                  { className: 'bs-settings-actions' },
+                  h('button', { type: 'button', className: 'bs-button', onClick: onClose, disabled: saving }, t('done')),
+                  h('button', { type: 'button', className: 'bs-button', onClick: testSpeech, disabled: saving || draft === null }, t('ttsTest')),
+                  h('button', { type: 'button', className: 'bs-button bs-button-primary', onClick: saveSpeech, disabled: saving || draft === null }, saving ? t('saving') : t('settingsSaveSpeech')),
+                )
+              : h('button', { type: 'button', className: 'bs-button bs-button-primary', onClick: onClose }, t('done')),
+          ),
+        ),
+      )
+    }
+
+    function ReaderShell({ t, book, onBack, controls, children, state, progress, speech }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
@@ -1619,6 +2879,29 @@ html.bb-paged body table tr{break-inside:avoid}
                 'div',
                 { className: 'bs-reader-controls' },
                 controls,
+                speech
+                  ? h(
+                      'button',
+                      {
+                        key: 'read-aloud',
+                        type: 'button',
+                        className: 'bs-icon-button',
+                        onClick: () => {
+                          if (speech.readAloud.running) {
+                            speech.readAloud.stop()
+                            return
+                          }
+                          // Unlock audio inside the gesture, then start.
+                          speech.readAloud.unlock()
+                          speech.start()
+                        },
+                        'aria-pressed': speech.readAloud.running,
+                        title: t('readAloud'),
+                        'aria-label': t('readAloud'),
+                      },
+                      h(SpeechIcon),
+                    )
+                  : null,
                 h('span', { key: 'shell-div', className: 'bs-divider' }),
                 h(
                   'button',
@@ -1647,6 +2930,9 @@ html.bb-paged body table tr{break-inside:avoid}
               ),
             ),
         children,
+        focusMode || !speech || speech.readAloud.status === 'idle'
+          ? null
+          : h(ReadAloudBar, { t, readAloud: speech.readAloud, onClose: () => speech.readAloud.stop() }),
         focusMode ? null : progress ? h(ReadingProgress, { t, percent: progress.percent, onSeek: progress.onSeek }) : null,
         focusMode
           ? h(
@@ -2526,6 +3812,54 @@ html.bb-paged body table tr{break-inside:avoid}
           )
         : null
 
+      const [speechLanguage, setSpeechLanguage] = useState('')
+      const readAloud = useReadAloud({ base, t, language: speechLanguage })
+
+      const startReadAloud = useCallback(() => {
+        const document = pdfDocumentRef.current
+        if (document === null) return
+        const total = document.numPages
+        const modulePromise = loadTtsSentences(base)
+        // A PDF rarely declares a language: read the first page and detect it.
+        void (async () => {
+          try {
+            const firstPage = await document.getPage(Math.min(total, Math.max(1, currentPageRef.current)))
+            const detected = detectSpeechLanguage(joinPdfItems((await firstPage.getTextContent()).items))
+            if (detected !== '') {
+              readAloud.setLanguage(detected)
+              setSpeechLanguage(detected)
+            }
+          } catch {
+            // Detection is best effort; the provider default voice still works.
+          }
+        })()
+        const batchForPage = async (page) => {
+          const module = await modulePromise
+          const pdfPage = await document.getPage(page)
+          const content = await pdfPage.getTextContent()
+          const sentences = module.splitSentences(joinPdfItems(content.items))
+          return sentences.map((text) => ({
+            text,
+            enter: async () => {
+              if (currentPageRef.current === page) return
+              scrollToPage(page)
+              await new Promise((resolve) => setTimeout(resolve, 60))
+            },
+          }))
+        }
+        const driver = {
+          current: () => batchForPage(Math.min(total, Math.max(1, currentPageRef.current))),
+          advance: async () => {
+            const next = currentPageRef.current + 1
+            if (next > total) return null
+            // Re-check the live document: it may have been replaced by a reload.
+            if (pdfDocumentRef.current !== document) return null
+            return batchForPage(next)
+          },
+        }
+        void readAloud.start(driver)
+      }, [base, readAloud, scrollToPage, t])
+
       return h(
         ReaderShell,
         {
@@ -2535,6 +3869,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: status === 'ready' && pdfDocument ? t('pdfPages', { total: pdfDocument.numPages }) : undefined,
           progress: status === 'ready' && pdfDocument ? { percent, onSeek: onSeekProgress } : undefined,
+          speech: { readAloud, start: startReadAloud },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('rendering') })
@@ -2692,6 +4027,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const lastSavedProgressRef = useRef('')
       const pageIndexRef = useRef(0)
       const pageCountRef = useRef(1)
+      const laidOutPagesRef = useRef(1)
       const pageColumnsRef = useRef(1)
       const pageAnchorRef = useRef(null)
       const previousModeRef = useRef(settings.pageMode)
@@ -2858,6 +4194,13 @@ html.bb-paged body table tr{break-inside:avoid}
             const anchored = pageForAnchor(documentNode, windowNode, info)
             if (anchored !== null) page = anchored
             else if (Number.isFinite(options.targetRatio)) page = Math.round(options.targetRatio * (info.pages - 1))
+            // A height-only reflow (toolbar or read-aloud bar appearing) must not
+            // move the reader: a stale anchor from an earlier spread used to snap
+            // the page back to the start.
+            const spreadAt = (value) => Math.floor(value / info.columns)
+            if (laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
+              page = pageIndexRef.current
+            }
           } else if (Number.isFinite(options.targetRatio)) {
             page = Math.round(options.targetRatio * (info.pages - 1))
           } else if (Number.isFinite(options.targetPage)) {
@@ -2870,6 +4213,7 @@ html.bb-paged body table tr{break-inside:avoid}
           pageIndexRef.current = page
           setPageCount(info.pages)
           pageCountRef.current = info.pages
+          laidOutPagesRef.current = info.pages
           setPageColumns(info.columns)
           pageColumnsRef.current = info.columns
           const ratio = info.pages <= 1 ? 0 : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
@@ -2882,9 +4226,9 @@ html.bb-paged body table tr{break-inside:avoid}
             pageAnchorRef.current = resolvedAnchor
           } else if (!options.restoreAnchor || pageAnchorRef.current === null) {
             pageAnchorRef.current = null
-            requestAnimationFrame(() => {
-              if (generation === layoutGenerationRef.current) capturePagedAnchor()
-            })
+            // Capture right away: a scheduled capture loses to the next layout
+            // call and leaves a stale anchor from the previous spread.
+            if (generation === layoutGenerationRef.current) capturePagedAnchor()
           }
           if (options.save && generation === layoutGenerationRef.current) {
             saveEpubProgress(chapterRef.current, ratio)
@@ -3748,6 +5092,91 @@ html.bb-paged body table tr{break-inside:avoid}
           ? undefined
           : `${data.author || t('unknownAuthor')} · ${t('chapterOf', { current: chapter + 1, total: data.chapters.length })}`
 
+      const speechLanguage = useMemo(() => epubSpeechLanguage(data), [data])
+      const readAloud = useReadAloud({ base, t, language: speechLanguage })
+
+      const waitForSpeechChapter = useCallback(async (index, previousDocument) => {
+        const deadline = Date.now() + 4000
+        while (Date.now() < deadline) {
+          const frame = frameRef.current
+          const documentNode = frame && frame.contentDocument
+          const body = documentNode && documentNode.body
+          const replaced = previousDocument === null || previousDocument === undefined || documentNode !== previousDocument
+          if (replaced && body !== null && body !== undefined && chapterRef.current === index && (body.innerText || '').trim() !== '') {
+            return documentNode
+          }
+          await new Promise((resolve) => setTimeout(resolve, 80))
+        }
+        throw new Error(t('ttsChapterTimeout'))
+      }, [t])
+
+      const startReadAloud = useCallback(() => {
+        if (data === null) return
+        const chapters = data.chapters
+        const modulePromise = loadTtsSentences(base)
+
+        const batchForChapter = async (index, previousDocument = null) => {
+          const module = await modulePromise
+          const documentNode = await waitForSpeechChapter(index, previousDocument)
+          const frame = frameRef.current
+          const windowNode = frame && frame.contentWindow
+          if (!windowNode) return []
+          const sentences = module.splitSentences(documentNode.body.innerText || '')
+          const entries = buildSpeechBatches(documentNode, sentences)
+          const paged = settingsRef.current.pageMode === 'paged'
+          const startPage = pageIndexRef.current
+          let start = 0
+          if (paged) {
+            const found = entries.findIndex((entry) => {
+              const page = rangePage(documentNode, windowNode, entry.range)
+              return page !== null && page >= startPage
+            })
+            if (found > 0) start = found
+          } else {
+            const found = entries.findIndex((entry) => {
+              if (entry.range === null) return false
+              const rect = entry.range.getBoundingClientRect()
+              return rect.bottom > 0 && rect.top < windowNode.innerHeight
+            })
+            if (found > 0) start = found
+          }
+          return entries.slice(start).map((entry) => ({
+            text: entry.text,
+            enter: async () => {
+              if (entry.range === null) return
+              const frameNode = frameRef.current
+              const currentDocument = frameNode && frameNode.contentDocument
+              if (currentDocument !== documentNode) return
+              if (paged) {
+                const page = rangePage(documentNode, windowNode, entry.range)
+                if (page !== null && page > pageIndexRef.current) {
+                  layoutPagedFrame(frameNode, { targetPage: page, save: true })
+                }
+                return
+              }
+              const rect = entry.range.getBoundingClientRect()
+              if (rect.top < 0 || rect.bottom > windowNode.innerHeight) {
+                const element = entry.range.startContainer.parentElement || documentNode.body
+                if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
+              }
+            },
+          }))
+        }
+
+        const driver = {
+          current: () => batchForChapter(chapterRef.current),
+          advance: async () => {
+            const next = chapterRef.current + 1
+            if (next >= chapters.length) return null
+            const frame = frameRef.current
+            const previousDocument = frame && frame.contentDocument
+            goTo(next, '', 0)
+            return batchForChapter(next, previousDocument)
+          },
+        }
+        void readAloud.start(driver)
+      }, [base, data, goTo, layoutPagedFrame, readAloud, t, waitForSpeechChapter])
+
       return h(
         ReaderShell,
         {
@@ -3757,6 +5186,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
+          speech: { readAloud, start: startReadAloud },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('parsing') })
@@ -5528,7 +6958,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [renameState, setRenameState] = useState(null)
       const [renameSaving, setRenameSaving] = useState(false)
       const [renameError, setRenameError] = useState('')
-      const [defaultsOpen, setDefaultsOpen] = useState(false)
+      const [settingsOpen, setSettingsOpen] = useState(false)
       const [defaultReadingSettings, setDefaultReadingSettings] = useState(null)
       const [discussionWorkspace, setDiscussionWorkspace] = useState(() => {
         try { return localStorage.getItem(DISCUSSION_WORKSPACE_KEY) || '' } catch { return '' }
@@ -5853,17 +7283,6 @@ html.bb-paged body table tr{break-inside:avoid}
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [open, deleteTarget, closeReader])
 
-      useEffect(() => {
-        if (!defaultsOpen) return undefined
-        const onKeyDown = (event) => {
-          if (event.key !== 'Escape' || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
-          event.preventDefault()
-          setDefaultsOpen(false)
-        }
-        window.addEventListener('keydown', onKeyDown)
-        return () => window.removeEventListener('keydown', onKeyDown)
-      }, [defaultsOpen])
-
       const importFiles = useCallback(
         async (fileList) => {
           const files = Array.from(fileList || []).filter((file) => file && typeof file.arrayBuffer === 'function')
@@ -6159,9 +7578,9 @@ html.bb-paged body table tr{break-inside:avoid}
               {
                 type: 'button',
                 className: 'bs-icon-button',
-                onClick: () => setDefaultsOpen((value) => !value),
-                'aria-expanded': defaultsOpen,
-                'aria-pressed': defaultsOpen,
+                onClick: () => setSettingsOpen(true),
+                'aria-haspopup': 'dialog',
+                'aria-expanded': settingsOpen,
                 title: t('shelfSettings'),
                 'aria-label': t('shelfSettings'),
               },
@@ -6383,14 +7802,13 @@ html.bb-paged body table tr{break-inside:avoid}
               },
             })
           : null,
-        defaultsOpen
-          ? h(ReaderSettingsPopover, {
+        settingsOpen
+          ? h(ShelfSettingsDialog, {
               t,
-              settings: effectiveDefaults,
-              onChange: updateDefaultSettings,
-              onClose: () => setDefaultsOpen(false),
-              title: t('shelfSettings'),
-              hint: t('shelfSettingsHint'),
+              base,
+              onClose: () => setSettingsOpen(false),
+              defaults: effectiveDefaults,
+              onDefaultsChange: updateDefaultSettings,
               workspaces: props.workspaces,
               discussionWorkspace: presetWorkspace ? presetWorkspace.workspaceId : '',
               onDiscussionWorkspaceChange: updateDiscussionWorkspace,
@@ -6600,6 +8018,62 @@ html.bb-paged body table tr{break-inside:avoid}
       untitled: 'Untitled',
       unknownAuthor: 'Unknown author',
       back: 'Back to bookshelf',
+      readAloud: 'Read aloud',
+      settingsTitle: 'Shelf settings',
+      settingsHint: 'Reading, read-aloud and workspace options.',
+      settingsTabReading: 'Reading',
+      settingsTabSpeech: 'Read aloud',
+      settingsTabOther: 'Other',
+      settingsOtherHint: 'Discussion and import options.',
+      settingsSaveSpeech: 'Save read-aloud settings',
+      settingsSaved: 'Saved.',
+      ttsSaveFailed: 'Could not save: {message}',
+      ttsCacheTitle: 'Read-aloud cache',
+      ttsCacheStats: '{count} files · {size}',
+      ttsCacheClear: 'Clear cache',
+      ttsCacheCleared: 'Cache cleared.',
+      ttsPlay: 'Play',
+      ttsPause: 'Pause',
+      ttsPrevious: 'Previous sentence',
+      ttsNext: 'Next sentence',
+      ttsSpeed: 'Speed',
+      ttsVoice: 'Voice',
+      ttsProvider: 'Speech service',
+      ttsBaseUrl: 'Base URL',
+      ttsModel: 'Model',
+      ttsKeyLabel: 'API key',
+      ttsKeySet: 'API key is set',
+      ttsLoading: 'Preparing audio…',
+      ttsIdle: 'Read aloud is off',
+      ttsFailed: 'Read aloud failed',
+      ttsNotReady: 'Read-aloud settings are still loading.',
+      ttsChapterTimeout: 'The next chapter did not finish loading.',
+      ttsNotConfigured: 'not configured',
+      ttsUnavailableHere: 'not available on this system',
+      ttsLanguage: 'Language',
+      ttsAllLanguages: 'All languages',
+      ttsVoicesLoading: 'No voices available',
+      ttsMacosVoiceHint: 'Voices whose names contain the language in brackets are locale-specific; pick the one that matches the book.',
+      ttsAutoVoice: 'Pick a voice from the book language',
+      ttsVoiceAuto: 'Automatic (book language)',
+      ttsVoiceAutoHint: 'A voice is chosen from the book language. Pick a specific voice below to pin it.',
+      ttsAutoVoiceHint: 'The reader detects the book language and uses a matching system voice. Turn this off to pin one voice.',
+      ttsEdgeHint: 'Edge voices are chosen automatically from the book language. Turn off automatic voices to pick one.',
+      ttsEdgeNote: 'Uses the public Edge read-aloud service; no key needed. Needs network access.',
+      ttsLocalHint: 'Placeholder for a future on-device engine. These fields are saved but synthesis is not implemented yet.',
+      ttsLocalEndpoint: 'Service address',
+      ttsLocalModel: 'Model',
+      ttsLocalVoice: 'Voice',
+      ttsLocalDevice: 'Device',
+      ttsPreset: 'Quick setup',
+      ttsPresetChoose: 'Choose a service…',
+      ttsTest: 'Test',
+      ttsTestText: 'This is a read-aloud test.',
+      ttsTestOk: 'Test passed: the speech service returned audio.',
+      ttsTestFailed: 'Test failed: {message}',
+      ttsTimeout: 'The speech service did not answer in time; the request was aborted.',
+      ttsPlaybackFailed: 'The audio could not be played.',
+      ttsPlaybackBlocked: 'The browser blocked playback; press play again.',
       readerLabel: 'Reading {title}',
       rendering: 'Opening the PDF…',
       parsing: 'Opening the EPUB…',
@@ -6884,6 +8358,62 @@ html.bb-paged body table tr{break-inside:avoid}
       untitled: '无标题',
       unknownAuthor: '未知作者',
       back: '返回书架',
+      readAloud: '朗读',
+      settingsTitle: '书架设置',
+      settingsHint: '阅读、朗读与工作区设置。',
+      settingsTabReading: '阅读',
+      settingsTabSpeech: '朗读',
+      settingsTabOther: '其他',
+      settingsOtherHint: '讨论与导入相关设置。',
+      settingsSaveSpeech: '保存朗读设置',
+      settingsSaved: '已保存。',
+      ttsSaveFailed: '保存失败：{message}',
+      ttsCacheTitle: '朗读缓存',
+      ttsCacheStats: '{count} 个文件 · {size}',
+      ttsCacheClear: '清空缓存',
+      ttsCacheCleared: '缓存已清空。',
+      ttsPlay: '播放',
+      ttsPause: '暂停',
+      ttsPrevious: '上一句',
+      ttsNext: '下一句',
+      ttsSpeed: '语速',
+      ttsVoice: '音色',
+      ttsProvider: '语音服务',
+      ttsBaseUrl: 'Base URL',
+      ttsModel: '模型',
+      ttsKeyLabel: 'API Key',
+      ttsKeySet: 'API Key 已设置',
+      ttsLoading: '正在准备音频…',
+      ttsIdle: '朗读已停止',
+      ttsFailed: '朗读失败',
+      ttsNotReady: '朗读设置尚未载入。',
+      ttsChapterTimeout: '下一章没有加载完成。',
+      ttsNotConfigured: '未配置',
+      ttsUnavailableHere: '当前系统不可用',
+      ttsLanguage: '语言',
+      ttsAllLanguages: '全部语言',
+      ttsVoicesLoading: '没有可用音色',
+      ttsMacosVoiceHint: '名字里括号标注语言的音色属于该语言；选同名音色时请确认括号里的语言。',
+      ttsAutoVoice: '按书籍语言自动选择音色',
+      ttsVoiceAuto: '自动（按书籍语言）',
+      ttsVoiceAutoHint: '会根据书籍语言自动选择音色；在下面选择具体音色即可固定。',
+      ttsAutoVoiceHint: '阅读器会识别书籍语言并匹配对应系统音色；关闭后可固定一个音色。',
+      ttsEdgeHint: 'Edge 音色会按书籍语言自动选择；关闭自动音色后可手动指定。',
+      ttsEdgeNote: '使用微软 Edge 公开朗读服务，无需 Key，需要联网。',
+      ttsLocalHint: '本地 TTS 模型的占位配置：会保存这些字段，但合成尚未实现。',
+      ttsLocalEndpoint: '服务地址',
+      ttsLocalModel: '模型',
+      ttsLocalVoice: '音色',
+      ttsLocalDevice: '设备',
+      ttsPreset: '常用配置',
+      ttsPresetChoose: '选择服务…',
+      ttsTest: '测试',
+      ttsTestText: '这是一次朗读测试。',
+      ttsTestOk: '测试通过：语音服务已返回音频。',
+      ttsTestFailed: '测试失败：{message}',
+      ttsTimeout: '语音服务迟迟没有响应，已中断本次请求。',
+      ttsPlaybackFailed: '音频播放失败。',
+      ttsPlaybackBlocked: '浏览器阻止了播放，请再点一次播放。',
       readerLabel: '正在阅读《{title}》',
       rendering: '正在打开 PDF…',
       parsing: '正在打开 EPUB…',

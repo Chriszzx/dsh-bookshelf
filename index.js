@@ -10,6 +10,7 @@ import { createSourceLink } from './link-source.js'
 import { sanitizeFontSettings } from './assets/reading-fonts.mjs'
 import { replaceFile } from './assets/atomic-file.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
+import { createTtsService, TtsError } from './tts.js'
 import {
   createTagStore,
   FINISHED_PERCENT,
@@ -76,7 +77,7 @@ class HttpError extends Error {
   }
 }
 
-export function apply(ctx) {
+export function apply(ctx, options = {}) {
   const home = process.env.DSH_HOME || join(homedir(), '.dsh')
   const rootDir = join(home, 'bookshelf')
   const booksDir = join(rootDir, 'books')
@@ -86,6 +87,59 @@ export function apply(ctx) {
   const defaultsPath = join(rootDir, 'defaults.json')
   const assetsDir = fileURLToPath(new URL('./assets', import.meta.url))
   const tagStore = createTagStore({ rootDir })
+
+  // Read-aloud secrets never leave the Host. A pasted key is stored in a
+  // 0600 file under the bookshelf directory; an environment variable or a
+  // credential store entry with the same name still applies as a fallback.
+  const ttsSecretsPath = join(rootDir, 'tts-secrets.json')
+  let secretsCache = null
+  let pendingSecretWrite = Promise.resolve()
+  async function readTtsSecrets() {
+    if (secretsCache !== null) return secretsCache
+    try {
+      const parsed = JSON.parse(await fs.readFile(ttsSecretsPath, 'utf8'))
+      secretsCache = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch {
+      secretsCache = {}
+    }
+    return secretsCache
+  }
+  function writeTtsSecrets(patch) {
+    const run = async () => {
+      const current = await readTtsSecrets()
+      const next = { ...current }
+      for (const [name, value] of Object.entries(patch)) {
+        if (typeof value === 'string' && value.trim() !== '') next[name] = value.trim()
+        else delete next[name]
+      }
+      secretsCache = next
+      await fs.mkdir(rootDir, { recursive: true })
+      const temporary = `${ttsSecretsPath}.${process.pid}.tmp`
+      await fs.writeFile(temporary, JSON.stringify(next, null, 2), { mode: 0o600 })
+      await fs.chmod(temporary, 0o600).catch(() => undefined)
+      await replaceFile(temporary, ttsSecretsPath)
+      return next
+    }
+    const pending = pendingSecretWrite.then(run, run)
+    pendingSecretWrite = pending.catch(() => undefined)
+    return pending
+  }
+  async function resolveTtsSecret(name) {
+    const stored = (await readTtsSecrets())[name]
+    if (typeof stored === 'string' && stored !== '') return stored
+    const envName = name === 'deepseek' ? 'DEEPSEEK_API_KEY' : 'BOOKSHELF_TTS_OPENAI_KEY'
+    const fromEnv = process.env[envName]
+    if (typeof fromEnv === 'string' && fromEnv !== '') return fromEnv
+    try {
+      const credentials = typeof ctx.get === 'function' ? ctx.get('credentials') : undefined
+      const hit = credentials && typeof credentials.resolve === 'function' ? await credentials.resolve(envName) : undefined
+      if (hit && typeof hit.value === 'string' && hit.value !== '') return hit.value
+    } catch {
+      // The credential store is optional; a missing service is not an error.
+    }
+    return ''
+  }
+  const tts = createTtsService({ rootDir, resolveSecret: resolveTtsSecret, logger: ctx.logger, ...(options.tts || {}) })
 
   let pendingWrite = Promise.resolve()
   let pendingStateWrite = Promise.resolve()
@@ -1198,6 +1252,89 @@ export function apply(ctx) {
         }
         throw new HttpError(405, 'method not allowed')
       }
+      if (pathname === `${API_PREFIX}/tts/capabilities`) {
+        if (request.method !== 'GET') throw new HttpError(405, 'method not allowed')
+        await tts.ready()
+        const capabilities = await tts.capabilities()
+        // Report only whether a key is set; never echo the value.
+        capabilities.secrets = {
+          deepseek: (await resolveTtsSecret('deepseek')) !== '',
+          openai: (await resolveTtsSecret('openai')) !== '',
+        }
+        sendJson(request, response, 200, capabilities)
+        return
+      }
+      if (pathname === `${API_PREFIX}/tts/voices`) {
+        if (request.method !== 'GET') throw new HttpError(405, 'method not allowed')
+        await tts.ready()
+        const provider = cleanText(url.searchParams.get('provider'), '', 40)
+        sendJson(request, response, 200, { voices: await tts.voices(provider) })
+        return
+      }
+      if (pathname === `${API_PREFIX}/tts/settings`) {
+        if (request.method === 'GET') {
+          sendJson(request, response, 200, { settings: tts.getSettings() })
+          return
+        }
+        if (request.method === 'PUT') {
+          const body = await readJsonBody(request, 32 * 1024)
+          if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'settings must be an object')
+          const patch = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : body
+          const secrets = body.secrets && typeof body.secrets === 'object' && !Array.isArray(body.secrets) ? body.secrets : undefined
+          if (secrets !== undefined) await writeTtsSecrets(secrets)
+          const settings = await tts.updateSettings(patch)
+          sendJson(request, response, 200, { settings })
+          return
+        }
+        throw new HttpError(405, 'method not allowed')
+      }
+      if (pathname === `${API_PREFIX}/tts/synthesize`) {
+        if (request.method !== 'POST') throw new HttpError(405, 'method not allowed')
+        const body = await readJsonBody(request, 64 * 1024)
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid synthesis request')
+        await tts.ready()
+        const result = await tts.synthesize({
+          provider: cleanText(body.provider, '', 40),
+          voice: cleanText(body.voice, '', 64),
+          speed: body.speed,
+          text: typeof body.text === 'string' ? body.text : '',
+        })
+        // Hand back a same-origin URL: browser CSP blocks blob: media, while a
+        // plain Host URL plays everywhere.
+        sendJson(request, response, 200, {
+          url: `${API_PREFIX}/tts/audio/${result.name}`,
+          mime: result.mime,
+          cached: result.cached,
+        })
+        return
+      }
+      const audioMatch = new RegExp(`^${API_PREFIX}/tts/audio/([0-9a-f]{64}\\.(?:wav|mp3))$`).exec(pathname)
+      if (audioMatch !== null) {
+        if (request.method !== 'GET' && request.method !== 'HEAD') throw new HttpError(405, 'method not allowed')
+        const audio = await tts.readAudio(audioMatch[1])
+        if (audio === null) throw new HttpError(404, 'audio not found')
+        response.writeHead(200, {
+          ...baseHeaders(request),
+          'Content-Type': audio.mime,
+          'Content-Length': audio.audio.length,
+          // The name is a content hash, so the bytes never change.
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        })
+        if (request.method === 'HEAD') response.end()
+        else response.end(audio.audio)
+        return
+      }
+      if (pathname === `${API_PREFIX}/tts/cache`) {
+        if (request.method === 'GET') {
+          sendJson(request, response, 200, await tts.cache.stats())
+          return
+        }
+        if (request.method === 'DELETE') {
+          sendJson(request, response, 200, await tts.cache.clear())
+          return
+        }
+        throw new HttpError(405, 'method not allowed')
+      }
       if (pathname === `${API_PREFIX}/books` || pathname === `${API_PREFIX}/books/`) {
         if (request.method === 'GET') {
           await listBooks(request, response)
@@ -1261,9 +1398,11 @@ export function apply(ctx) {
           ? error.status
           : error instanceof TagStoreError
             ? error.status
-            : error instanceof AppleBooksImportError
+            : error instanceof TtsError
               ? error.status
-              : 500
+              : error instanceof AppleBooksImportError
+                ? error.status
+                : 500
       if (status >= 500) ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
       if (response.headersSent) {
         response.destroy()
@@ -1286,6 +1425,7 @@ export function apply(ctx) {
     () => ctx.webServer.register({ kind: 'prefix', path: ROUTE_PREFIX, handler }),
     'bookshelf: http routes',
   )
+  void tts.load().catch((error) => ctx.logger.warn(error instanceof Error ? error : new Error(String(error))))
   ctx.logger.info(`bookshelf: library at ${rootDir}`)
   void migrateAppleLinks().catch((error) => {
     ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))

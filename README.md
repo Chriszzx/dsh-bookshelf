@@ -1,161 +1,84 @@
 # dsh-bookshelf
 
-A local PDF and EPUB bookshelf for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-Web GUI. It adds a **Bookshelf** entry to the left sidebar and a shelf in the main
-panel. Library, covers, progress, bookmarks and settings live under
-`$DSH_HOME/bookshelf`, so they survive reloads and restarts.
+A local PDF and EPUB bookshelf for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web GUI: a **Bookshelf** entry in the sidebar, covers, progress, bookmarks, tags and a reader, all stored under `$DSH_HOME/bookshelf`.
 
-## Features
+DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架：侧栏新增**书架**入口，管理封面、进度、书签、标签并内置阅读器，数据保存在 `$DSH_HOME/bookshelf`。
 
-- **One Import books menu**: **Import book files…** (picker or drag-and-drop,
-  copies into the shelf) and **Link a folder…** (soft links; on Windows a staged
-  copy when symlink creation is denied). Originals are never deleted.
-- **Apple Books import** (macOS): search the local library and link a downloaded
-  EPUB/PDF; EPUB source folders are packed on demand.
-- **Shelf**: left-aligned, stable-size cover grid that adapts to the panel width; search, sort, rename, delete.
-  Switch to a **list view** for a vertical row per book (thumbnail, title, status/progress);
-  the choice is remembered across reloads.
-- **Tags and reading status**: every book has one built-in status (**Unread**,
-  **Reading**, **Finished** — Unread/Reading follow progress, Finished is
-  confirmed when you leave the book on its last page or set it yourself) plus any
-  number of custom tags. The shelf switches categories with tabs; tags can be
-  created, renamed and deleted, and renaming keeps the books that carry them.
-- **Finished books** show **Finished 100%** on the shelf without a progress bar;
-  re-reading past the end drops the status and restores the continuing-reading
-  card.
-- **PDF.js reader**: fit page/width/custom zoom, single/continuous pages, page
-  bookmarks, progress restore.
-- **EPUB reader**: paged/scroll, TOC, typography, light/dark themes, automatic
-  two-page layout, fullscreen, bookmarks, progress restore.
-- **Page discussion** (EPUB): capture the visible page into
-  `.dsh-bookshelf/<id>.md` in a chosen workspace, open a native conversation with
-  an `@file` draft (nothing is sent), and show the page in the static **Books**
-  sidebar tab.
-- English/Chinese UI.
+## Features / 功能
 
-## Install
+- **Import**: one menu for file picking or drag-and-drop (copied into the shelf) and folder links; originals are never modified.
+  **导入**：统一菜单支持文件选择/拖拽（复制进书架）与链接文件夹，原始文件不会被修改。
+- **Shelf**: stable-size cover grid with search, sort, rename, delete, or a list view that remembers your choice.
+  **书架**：尺寸稳定的封面网格，支持搜索、排序、重命名、删除，可切换为列表模式并记住选择。
+- **Tags and status**: Unread / Reading / Finished plus custom tags, switched with tabs; finished books show **Finished 100%** and drop the status when you read past the end again.
+  **标签与状态**：未读 / 正在阅读 / 已读完，外加自定义标签与分类页签；已读完显示「100%」，重新往后读会取消状态。
+- **PDF and EPUB readers**: zoom, paged/scroll modes, TOC, themes, bookmarks and progress restore.
+  **阅读器**：PDF 与 EPUB 均支持缩放、分页/滚动、目录、主题、书签和进度恢复。
+- **Page discussion** (EPUB): snapshots the visible page into a chosen workspace and opens a native conversation with an `@file` draft.
+  **页面讨论**（EPUB）：把当前页快照写入所选工作区，并打开一个带 `@file` 草稿的原生会话。
+- **English / Chinese UI.**
+  **中英文界面。**
 
-Requires DSH `>=0.2.0-rc.2 <0.3.0`, Node `^22.19.0 || >=24.0.0`, on macOS or
-Windows.
+## Read aloud / 朗读
 
-From GitHub:
+Play the current chapter with automatic page turns and chapter advance, a sentence caption, speed control and a disk cache. Backends: system voices (macOS `say`, Windows SAPI, offline), **Edge speech** (no key), **DeepSeek speech**, any **OpenAI-compatible** `/audio/speech`, and a **local model** section that is UI-only for now.
+
+朗读当前章节，支持自动翻页、自动进入下一章、字幕、语速与磁盘缓存。后端包括系统音色（macOS `say`、Windows SAPI，离线）、**Edge 语音**（无需 Key）、**DeepSeek 语音**、任意 **OpenAI 兼容** `/audio/speech`，以及目前只有配置界面的**本地模型**占位。
+
+The voice picker's first option is **Automatic (book language)**, which is the default: EPUB metadata (or a script count for PDFs) selects a matching voice, and picking a concrete voice pins it. Voice ids are locale-specific, so a shared name never silently switches language.
+
+音色下拉第一项是**「自动（按书籍语言）」**且默认选中：EPUB 元数据（PDF 按文字统计）匹配对应语言的音色；选具体音色即固定。音色 id 按语言唯一，不会因为同名而静默换语言。
+
+The **Test** button aborts after 12 seconds and sentence requests time out as well; failures are shown in the player instead of hanging.
+
+「测试」按钮 12 秒超时中断，单句请求也有超时保护；失败原因直接显示在播放条，不会卡住。
+
+## Install / 安装
+
+Requires DSH `>=0.2.0-rc.2 <0.3.0`, Node `^22.19.0 || >=24.0.0`, on macOS or Windows.
+
+需要 DSH `>=0.2.0-rc.2 <0.3.0`、Node `^22.19.0 || >=24.0.0`，支持 macOS 与 Windows。
 
 ```sh
 dsh plugin --profile web add github:Chriszzx/dsh-bookshelf
+dsh plugin --profile web add /absolute/path/to/dsh-bookshelf   # local checkout
 ```
 
-From a local checkout:
+The bundle inserts `ui-bookshelf`; reload the Web page after replacing client files.
+
+插件会注册 `ui-bookshelf`；替换客户端文件后刷新页面即可。
+
+## Usage / 使用
+
+The gear icon opens **Shelf settings** with three tabs: Reading (fonts, size, margins, mode, theme), Read aloud (backend, language-aware voice, speed, API fields, cache) and Other (discussion workspace, Apple Books import).
+
+齿轮打开**书架设置**窗口，三个标签页：阅读（字体、字号、边距、模式、主题）、朗读（后端、按语言选音色、语速、API 字段、缓存）、其他（讨论工作区、Apple Books 导入）。
+
+In the reader, the speaker button starts read-aloud; the bar offers play/pause, previous/next sentence, speed, voice and close.
+
+阅读器里点朗读按钮开始；底部条提供播放/暂停、上/下句、语速、音色与关闭。
+
+## Data / 数据
+
+Everything lives in `$DSH_HOME/bookshelf`: `library.json`, `state.json`, `tags.json`, `tts.json`, `tts-secrets.json` (0600, never echoed back) and `tts-cache/` (LRU, 512 MB). API keys can also come from `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`.
+
+所有数据都在 `$DSH_HOME/bookshelf`：`library.json`、`state.json`、`tags.json`、`tts.json`、`tts-secrets.json`（0600，不会回显）和 `tts-cache/`（LRU，512 MB）。API Key 也可来自 `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`。
+
+Edge speech sends the text to Microsoft's public read-aloud endpoint; system voices stay offline.
+
+Edge 语音会把待朗读文本发送到微软公开的朗读接口；系统音色完全离线。
+
+## Development / 开发
 
 ```sh
-dsh plugin --profile web add /absolute/path/to/dsh-bookshelf
+node scripts/run-checks.mjs all     # syntax + unit/API + browser regressions
+node tests/run-browser.mjs tts-playback
 ```
 
-The bundle inserts `ui-bookshelf`; reload the Web page after replacing client
-files.
+Tests need Chrome and the React UMD fixtures; network speech providers are never called. See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for data formats, the Edge protocol and the pre-release checklist.
 
-## Usage
+测试需要 Chrome 与 React UMD 文件，不会访问真实语音服务。数据格式、Edge 协议与提交前检查见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-Open **Bookshelf** in the sidebar, then **Import books**:
+## License / 许可
 
-- **Import book files…** — choose one or several EPUB/PDF files, or drop files
-  on the shelf.
-- **Link a folder…** — choose a folder, review its books, and add them as soft
-  links (or copies on the Windows fallback).
-- **Apple Books** (macOS) — search the local library and link a downloaded book.
-
-EPUB settings separate **Font** from **Typography**. Choose an available common font, or use **Detect system fonts** to include installed custom fonts. Full detection requires browser support and a user-granted font-access permission; denial or unsupported browsers retain the common list. Native font metadata supplies weights and italics, including variable weights. The font inventory stays in browser memory; only the selected family and style are saved. Missing fonts use a fallback without discarding the saved selection. PDF pages keep their document fonts.
-
-Two arrangements are available from the toolbar: the cover grid (default) and a
-vertical row list that shows a thumbnail, title, author and the same status or
-progress line. The list keeps the cover artwork as a small thumbnail, hides the
-progress bar for finished books, and remembers your choice after a reload.
-
-The shelf header lists one tab per category: **All**, the three reading statuses,
-and your own tags. Open a book's **More** menu → **Tags…** to pick a status and
-attach tags; **Manage tags** in the header creates, renames, or deletes tag
-definitions. A book may carry several tags, and deleting a tag removes it from
-every book. Tabs show how many books they hold; the search box narrows the
-selected category.
-
-Leaving a book on its last page asks whether to mark it as finished. Confirmed
-books show **Finished 100%** on the shelf and drop out of the progress view;
-reading on from an earlier page clears the status and the card returns to
-**Continue reading x%**.
-
-Progress, bookmarks, tags and status overrides are stored on the Host under
-`$DSH_HOME/bookshelf`. Switching panels preserves the open book, search/sort,
-selected category and scroll; a page reload returns to the shelf with progress
-intact.
-
-## Platform
-
-| Platform | Shelf + readers | File import | Folder linking | Apple Books |
-|---|---|---|---|---|
-| macOS | Yes | Yes | Soft links | Yes |
-| Windows | Yes | Yes | Soft links with Developer Mode; otherwise copy | No |
-| Linux | Not declared | — | — | No |
-
-**Windows.** Folder linking needs `SeCreateSymbolicLinkPrivilege`. Without it,
-the Host automatically saves a staged copy and labels it **copy**; enable
-**Settings → Privacy & security → For developers → Developer Mode** (then sign
-out/in) or run DSH elevated for true soft links. File import and drag-and-drop
-need no symlink privilege. Unrelated errors are reported, and failed copies
-clean up. Automated tests cover permission failures and the copy fallback.
-
-**Apple Books.** macOS only; on Windows the button, setting and routes are
-unavailable (`501`). If the library is unavailable, grant DSH **Full Disk
-Access**. Books that are not downloaded show as unavailable.
-
-## Data and privacy
-
-```text
-$DSH_HOME/bookshelf/{library.json,books,state.json,defaults.json,covers}
-```
-
-Deleting an entry removes its shelf file, cover and reading state; it never
-follows or deletes a linked source. The plugin has no telemetry and does not
-upload books. Page-discussion files stay in the selected workspace under
-`.dsh-bookshelf/` and are not added to a model context until you send a message
-that references them.
-
-## Development
-
-Use the Node range above and pnpm 11.28.5 (pinned in `packageManager`):
-
-```sh
-pnpm install --frozen-lockfile --ignore-scripts
-pnpm run test:syntax
-pnpm test
-pnpm run test:browser
-```
-
-Node tests need no browser. Browser regressions automatically locate Chrome,
-Chromium or Edge, use pinned React 18 development dependencies, and generate
-synthetic EPUB/PDF fixtures. Set `CHROME_BIN` to an executable path if detection
-fails. Each suite owns a temporary book library, browser profile and fixtures;
-cleanup never touches the running DSH instance or a personal library.
-
-Run one browser regression with `pnpm run test:browser file-import` (also:
-`reading-snapshot`, `discussion-handoff`, `tab-persistence`,
-`pagination-geometry`, `layout-fonts`). `BOOKSHELF_TEST_FIXTURES` optionally supplies an existing
-fixture directory instead of generated resources. Windows without symlink
-privileges skips only the true-symlink success case; fallback and source
-verification still run. CI covers Windows/macOS with Node 22 and 24, and browser
-regressions with Node 24.
-
-Install this checkout as a **local directory** in DSH's Plugins page to develop
-against these files; a GitHub installation does not track local edits. Keep only
-one selected bookshelf bundle. Host changes require reload/restart; refresh the
-page for Client changes. These standalone regression suites check the real plugin
-code in an isolated harness; they do not establish live DSH GUI acceptance.
-See [development and testing notes (中文)](docs/DEVELOPMENT.md).
-
-## License
-
-MIT — see [LICENSE](LICENSE). Bundled PDF.js, fflate, fonts, CMaps and WebAssembly
-assets retain their upstream notices under [`assets/licenses`](assets/licenses),
-[`assets/wasm`](assets/wasm) and [`assets/standard_fonts`](assets/standard_fonts).
-
-The automated regression suite is configured for Windows and macOS. Copy
-fallback is tested without requiring symlink privileges. Native folder-picker
-and live DSH interaction acceptance should also be checked when releasing.
+MIT.
