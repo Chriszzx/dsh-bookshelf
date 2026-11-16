@@ -15,8 +15,16 @@ async function collect(directory) {
     else if (/\.m?js$/.test(entry.name)) files.push(relative)
   }
 }
-await collect('scripts')
-await collect('tests')
+// Optional module trees appear as the refactor lands; missing ones are skipped
+// so this check keeps working in either half of a parallel branch.
+for (const directory of ['scripts', 'tests', 'host', 'tts', 'assets/lib']) {
+  try {
+    await collect(directory)
+  } catch (error) {
+    if (error && error.code === 'ENOENT') continue
+    throw error
+  }
+}
 for (const file of files) {
   const result = spawnSync(process.execPath, ['--check', join(root, file)], { stdio: 'inherit' })
   if (result.error) throw result.error
