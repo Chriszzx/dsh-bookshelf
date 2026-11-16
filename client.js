@@ -1072,7 +1072,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // synchronously after the reader awaited the preload; the cached promise
     // deduplicates concurrent loads and is dropped on failure so a retry
     // fetches the module again.
-    const CLIENT_LIB_NAMES = ['text-index', 'clipboard']
+    const CLIENT_LIB_NAMES = ['text-index', 'clipboard', 'highlights', 'selection-speech']
     const clientLibs = new Map()
 
     function loadClientLib(base, name) {
@@ -2037,17 +2037,23 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }, [])
 
-      const audioFor = useCallback((text) => {
+      // `options.cache === false` marks one-off selection audio: the in-memory
+      // map is skipped and the Host is asked to leave the file out of its cache
+      // (`tts-scratch/`), so a selection never evicts the book's sentences.
+      const audioFor = useCallback((text, options) => {
+        const cacheEnabled = !(options !== null && options !== undefined && options.cache === false)
         const pending = settingsReadyRef.current
         if (pending) {
-          return Promise.resolve(pending).then(() => audioFor(text))
+          return Promise.resolve(pending).then(() => audioFor(text, options))
         }
         const current = settingsRef.current
         if (current === null) return Promise.reject(new Error(t('ttsNotReady')))
         const key = `${current.provider}\u0000${current.voice}\u0000${current.autoVoice}\u0000${languageRef.current}\u0000${current.speed}\u0000${text}`
         const cache = audioCacheRef.current
-        const hit = cache.get(key)
-        if (hit !== undefined) return hit
+        if (cacheEnabled) {
+          const hit = cache.get(key)
+          if (hit !== undefined) return hit
+        }
         const promise = (async () => {
           const provider = resolveSpeechProvider(current, providersRef.current, defaultProviderRef.current)
           const providerVoices = (providersRef.current.find((item) => item.id === provider) || {}).voices || []
@@ -2062,7 +2068,7 @@ html.bb-paged body table tr{break-inside:avoid}
             response = await fetch(resourceUrl(base, `${API_ROOT}/tts/synthesize`), {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ provider, voice, text, speed: current.speed }),
+              body: JSON.stringify({ provider, voice, text, speed: current.speed, ...(cacheEnabled ? {} : { cache: false }) }),
               signal: AbortSignal.timeout(TTS_SENTENCE_TIMEOUT_MS),
             })
           } catch (failure) {
@@ -2083,8 +2089,10 @@ html.bb-paged body table tr{break-inside:avoid}
           if (!payload || typeof payload.url !== 'string') throw new Error(t('ttsPlaybackFailed'))
           return payload.url
         })()
-        cache.set(key, promise)
-        promise.catch(() => cache.delete(key))
+        if (cacheEnabled) {
+          cache.set(key, promise)
+          promise.catch(() => cache.delete(key))
+        }
         return promise
       }, [base, t])
 
@@ -2113,62 +2121,84 @@ html.bb-paged body table tr{break-inside:avoid}
         void run
       }), [base, getAudio, t])
 
+      // Play one sentence queue in order. `item.cache === false` marks the
+      // temporary selection queue: its audio is never reused, and a scratch URL
+      // that has expired (the Host prunes scratch files after ten minutes) is
+      // synthesized once more instead of surfacing a playback error.
       const playBatch = useCallback(async (batch, startIndex) => {
         const run = ++runRef.current
         batchRef.current = batch
         setStatus('loading')
         setError('')
         for (let index = startIndex; index < batch.length; index += 1) {
-          if (runRef.current !== run) return
+          if (runRef.current !== run) return null
           indexRef.current = index
           const item = batch[index]
+          const policy = item !== null && typeof item === 'object' && item.cache === false ? { cache: false } : undefined
           setCaption(item.text)
           const lookahead = batch[index + 1]
-          if (lookahead) audioFor(lookahead.text).catch(() => undefined)
+          if (lookahead) {
+            const lookaheadPolicy = lookahead !== null && typeof lookahead === 'object' && lookahead.cache === false ? { cache: false } : undefined
+            audioFor(lookahead.text, lookaheadPolicy).catch(() => undefined)
+          }
           if (typeof item.enter === 'function') await item.enter()
-          if (runRef.current !== run) return
+          if (runRef.current !== run) return null
           let url
           try {
-            url = await audioFor(item.text)
+            url = await audioFor(item.text, policy)
           } catch (failure) {
-            if (runRef.current !== run) return
+            if (runRef.current !== run) return null
             setError(failure instanceof Error ? failure.message : String(failure))
             setStatus('error')
-            return
+            return null
           }
-          if (runRef.current !== run) return
+          if (runRef.current !== run) return null
           setStatus('playing')
           try {
             await playUrl(url, run)
           } catch (failure) {
-            if (runRef.current !== run) return
-            setError(failure instanceof Error ? failure.message : String(failure))
-            setStatus('error')
-            return
+            if (runRef.current !== run) return null
+            if (policy === undefined) {
+              setError(failure instanceof Error ? failure.message : String(failure))
+              setStatus('error')
+              return null
+            }
+            // An uncached scratch file may be gone (expired or cleaned): ask for
+            // it once more, then give up only if that also fails.
+            try {
+              const retryUrl = await audioFor(item.text, policy)
+              if (runRef.current !== run) return null
+              await playUrl(retryUrl, run)
+            } catch (retryFailure) {
+              if (runRef.current !== run) return null
+              setError(retryFailure instanceof Error ? retryFailure.message : String(retryFailure))
+              setStatus('error')
+              return null
+            }
           }
-          if (runRef.current !== run) return
+          if (runRef.current !== run) return null
         }
         // Batch finished; the reader decides what comes next (page or chapter).
         const driver = driverRef.current
-        if (driver === null) { setStatus('idle'); return }
+        if (driver === null) { setStatus('idle'); return run }
         setStatus('loading')
         let nextBatch
         try {
           nextBatch = await driver.advance()
         } catch (failure) {
-          if (runRef.current !== run) return
+          if (runRef.current !== run) return null
           setError(failure instanceof Error ? failure.message : String(failure))
           setStatus('error')
-          return
+          return null
         }
-        if (runRef.current !== run) return
+        if (runRef.current !== run) return null
         if (nextBatch === null || nextBatch.length === 0) {
           // Keep the last sentence on screen: after the queue ends the reader
           // still needs to see where read-aloud stopped.
           setStatus('idle')
-          return
+          return run
         }
-        await playBatch(nextBatch, 0)
+        return playBatch(nextBatch, 0)
       }, [audioFor, playUrl])
 
       const start = useCallback(async (driver) => {
@@ -2224,21 +2254,42 @@ html.bb-paged body table tr{break-inside:avoid}
 
       // Read an explicit text (a selection) without following the page: the
       // queue is a plain sentence list, so the reader keeps its position while
-      // the selection is spoken.
+      // the selection is spoken. Selection audio is never cached. When a
+      // read-aloud driver is active, playback then resumes at the chapter
+      // sentence that contains the selection's last sentence — that sentence is
+      // deliberately read once more (docs/PLAN-split-and-annotations.md §6.2).
       const speakText = useCallback(async (text) => {
         const value = String(text || '').trim()
         if (value === '') return
         let module
+        let selection
         try {
-          module = await loadTtsSentences(base)
+          ;[module, selection] = await Promise.all([
+            loadTtsSentences(base),
+            clientLib('selection-speech') !== null ? clientLib('selection-speech') : loadClientLib(base, 'selection-speech'),
+          ])
         } catch {
           return
         }
-        const sentences = module.splitSentences(value)
+        const sentences = selection.splitSelectionSentences(value, module.splitSentences)
         if (sentences.length === 0) return
+        const resumeDriver = driverRef.current
         driverRef.current = null
         unlock()
-        await playBatch(sentences.map((sentence) => ({ text: sentence })), 0)
+        const run = await playBatch(sentences.map((sentence) => ({ text: sentence, cache: false })), 0)
+        // A stop, an error or a newer utterance during the selection keeps the
+        // driver off; only a naturally finished selection resumes the book.
+        if (run === null || runRef.current !== run || resumeDriver === null) return
+        let batch
+        try {
+          batch = await resumeDriver.current()
+        } catch {
+          return
+        }
+        if (runRef.current !== run || !Array.isArray(batch) || batch.length === 0) return
+        driverRef.current = resumeDriver
+        const start = Math.max(0, selection.resumeIndexFor(batch, selection.lastSelectionSentence(sentences)))
+        await playBatch(batch, start)
       }, [base, playBatch, unlock])
 
       const toggle = useCallback(() => {
@@ -4664,6 +4715,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const frameTokenRef = useRef(0)
       const layoutGenerationRef = useRef(0)
       const speechRangeRef = useRef(null)
+      // Annotation ranges are cached per chapter document: the stored anchors
+      // are chapter-local text offsets, so they must be mapped onto the live
+      // DOM again after every chapter change.
+      const annotationRangesRef = useRef({ document: null, source: null, ranges: [] })
+      const highlightFallbackRef = useRef(false)
       const lastSavedProgressRef = useRef('')
       const pageIndexRef = useRef(0)
       const pageCountRef = useRef(1)
@@ -4675,6 +4731,103 @@ html.bb-paged body table tr{break-inside:avoid}
       const themeTick = useThemeTick()
       const settingsRef = useRef(settings)
       const palette = useMemo(() => readingPalette(settings), [settings, themeTick])
+
+      // ----- [frame:highlights] -----
+      // Read-aloud paints the spoken sentence as a true colour inversion and
+      // every annotation of the current chapter above it. Both layers are
+      // rebuilt from the live chapter DOM whenever the sentence, the page, the
+      // font or the annotation list changes; a browser without the CSS Custom
+      // Highlight API keeps the legacy marker band (`plan.fallback === 'overlay'`).
+      const resolveAnnotationRanges = useCallback((documentNode, annotations, chapter) => {
+        const textIndex = clientLib('text-index')
+        if (textIndex === null || annotations.length === 0) return []
+        const cache = annotationRangesRef.current
+        if (cache.document === documentNode && cache.source === annotations && cache.chapter === chapter) return cache.ranges
+        // One index per chapter document; only then are the stored text offsets
+        // mapped onto live text nodes.
+        const index = textIndex.buildSpeechIndex(documentNode)
+        const ranges = []
+        for (const annotation of annotations) {
+          if (annotation === null || typeof annotation !== 'object') continue
+          if (annotation.chapterIndex !== chapter) continue
+          if (!Number.isInteger(annotation.start) || !Number.isInteger(annotation.end) || annotation.end <= annotation.start) continue
+          const start = index.entries[annotation.start]
+          const end = index.entries[annotation.end - 1]
+          if (!start || !end) continue
+          try {
+            const range = documentNode.createRange()
+            range.setStart(start.node, Math.min(start.offset, (start.node.nodeValue || '').length))
+            range.setEnd(end.node, Math.min(end.offset + 1, (end.node.nodeValue || '').length))
+            ranges.push({ ...annotation, range })
+          } catch {
+            // A stale anchor must not break the repaint of the other entries.
+          }
+        }
+        annotationRangesRef.current = { document: documentNode, source: annotations, chapter, ranges }
+        return ranges
+      }, [])
+
+      const repaintHighlights = useCallback((documentNode) => {
+        const highlights = clientLib('highlights')
+        const liveFrame = frameRef.current
+        if (!documentNode || (liveFrame !== null && liveFrame.contentDocument !== documentNode)) return null
+        const speechRange = speechRangeRef.current
+        const spoken = speechRange !== null && typeof documentNode.contains === 'function' && documentNode.contains(speechRange.startContainer)
+          ? { range: speechRange }
+          : null
+        // A range from a replaced chapter is meaningless here; dropping it also
+        // lets the next sentence start from a clean slate.
+        if (spoken === null) speechRangeRef.current = null
+        const stored = readerState.stateRef.current
+        const storedAnnotations = stored !== null && stored !== undefined && Array.isArray(stored.annotations) ? stored.annotations : []
+        const chapter = chapterRef.current
+        const resolved = resolveAnnotationRanges(documentNode, storedAnnotations, chapter)
+        if (highlights === null) {
+          // The module itself failed to load: losing the band would lose the
+          // only position cue read-aloud has, so keep the legacy marker.
+          highlightFallbackRef.current = true
+          if (spoken !== null) paintSpeechGlass(documentNode, spoken.range)
+          else clearSpeechGlass(documentNode)
+          return null
+        }
+        const plan = highlights.buildHighlightPlan({
+          palette: readingPalette(settingsRef.current),
+          readAloud: spoken,
+          annotations: resolved,
+          chapterIndex: chapter,
+          // CSS.highlights lives on the chapter window, not on the parent
+          // window that runs this glue: the probe must look at the former.
+          win: documentNode.defaultView || null,
+        })
+        highlights.applyHighlightPlan(documentNode, plan)
+        highlightFallbackRef.current = plan.fallback === 'overlay'
+        if (plan.fallback === 'overlay') {
+          // Without the CSS Custom Highlight API the sentence falls back to the
+          // marker band; annotation data is untouched and simply not painted.
+          if (spoken !== null) paintSpeechGlass(documentNode, spoken.range)
+          else clearSpeechGlass(documentNode)
+        } else {
+          clearSpeechGlass(documentNode)
+        }
+        return plan
+      }, [resolveAnnotationRanges])
+
+      // A replaced chapter document must not keep its registry entries or its
+      // ::highlight() style element alive.
+      const clearDisplayedHighlights = useCallback(() => {
+        const previous = displayedChapterRef.current
+        if (previous === null || previous === undefined || !previous.document) return
+        const liveFrame = frameRef.current
+        const liveDocument = liveFrame === null ? null : liveFrame.contentDocument
+        if (liveDocument === previous.document) return
+        const highlights = clientLib('highlights')
+        if (highlights === null) return
+        try {
+          highlights.clearHighlights(previous.document)
+        } catch {
+          // A detached document cannot be cleaned; nothing is left to clean.
+        }
+      }, [])
 
       // The reader preloads the clipboard helper, so copying stays synchronous
       // on the gesture; the promise fallback keeps a lost preload recoverable.
@@ -4884,8 +5037,12 @@ html.bb-paged body table tr{break-inside:avoid}
           if (options.save && generation === layoutGenerationRef.current) {
             saveEpubProgress(chapterRef.current, ratio)
           }
+          // A reflow keeps the Range objects valid, but the overlay fallback
+          // band is viewport-fixed and a repaint keeps both layers in step with
+          // the new column geometry.
+          if (generation === layoutGenerationRef.current) repaintHighlights(documentNode)
         },
-        [capturePagedAnchor, pageForAnchor, saveEpubProgress],
+        [capturePagedAnchor, pageForAnchor, repaintHighlights, saveEpubProgress],
       )
 
       useEffect(() => {
@@ -5012,8 +5169,11 @@ html.bb-paged body table tr{break-inside:avoid}
             scrollBindingRef.current()
             scrollBindingRef.current = null
           }
+          // Leaving the chapter (or the reader) must not leave the previous
+          // document's highlight layers registered on its window.
+          clearDisplayedHighlights()
         },
-        [chapter],
+        [chapter, clearDisplayedHighlights],
       )
 
       const resourceIndex = useMemo(() => {
@@ -5187,9 +5347,14 @@ html.bb-paged body table tr{break-inside:avoid}
         const documentNode = frame && frame.contentDocument
         const windowNode = frame && frame.contentWindow
         if (!documentNode || !windowNode) return
+        // A chapter swap replaces the frame document: the previous document's
+        // ::highlight() rules and registry entries would otherwise leak.
+        clearDisplayedHighlights()
         paintFrame(documentNode, settingsRef.current)
         wrapTables(documentNode)
         displayedChapterRef.current = { document: documentNode, chapter: chapterRef.current }
+        // Paint the chapter's annotations before the first sentence arrives.
+        repaintHighlights(documentNode)
         if (typeof documentNode.__bsBound !== 'boolean') {
           documentNode.__bsBound = true
           documentNode.addEventListener('click', (event) => {
@@ -5284,7 +5449,11 @@ html.bb-paged body table tr{break-inside:avoid}
           glassTimer = setTimeout(() => {
             glassTimer = 0
             const range = speechRangeRef.current
-            if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
+            // Only the overlay fallback needs the fixed-position band; with the
+            // CSS Custom Highlight API the inversion follows the text natively.
+            if (highlightFallbackRef.current && range !== null && documentNode.contains(range.startContainer)) {
+              paintSpeechGlass(documentNode, range)
+            }
           }, 140)
           if (frameRequest !== 0) return
           frameRequest = requestAnimationFrame(() => {
@@ -5324,8 +5493,10 @@ html.bb-paged body table tr{break-inside:avoid}
           const refresh = () => {
             if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-              const range = speechRangeRef.current
-              if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
+              if (highlightFallbackRef.current) {
+                const range = speechRangeRef.current
+                if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
+              }
             }
           }
           if (documentNode.fonts && documentNode.fonts.ready) {
@@ -5404,7 +5575,7 @@ html.bb-paged body table tr{break-inside:avoid}
           clearTimeout(retry)
           clearTimeout(settle)
         }
-      }, [goTo, layoutPagedFrame, saveEpubProgress])
+      }, [clearDisplayedHighlights, goTo, layoutPagedFrame, repaintHighlights, saveEpubProgress])
 
       useEffect(() => {
         const previousMode = previousModeRef.current
@@ -5413,6 +5584,9 @@ html.bb-paged body table tr{break-inside:avoid}
         const documentNode = frame && frame.contentDocument
         if (!documentNode) return
         paintFrame(documentNode, settings)
+        // A font, size or theme change moves the glyphs; the plan depends on the
+        // palette, so both highlight layers are rebuilt here.
+        repaintHighlights(documentNode)
         if (settings.pageMode === 'paged') {
           if (previousMode === 'paged') {
             layoutPagedFrame(frame, { restoreAnchor: true, save: true })
@@ -5446,7 +5620,17 @@ html.bb-paged body table tr{break-inside:avoid}
           setScrollRatio(ratio)
           saveEpubProgress(chapterRef.current, ratio)
         }
-      }, [settings, themeTick, layoutPagedFrame, saveEpubProgress])
+      }, [settings, themeTick, layoutPagedFrame, repaintHighlights, saveEpubProgress])
+
+      // Creating or deleting an annotation must repaint without a page turn.
+      // The array identity only changes when the Host state actually stores a
+      // new annotation list, so progress saves do not trigger a repaint.
+      const annotations = readerState.state !== null && Array.isArray(readerState.state.annotations) ? readerState.state.annotations : null
+      useEffect(() => {
+        const frame = frameRef.current
+        const documentNode = frame && frame.contentDocument
+        if (documentNode) repaintHighlights(documentNode)
+      }, [annotations, repaintHighlights])
 
       useEffect(() => {
         if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
@@ -5873,12 +6057,12 @@ html.bb-paged body table tr{break-inside:avoid}
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
               speechRangeRef.current = entry.range
-              // Paint after the page turn or scroll settles so the glass bands
-              // match the final line boxes.
+              // Paint after the page turn or scroll settles so the inversion (or
+              // the fallback marker band) matches the final line boxes.
               const paint = () => {
                 const live = frameRef.current
                 if (!live || live.contentDocument !== documentNode) return
-                paintSpeechGlass(documentNode, entry.range)
+                repaintHighlights(documentNode)
               }
               if (paged) {
                 const page = rangePage(documentNode, windowNode, entry.range)
@@ -5913,7 +6097,7 @@ html.bb-paged body table tr{break-inside:avoid}
               windowNode.requestAnimationFrame(() => {
                 const live = frameRef.current
                 if (!live || live.contentDocument !== documentNode) return
-                paintSpeechGlass(documentNode, entry.range)
+                repaintHighlights(documentNode)
               })
             },
           }))
@@ -5930,7 +6114,7 @@ html.bb-paged body table tr{break-inside:avoid}
             return batchForChapter(next, previousDocument)
           },
         }
-      }, [base, data, goTo, layoutPagedFrame, t, waitForSpeechChapter])
+      }, [base, data, goTo, layoutPagedFrame, repaintHighlights, t, waitForSpeechChapter])
 
       const startReadAloud = useCallback(() => {
         const driver = createSpeechDriver()

@@ -212,7 +212,14 @@ try {
     await until(()=>caption().length>0);
     window.__preview=caption();
     const previewFrame=document.querySelector('.bs-epub-frame');
-    await until(()=>previewFrame.contentDocument.querySelector('[data-bb-glass-band]'));
+    // The spoken sentence is now a true colour inversion through the CSS
+    // Custom Highlight API; the marker band survives only as the no-API
+    // fallback (covered by the highlights-browser suite).
+    const previewWindow=previewFrame.contentWindow;
+    check(!!previewWindow.CSS&&!!previewWindow.CSS.highlights,'CSS Custom Highlight API available');
+    await until(()=>previewWindow.CSS.highlights.get('bb-ra'));
+    const previewHighlight=previewWindow.CSS.highlights.get('bb-ra');
+    check([...previewHighlight].map(range=>range.toString()).join(' ').includes(window.__preview),'read-aloud highlight covers the preview sentence');
     await wait(200);
     check(window.audioEvents('play').length===playsBefore,'preview must not play audio');
     check(!!document.querySelector('.bs-tts-caption'),'preview card appears before play');
@@ -585,17 +592,25 @@ try {
     check(parseFloat(dockStyle.borderTopLeftRadius)>=20,'dock must be a rounded bar');
     check(dockStyle.backdropFilter.includes('blur'),'dock must be frosted glass');
     const frame=document.querySelector('.bs-epub-frame');
-    const bands=[...frame.contentDocument.querySelectorAll('[data-bb-glass-band]')];
-    check(bands.length>0,'highlight bands cover the sentence');
-    check(getComputedStyle(bands[0]).position==='fixed','highlight floats without joining the paged columns');
-    const bandStyle=getComputedStyle(bands[0]);
-    check(!bandStyle.backdropFilter.includes('blur'),'the words must stay crisp under the marker');
-    check(parseFloat(bandStyle.borderTopLeftRadius)>0,'highlight is rounded');
-    const rgbParts=bandStyle.backgroundColor.replace(/[^0-9.,]/g,'').split(',');
-    const alpha=Number(rgbParts[3]);
-    check(Number.isFinite(alpha)&&alpha>0.2&&alpha<=0.7,'marker must stay see-through: '+bandStyle.backgroundColor);
-    check(['multiply','screen'].includes(bandStyle.mixBlendMode),'marker blends into the page: '+bandStyle.mixBlendMode);
-    const covered=bands.reduce((sum,band)=>sum+band.getBoundingClientRect().width,0);
+    const frameWindow=frame.contentWindow;
+    const spoken=frameWindow.CSS.highlights.get('bb-ra');
+    check(!!spoken,'the spoken sentence is highlighted');
+    check(spoken.priority===0,'read-aloud highlight priority: '+spoken.priority);
+    const ruleStyle=frame.contentDocument.querySelector('style[data-bb-highlight-styles]');
+    check(!!ruleStyle,'::highlight() rules are written');
+    const ruleText=ruleStyle.textContent;
+    const rootStyle=frame.contentDocument.documentElement.style;
+    const fg=rootStyle.getPropertyValue('--bb-fg');
+    const bg=rootStyle.getPropertyValue('--bb-bg');
+    check(ruleText.includes('::highlight(bb-ra)'),'read-aloud rule present: '+ruleText);
+    check(
+      ruleText.includes('color: '+bg+';')&&ruleText.includes('background-color: '+fg+';'),
+      'read-aloud inverts the page palette: '+ruleText+' fg='+fg+' bg='+bg,
+    );
+    const covered=[...spoken].reduce(
+      (sum,range)=>sum+[...range.getClientRects()].reduce((width,rect)=>width+rect.width,0),
+      0,
+    );
     check(covered>frame.getBoundingClientRect().width*0.5,'highlight covers the whole sentence, not just its opening');
     const preview=document.querySelector('.bs-tts-caption');
     check(!!preview&&preview.getBoundingClientRect().width>0,'floating preview card stays visible next to the marker');
