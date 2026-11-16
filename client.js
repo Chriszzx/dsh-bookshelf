@@ -201,6 +201,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-selection-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;line-height:1.4;text-align:left;cursor:pointer;white-space:nowrap}
 .bs-selection-item:hover{background:var(--dsw-alias-bg-layer-2)}
 .bs-selection-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-selection-item:disabled{opacity:.45;cursor:default;background:transparent}
 .bs-selection-divider{height:1px;margin:3px 6px;background:var(--dsw-alias-border-l1)}
 .bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px)}
 .bs-tts-file-open{justify-content:flex-start}
@@ -314,6 +315,36 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-text-button:disabled{opacity:.45;cursor:default}
 .bs-text-button[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-brand-primary)}
 .bs-text-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+/* ----- [styles:annotations] ----- */
+.bs-annotation-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;width:min(304px,calc(100vw - 28px));max-height:calc(100% - var(--bs-popover-top) - 12px);overflow:auto;padding:10px 13px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-annotation-preview{display:flex;align-items:center;justify-content:center;min-height:46px;margin:2px 0 2px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:15px;line-height:1.6;text-align:center;overflow-wrap:anywhere}
+.bs-annotation-color-row{display:flex;align-items:center;gap:8px}
+.bs-annotation-hue{flex:1;min-width:0;height:16px;margin:0;padding:0;appearance:none;-webkit-appearance:none;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:linear-gradient(90deg,#ff2d2d,#ffd23f,#54d34f,#3fc8d6,#3f6cd8,#b84fd8,#ff2d2d);cursor:pointer}
+.bs-annotation-hue::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:14px;height:14px;border-radius:50%;border:2px solid #fff;background:var(--dsw-alias-label-primary);box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.bs-annotation-hue::-moz-range-thumb{width:12px;height:12px;border-radius:50%;border:2px solid #fff;background:var(--dsw-alias-label-primary);box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.bs-annotation-color-input{flex:none;width:36px;height:26px;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;cursor:pointer}
+.bs-annotation-range{width:100%;margin:2px 0 0;accent-color:var(--dsw-alias-brand-primary);cursor:pointer}
+.bs-annotation-value{float:right;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
+/* ----- [styles:reading-list] ----- */
+.bs-reading-tools{display:flex;align-items:center;gap:6px;margin:0 0 8px}
+.bs-reading-sort{flex:none;max-width:112px;font:inherit;font-size:11.5px;line-height:1.4;padding:4px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer}
+.bs-reading-sort:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-reading-search{flex:1;min-width:0;font:inherit;font-size:11.5px;line-height:1.4;padding:4px 7px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);outline:none}
+.bs-reading-search:focus{border-color:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--dsw-alias-brand-primary) 14%,transparent)}
+.bs-reading-list{display:flex;flex-direction:column;gap:1px}
+.bs-reading-row{display:flex;align-items:flex-start;gap:2px}
+.bs-reading-main{flex:1;min-width:0;display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;text-align:left;cursor:pointer}
+.bs-reading-main:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-reading-main:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-reading-icon{flex:none;display:inline-flex;margin-top:2px}
+.bs-reading-text{display:flex;flex-direction:column;gap:1px;min-width:0}
+.bs-reading-label{font-size:12px;line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-reading-detail{font-size:10.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-reading-delete{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin-top:3px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;opacity:0}
+.bs-reading-row:hover .bs-reading-delete,.bs-reading-delete:focus-visible{opacity:1}
+.bs-reading-delete:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-error-primary)}
+.bs-reading-delete:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-reading-empty{padding:12px 8px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}
 .bs-discussion-backdrop{position:absolute;inset:0;z-index:30;background:color-mix(in srgb,var(--dsw-alias-bg-base) 72%,transparent);display:flex;align-items:center;justify-content:center;padding:20px}
 .bs-discussion-dialog{display:flex;flex-direction:column;gap:14px;width:min(560px,100%);max-height:100%;overflow:auto;padding:20px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);color:var(--dsw-alias-label-primary);box-shadow:0 20px 60px -25px var(--dsw-alias-label-secondary);outline:none}
 .bs-discussion-dialog h2{margin:0;font-size:16px;line-height:1.4}
@@ -351,6 +382,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-controls{gap:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:3px;width:100%}
   .bs-reader-controls .bs-divider{margin:0 2px}
   .bs-reader-settings{right:8px;left:8px;width:auto}
+  .bs-annotation-menu{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
   .bs-tts-overlay{padding:0 8px;bottom:10px}
@@ -1072,7 +1104,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // synchronously after the reader awaited the preload; the cached promise
     // deduplicates concurrent loads and is dropped on failure so a retry
     // fetches the module again.
-    const CLIENT_LIB_NAMES = ['text-index', 'clipboard']
+    const CLIENT_LIB_NAMES = ['text-index', 'clipboard', 'annotations', 'reading-list']
     const clientLibs = new Map()
 
     function loadClientLib(base, name) {
@@ -1268,6 +1300,21 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    // Marker pen: the toolbar button and the panel row icon for highlights.
+    function MarkerIcon({ size = 17 }) {
+      return svgIcon(size, [
+        h('path', { key: 'a', d: 'm9 11-6 6v3h9l3-3' }),
+        h('path', { key: 'b', d: 'M13 15 22 6a2.1 2.1 0 0 0-3-3L10 12' }),
+      ])
+    }
+
+    function UnderlineIcon({ size = 17 }) {
+      return svgIcon(size, [
+        h('path', { key: 'a', d: 'M6 4v6a6 6 0 0 0 12 0V4' }),
+        h('path', { key: 'b', d: 'M4 20h16' }),
+      ])
+    }
+
     function ImmersiveIcon({ size = 16 }) {
       return svgIcon(size, [
         h('path', { key: 'a', d: 'M4 4h16v16H4z' }),
@@ -1314,6 +1361,86 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function Spinner({ small = false }) {
       return h('span', { className: small ? 'bs-spinner bs-spinner-small' : 'bs-spinner', 'aria-hidden': true })
+    }
+
+    // Annotation style helpers. The model itself lives in
+    // assets/lib/annotations.mjs and is preloaded before the reader opens; the
+    // literal fallback only covers the first frames before that preload and a
+    // failed module load, and mirrors DEFAULT_ANNOTATION_STYLE field by field.
+    const FALLBACK_ANNOTATION_STYLE = Object.freeze({
+      mode: 'highlight',
+      color: '#ffd23f',
+      strength: 0.35,
+      thickness: 2,
+      underlineStyle: 'solid',
+    })
+    const ANNOTATION_UNDERLINE_STYLES = Object.freeze(['solid', 'dashed', 'dotted', 'wavy'])
+    const ANNOTATION_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+    function defaultAnnotationStyle() {
+      const module = clientLib('annotations')
+      return module !== null ? module.DEFAULT_ANNOTATION_STYLE : FALLBACK_ANNOTATION_STYLE
+    }
+
+    function normalizeAnnotationStyleValue(value) {
+      const module = clientLib('annotations')
+      if (module !== null) return module.normalizeAnnotationStyle(value)
+      const source = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {}
+      const mode = source.mode === 'highlight' || source.mode === 'underline' ? source.mode : FALLBACK_ANNOTATION_STYLE.mode
+      const color = typeof source.color === 'string' && ANNOTATION_COLOR_PATTERN.test(source.color)
+        ? source.color.toLowerCase()
+        : FALLBACK_ANNOTATION_STYLE.color
+      const strength = typeof source.strength === 'number' && Number.isFinite(source.strength)
+        ? Math.round(Math.min(0.9, Math.max(0.05, source.strength)) * 100) / 100
+        : FALLBACK_ANNOTATION_STYLE.strength
+      const thickness = typeof source.thickness === 'number' && Number.isFinite(source.thickness)
+        ? Math.round(Math.min(6, Math.max(1, source.thickness)))
+        : FALLBACK_ANNOTATION_STYLE.thickness
+      const underlineStyle = ANNOTATION_UNDERLINE_STYLES.includes(source.underlineStyle)
+        ? source.underlineStyle
+        : FALLBACK_ANNOTATION_STYLE.underlineStyle
+      return { mode, color, strength, thickness, underlineStyle }
+    }
+
+    // The UI edits a hue slider plus a native colour input, so the stored
+    // colour stays a plain hex string the model whitelists.
+    function hueForAnnotationColor(color) {
+      const match = ANNOTATION_COLOR_PATTERN.exec(typeof color === 'string' ? color : '')
+      if (match === null) return 48
+      let hex = match[0].slice(1).toLowerCase()
+      if (hex.length === 3) hex = hex.split('').map((part) => part + part).join('')
+      const red = parseInt(hex.slice(0, 2), 16) / 255
+      const green = parseInt(hex.slice(2, 4), 16) / 255
+      const blue = parseInt(hex.slice(4, 6), 16) / 255
+      const maximum = Math.max(red, green, blue)
+      const minimum = Math.min(red, green, blue)
+      const delta = maximum - minimum
+      if (delta === 0) return 0
+      let hue
+      if (maximum === red) hue = ((green - blue) / delta) % 6
+      else if (maximum === green) hue = (blue - red) / delta + 2
+      else hue = (red - green) / delta + 4
+      return Math.round(((hue * 60) + 360) % 360)
+    }
+
+    function annotationColorForHue(hue) {
+      const value = Number.isFinite(hue) ? ((hue % 360) + 360) % 360 : 0
+      const saturation = 0.86
+      const lightness = 0.55
+      const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation
+      const secondary = chroma * (1 - Math.abs(((value / 60) % 2) - 1))
+      const offset = lightness - chroma / 2
+      let red = 0
+      let green = 0
+      let blue = 0
+      if (value < 60) { red = chroma; green = secondary }
+      else if (value < 120) { red = secondary; green = chroma }
+      else if (value < 180) { green = chroma; blue = secondary }
+      else if (value < 240) { green = secondary; blue = chroma }
+      else if (value < 300) { red = secondary; blue = chroma }
+      else { red = chroma; blue = secondary }
+      const channel = (part) => Math.round((part + offset) * 255).toString(16).padStart(2, '0')
+      return `#${channel(red)}${channel(green)}${channel(blue)}`
     }
 
     // ----- [hooks:state] -----
@@ -1527,6 +1654,208 @@ html.bb-paged body table tr{break-inside:avoid}
                 title: t('deleteBookmark'),
                 'aria-label': t('deleteBookmark'),
                 onClick: () => onDelete(bookmark),
+              },
+              h(TrashIcon, { size: 12 }),
+            ),
+          ),
+        ),
+      )
+    }
+
+    // Annotation style popover: opens from the toolbar marker button next to the
+    // bookmark button. Every control writes one field of
+    // state.settings.annotationStyle (see assets/lib/annotations.mjs for the
+    // model) and the preview follows immediately.
+    function AnnotationStyleMenu({ t, style, onChange, onClose }) {
+      const fallback = defaultAnnotationStyle()
+      const storedColor = typeof style.color === 'string' && ANNOTATION_COLOR_PATTERN.test(style.color) ? style.color : fallback.color
+      const paint = storedColor.toLowerCase()
+      const hue = hueForAnnotationColor(paint)
+      const strength = Math.round(Math.min(0.9, Math.max(0.05, style.strength)) * 100)
+      const thickness = Math.round(Math.min(6, Math.max(1, style.thickness)))
+      const underlineStyle = ANNOTATION_UNDERLINE_STYLES.includes(style.underlineStyle) ? style.underlineStyle : fallback.underlineStyle
+      const preview = style.mode === 'underline'
+        ? {
+            textDecorationLine: 'underline',
+            textDecorationColor: paint,
+            textDecorationThickness: `${thickness}px`,
+            textDecorationStyle: underlineStyle,
+          }
+        : { backgroundColor: `color-mix(in srgb, ${paint} ${strength}%, transparent)` }
+      const segment = (value, label) => h(
+        'button',
+        {
+          key: value,
+          type: 'button',
+          className: 'bs-segment',
+          'aria-pressed': style.mode === value,
+          onClick: () => onChange({ mode: value }),
+        },
+        label,
+      )
+      const underlineOption = (value, label) => h(
+        'button',
+        {
+          key: value,
+          type: 'button',
+          className: 'bs-segment',
+          'aria-pressed': underlineStyle === value,
+          onClick: () => onChange({ underlineStyle: value }),
+        },
+        label,
+      )
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-popover-backdrop', onClick: onClose }),
+        h(
+          'div',
+          { className: 'bs-annotation-menu', role: 'dialog', 'aria-label': t('annotationStyle') },
+          h(
+            'div',
+            { className: 'bs-settings-head' },
+            h('span', { className: 'bs-settings-title' }, t('annotationStyle')),
+            h(
+              'button',
+              { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') },
+              h(CloseIcon),
+            ),
+          ),
+          h('div', { className: 'bs-annotation-preview', 'data-mode': style.mode, style: preview }, t('annotationPreview')),
+          h(
+            'div',
+            { className: 'bs-setting-row' },
+            h('span', { className: 'bs-setting-label' }, t('annotationMode')),
+            h(
+              'div',
+              { className: 'bs-segmented bs-annotation-mode', role: 'group', 'aria-label': t('annotationMode') },
+              segment('highlight', t('annotationHighlight')),
+              segment('underline', t('annotationUnderline')),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'bs-setting-row' },
+            h('span', { className: 'bs-setting-label' }, t('annotationColor')),
+            h(
+              'div',
+              { className: 'bs-annotation-color-row' },
+              h('input', {
+                type: 'range',
+                className: 'bs-annotation-hue',
+                min: 0,
+                max: 359,
+                step: 1,
+                value: hue,
+                'aria-label': t('annotationColor'),
+                title: t('annotationColor'),
+                onChange: (event) => onChange({ color: annotationColorForHue(Number(event.target.value)) }),
+              }),
+              h('input', {
+                type: 'color',
+                className: 'bs-annotation-color-input',
+                value: paint,
+                'aria-label': t('annotationColorPick'),
+                title: t('annotationColorPick'),
+                onChange: (event) => onChange({ color: event.target.value }),
+              }),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'bs-setting-row' },
+            h('span', { className: 'bs-setting-label' }, t('annotationStrength'), h('span', { className: 'bs-annotation-value' }, `${strength}%`)),
+            h('input', {
+              type: 'range',
+              className: 'bs-annotation-range bs-annotation-strength',
+              min: 5,
+              max: 90,
+              step: 1,
+              value: strength,
+              'aria-label': t('annotationStrength'),
+              title: t('annotationStrength'),
+              onChange: (event) => onChange({ strength: Number(event.target.value) / 100 }),
+            }),
+          ),
+          h(
+            'div',
+            { className: 'bs-setting-row' },
+            h('span', { className: 'bs-setting-label' }, t('annotationThickness'), h('span', { className: 'bs-annotation-value' }, `${thickness}px`)),
+            h('input', {
+              type: 'range',
+              className: 'bs-annotation-range bs-annotation-thickness',
+              min: 1,
+              max: 6,
+              step: 1,
+              value: thickness,
+              'aria-label': t('annotationThickness'),
+              title: t('annotationThickness'),
+              onChange: (event) => onChange({ thickness: Number(event.target.value) }),
+            }),
+          ),
+          h(
+            'div',
+            { className: 'bs-setting-row' },
+            h('span', { className: 'bs-setting-label' }, t('annotationUnderlineStyle')),
+            h(
+              'div',
+              { className: 'bs-segmented bs-annotation-underline-options', role: 'group', 'aria-label': t('annotationUnderlineStyle') },
+              ANNOTATION_UNDERLINE_STYLES.map((value) =>
+                underlineOption(value, t(`underline${value[0].toUpperCase()}${value.slice(1)}`))),
+            ),
+          ),
+        ),
+      )
+    }
+
+    function ReadingItemIcon({ kind }) {
+      if (kind === 'highlight') {
+        return h('span', { className: 'bs-reading-icon bs-reading-icon-highlight' }, h(MarkerIcon, { size: 14 }))
+      }
+      if (kind === 'underline') {
+        return h('span', { className: 'bs-reading-icon bs-reading-icon-underline' }, h(UnderlineIcon, { size: 14 }))
+      }
+      return h('span', { className: 'bs-reading-icon bs-reading-icon-bookmark' }, h(BookmarkIcon, { size: 14, filled: true }))
+    }
+
+    // Bookmark / highlight / underline rows for the reader aside. Items come
+    // from assets/lib/reading-list.mjs (merge + sort + filter + counts), so this
+    // component only renders one flat row per item.
+    function ReadingList({ t, items, emptyLabel, onSelect, onDelete }) {
+      if (!Array.isArray(items) || items.length === 0) {
+        return h('div', { className: 'bs-reading-empty' }, emptyLabel)
+      }
+      return h(
+        'div',
+        { className: 'bs-reading-list' },
+        items.map((item) =>
+          h(
+            'div',
+            { key: item.id, className: 'bs-reading-row', 'data-kind': item.kind },
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'bs-reading-main',
+                title: item.label,
+                onClick: () => onSelect(item),
+              },
+              h(ReadingItemIcon, { kind: item.kind }),
+              h(
+                'span',
+                { className: 'bs-reading-text' },
+                h('span', { className: 'bs-reading-label' }, item.label || t('untitled')),
+                item.detail ? h('span', { className: 'bs-reading-detail' }, item.detail) : null,
+              ),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'bs-reading-delete',
+                title: t('deleteReadingItem'),
+                'aria-label': t('deleteReadingItem'),
+                onClick: () => onDelete(item),
               },
               h(TrashIcon, { size: 12 }),
             ),
@@ -2779,18 +3108,23 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     // Reader-owned menu for a text selection: the desktop menu only offers Copy,
-    // so the reader adds citation copy, select-all and reading the selection.
-    function SelectionMenu({ t, menu, onClose, onCopy, onCopyCite, onSelectAll, onSpeak }) {
+    // so the reader adds citation copy, reading the selection and the two
+    // annotation actions. The annotation actions are disabled when the selection
+    // could not be anchored to the chapter text (fromSelection would return
+    // null); they never throw inside the event handler.
+    function SelectionMenu({ t, menu, onClose, onCopy, onCopyCite, onSpeak, onHighlight, onUnderline, canAnnotate }) {
       const ref = useRef(null)
       useEffect(() => {
         const node = ref.current
         if (node !== null && typeof node.focus === 'function') node.focus({ preventScroll: true })
       }, [])
-      const item = (label, action) => h('button', {
+      const item = (label, action, disabled = false) => h('button', {
         type: 'button',
         className: 'bs-selection-item',
         role: 'menuitem',
+        disabled: disabled === true,
         onClick: () => {
+          if (disabled === true) return
           action()
           onClose()
         },
@@ -2810,8 +3144,10 @@ html.bb-paged body table tr{break-inside:avoid}
         item(t('selectionCopy'), onCopy),
         item(t('selectionCopyCite'), onCopyCite),
         h('div', { className: 'bs-selection-divider' }),
-        item(t('selectionSelectAll'), onSelectAll),
         item(t('selectionSpeak'), onSpeak),
+        h('div', { className: 'bs-selection-divider' }),
+        item(t('selectionHighlight'), onHighlight, canAnnotate !== true),
+        item(t('selectionUnderline'), onUnderline, canAnnotate !== true),
       )
     }
 
@@ -4622,6 +4958,132 @@ html.bb-paged body table tr{break-inside:avoid}
     // EPUB reader: chapter frame, paged layout, TOC/bookmarks aside and
     // read-aloud sentence mapping.
 
+    // Selection → annotation anchor mapping. Both helpers work in the
+    // whitespace-normalised chapter text produced by
+    // assets/lib/text-index.mjs buildSpeechIndex: that is the space the
+    // annotation model stores (chapterIndex + start/end) and the renderer uses
+    // to rebuild Ranges. Element boundary points are resolved to the nearest
+    // text node so a selection that starts or ends on a paragraph still anchors.
+    function resolveTextBoundary(node, offset, edge) {
+      if (node === null || node === undefined) return null
+      if (node.nodeType === 3) return { node, offset: Math.max(0, Math.min(node.nodeValue.length, offset)) }
+      if (node.nodeType !== 1 && node.nodeType !== 11) return null
+      const children = node.childNodes
+      if (!children || children.length === 0) return null
+      const descend = (child, first) => {
+        if (child === null || child === undefined) return null
+        if (child.nodeType === 3) return { node: child, offset: first ? 0 : child.nodeValue.length }
+        if (child.nodeType !== 1) return null
+        const nested = child.childNodes
+        if (!nested || nested.length === 0) return null
+        if (first) {
+          for (let index = 0; index < nested.length; index += 1) {
+            const found = descend(nested[index], true)
+            if (found !== null) return found
+          }
+          return null
+        }
+        for (let index = nested.length - 1; index >= 0; index -= 1) {
+          const found = descend(nested[index], false)
+          if (found !== null) return found
+        }
+        return null
+      }
+      const boundary = Math.max(0, Math.min(children.length, offset))
+      if (edge === 'start') {
+        for (let cursor = boundary; cursor < children.length; cursor += 1) {
+          const found = descend(children[cursor], true)
+          if (found !== null) return found
+        }
+        for (let cursor = boundary - 1; cursor >= 0; cursor -= 1) {
+          const found = descend(children[cursor], false)
+          if (found !== null) return found
+        }
+        return null
+      }
+      for (let cursor = boundary - 1; cursor >= 0; cursor -= 1) {
+        const found = descend(children[cursor], false)
+        if (found !== null) return found
+      }
+      for (let cursor = boundary; cursor < children.length; cursor += 1) {
+        const found = descend(children[cursor], true)
+        if (found !== null) return found
+      }
+      return null
+    }
+
+    function flatOffsetForBoundary(index, boundary) {
+      if (boundary === null) return null
+      // Entries are monotonic inside one text node, so binary search the first
+      // character at or after the DOM point. The per-node map is cached on the
+      // freshly built index, so a right click builds it once.
+      let points = index.annotationPoints
+      if (!(points instanceof Map)) {
+        points = new Map()
+        for (let flat = 0; flat < index.entries.length; flat += 1) {
+          const entry = index.entries[flat]
+          let record = points.get(entry.node)
+          if (record === undefined) {
+            record = { first: flat, offsets: [] }
+            points.set(entry.node, record)
+          }
+          record.offsets.push(entry.offset)
+        }
+        index.annotationPoints = points
+      }
+      const record = points.get(boundary.node)
+      if (record === undefined) return null
+      let low = 0
+      let high = record.offsets.length
+      while (low < high) {
+        const middle = (low + high) >> 1
+        if (record.offsets[middle] < boundary.offset) low = middle + 1
+        else high = middle
+      }
+      return record.first + low
+    }
+
+    // Returns the fromSelection() payload for a live DOM selection, or null when
+    // the selection has no anchorable text (empty, outside the chapter body, or
+    // the text-index module is unavailable). Callers disable the annotation
+    // actions instead of letting a null cross the event handler.
+    function annotationAnchorForSelection(documentNode, selection, chapterIndex) {
+      const textIndex = clientLib('text-index')
+      if (textIndex === null || selection === null || typeof selection.getRangeAt !== 'function') return null
+      if (!(selection.rangeCount > 0)) return null
+      let index
+      try {
+        index = textIndex.buildSpeechIndex(documentNode)
+      } catch {
+        return null
+      }
+      if (index.flat === '' || index.entries.length === 0) return null
+      const range = selection.getRangeAt(0)
+      const startBoundary = resolveTextBoundary(range.startContainer, range.startOffset, 'start')
+      const endBoundary = resolveTextBoundary(range.endContainer, range.endOffset, 'end')
+      let start = flatOffsetForBoundary(index, startBoundary)
+      let end = flatOffsetForBoundary(index, endBoundary)
+      if (start === null || end === null) return null
+      if (start > end) {
+        const swap = start
+        start = end
+        end = swap
+      }
+      while (start < end && /\s/u.test(index.flat[start])) start += 1
+      while (end > start && /\s/u.test(index.flat[end - 1])) end -= 1
+      if (end <= start) return null
+      const quote = index.flat.slice(start, end)
+      if (quote === '') return null
+      return {
+        chapterIndex,
+        start,
+        end,
+        quote,
+        prefix: index.flat.slice(Math.max(0, start - 40), start),
+        suffix: index.flat.slice(end, Math.min(index.flat.length, end + 40)),
+      }
+    }
+
     function EpubReader({ t, book, onBack, defaultSettings, discussion, workspaces, discussionWorkspace }) {
       const base = useMemo(() => transportBase(), [])
       const readerState = useReaderState(base, book)
@@ -4648,6 +5110,10 @@ html.bb-paged body table tr{break-inside:avoid}
       const [bookPageCounts, setBookPageCounts] = useState(null)
       const [frameSize, setFrameSize] = useState({ width: 0, height: 0 })
       const [selectionMenu, setSelectionMenu] = useState(null)
+      const [annotationOpen, setAnnotationOpen] = useState(false)
+      const [annotationStyle, setAnnotationStyle] = useState(() => normalizeAnnotationStyleValue(undefined))
+      const [readingSort, setReadingSort] = useState('position')
+      const [readingQuery, setReadingQuery] = useState('')
       const frameRef = useRef(null)
       const menuHostRef = useRef(null)
       const displayedChapterRef = useRef(null)
@@ -4674,6 +5140,10 @@ html.bb-paged body table tr{break-inside:avoid}
       const turnPageRef = useRef(() => {})
       const themeTick = useThemeTick()
       const settingsRef = useRef(settings)
+      // The annotation style is a separate slice of state: dragging its sliders
+      // must not replace the reader settings object identity, or the paged
+      // layout effect would reflow the chapter on every input event.
+      const annotationStyleRef = useRef(annotationStyle)
       const palette = useMemo(() => readingPalette(settings), [settings, themeTick])
 
       // The reader preloads the clipboard helper, so copying stays synchronous
@@ -4955,6 +5425,13 @@ html.bb-paged body table tr{break-inside:avoid}
               nextSettings.pageMargin = stored.readingWidth === 'wide' ? 'compact' : 'standard'
             }
             if (nextSettings.theme === 'sepia') nextSettings.theme = 'auto'
+            // The annotations module is preloaded by now, so the stored style is
+            // normalised against DEFAULT_ANNOTATION_STYLE instead of trusting a
+            // hand-edited state.json.
+            const loadedAnnotationStyle = normalizeAnnotationStyleValue(nextSettings.annotationStyle)
+            nextSettings.annotationStyle = loadedAnnotationStyle
+            annotationStyleRef.current = loadedAnnotationStyle
+            setAnnotationStyle(loadedAnnotationStyle)
             settingsRef.current = nextSettings
             // Loading stored settings is initialization, not a user mode switch.
             previousModeRef.current = nextSettings.pageMode
@@ -5182,6 +5659,20 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }, [selectionMenu])
 
+      // The annotation style popover is transient too: Escape closes it without
+      // leaving the book.
+      useEffect(() => {
+        if (!annotationOpen) return undefined
+        const onKey = (event) => {
+          if (event.key !== 'Escape') return
+          event.preventDefault()
+          event.stopPropagation()
+          setAnnotationOpen(false)
+        }
+        document.addEventListener('keydown', onKey)
+        return () => document.removeEventListener('keydown', onKey)
+      }, [annotationOpen])
+
       const onFrameLoad = useCallback(() => {
         const frame = frameRef.current
         const documentNode = frame && frame.contentDocument
@@ -5237,6 +5728,9 @@ html.bb-paged body table tr{break-inside:avoid}
               return
             }
             event.preventDefault()
+            // Capture the anchor while the selection is still live: the menu
+            // click must not depend on the iframe selection surviving the click.
+            const anchor = annotationAnchorForSelection(documentNode, selection, chapterRef.current)
             const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
             const box = range === null ? null : range.getBoundingClientRect()
             const liveFrame = frameRef.current
@@ -5244,11 +5738,12 @@ html.bb-paged body table tr{break-inside:avoid}
             const frameRect = liveFrame === null ? null : liveFrame.getBoundingClientRect()
             const hostRect = host === null ? null : host.getBoundingClientRect()
             if (box === null || frameRect === null || hostRect === null) {
-              setSelectionMenu({ text, x: 12, y: 12 })
+              setSelectionMenu({ text, anchor, x: 12, y: 12 })
               return
             }
             setSelectionMenu({
               text,
+              anchor,
               x: Math.max(8, Math.round(frameRect.left - hostRect.left + box.left)),
               y: Math.max(8, Math.round(frameRect.top - hostRect.top + box.bottom + 6)),
             })
@@ -5580,6 +6075,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       const percent = data === null ? 0 : metrics.percentFor(chapter, scrollRatio)
       const bookmarks = readerState.state && Array.isArray(readerState.state.bookmarks) ? readerState.state.bookmarks : []
+      const annotations = readerState.state && Array.isArray(readerState.state.annotations) ? readerState.state.annotations : []
       const currentRatio = scrollRatioRef.current
       const currentBookmark = bookmarks.find((bookmark) => {
         if (bookmark.format !== 'epub' || bookmark.chapterIndex !== chapter) return false
@@ -5615,6 +6111,35 @@ html.bb-paged body table tr{break-inside:avoid}
         readerState.save({ bookmarks: [bookmark, ...bookmarks].slice(0, 500) }, true)
         setAsideTab('bookmarks')
       }, [bookmarks, chapter, chapterTocLabel, currentBookmark, metrics, readerState.save, status])
+
+      // Style edits save the whole settings object (state.settings.annotationStyle
+      // is additive on the Host) without replacing the reader settings state, so
+      // dragging a slider never triggers the paged layout effect.
+      const saveAnnotationStyle = useCallback((patch) => {
+        const next = normalizeAnnotationStyleValue({ ...annotationStyleRef.current, ...patch })
+        annotationStyleRef.current = next
+        setAnnotationStyle(next)
+        settingsRef.current = { ...settingsRef.current, annotationStyle: next }
+        readerState.save({ settings: settingsRef.current })
+      }, [readerState.save])
+
+      // Create the annotation from the context-menu selection with the current
+      // style. fromSelection() returns null for a selection that could not be
+      // anchored: the menu disables those actions, so this is a last guard.
+      // `hasSameAnchor` replaces an annotation of the same type on the exact
+      // same span instead of stacking duplicates (§4.1).
+      const createAnnotation = useCallback((type) => {
+        const module = clientLib('annotations')
+        if (module === null || selectionMenu === null || !selectionMenu.anchor) return
+        const style = { ...annotationStyleRef.current, mode: type }
+        const annotation = module.fromSelection({ ...selectionMenu.anchor, style })
+        if (annotation === null) return
+        const current = readerState.stateRef.current && Array.isArray(readerState.stateRef.current.annotations)
+          ? readerState.stateRef.current.annotations
+          : []
+        const next = [annotation, ...current.filter((item) => !module.hasSameAnchor(item, annotation))].slice(0, 1000)
+        readerState.save({ annotations: next }, true)
+      }, [readerState, selectionMenu])
 
       const onSeekProgress = useCallback(
         (value) => {
@@ -5750,6 +6275,28 @@ html.bb-paged body table tr{break-inside:avoid}
           h(BookmarkIcon, { filled: Boolean(currentBookmark) }),
         ),
       )
+      // Annotation style button, directly right of the bookmark button (§5).
+      controls.push(
+        h(
+          'button',
+          {
+            key: 'annotation',
+            type: 'button',
+            className: 'bs-icon-button',
+            onClick: () => {
+              setSelectionMenu(null)
+              setSettingsOpen(false)
+              setAnnotationOpen((value) => !value)
+            },
+            'aria-pressed': annotationOpen,
+            'aria-expanded': annotationOpen,
+            disabled: status !== 'ready' || clientLib('annotations') === null,
+            title: t('annotationStyle'),
+            'aria-label': t('annotationStyle'),
+          },
+          h(MarkerIcon),
+        ),
+      )
       controls.push(h('span', { key: 'div1', className: 'bs-divider' }))
       controls.push(
         h(
@@ -5758,7 +6305,10 @@ html.bb-paged body table tr{break-inside:avoid}
             key: 'settings',
             type: 'button',
             className: 'bs-text-button',
-            onClick: () => setSettingsOpen((value) => !value),
+            onClick: () => {
+              setAnnotationOpen(false)
+              setSettingsOpen((value) => !value)
+            },
             'aria-expanded': settingsOpen,
             'aria-pressed': settingsOpen,
             title: t('readingSettings'),
@@ -5942,6 +6492,37 @@ html.bb-paged body table tr{break-inside:avoid}
         if (driver !== null) void readAloud.preview(driver)
       }, [createSpeechDriver, readAloud])
 
+      // Bookmark / annotation panel model: merge, sort, search and counts live in
+      // assets/lib/reading-list.mjs; the reader only supplies localised chapter
+      // names and the page fallback. The module is preloaded with the reader, so
+      // the panel falls back to the plain bookmark list only if that load failed.
+      const readingListLib = clientLib('reading-list')
+      const chapterLabels = useMemo(() => {
+        const labels = new Map()
+        for (const entry of toc) {
+          if (!labels.has(entry.chapterIndex)) labels.set(entry.chapterIndex, entry.label || chapterLabel(t, entry.chapterIndex))
+        }
+        return labels
+      }, [toc, t])
+      const readingMerged = useMemo(() => {
+        if (readingListLib === null) return []
+        return readingListLib.mergeReadingItems({
+          bookmarks,
+          annotations,
+          chapterLabels,
+          pageLabel: (page) => t('pageLabel', { number: page }),
+        })
+      }, [annotations, bookmarks, chapterLabels, readingListLib, t])
+      const readingItems = useMemo(() => {
+        if (readingListLib === null) return []
+        return readingListLib.sortReadingItems(readingListLib.filterReadingItems(readingMerged, readingQuery), readingSort)
+      }, [readingListLib, readingMerged, readingQuery, readingSort])
+      const readingCounts = useMemo(() => {
+        if (readingListLib === null) return { total: 0, bookmark: 0, highlight: 0, underline: 0 }
+        return readingListLib.countReadingItems(readingMerged)
+      }, [readingListLib, readingMerged])
+      const readingTabCount = readingListLib !== null ? readingCounts.total : bookmarks.length
+
       return h(
         ReaderShell,
         {
@@ -5985,7 +6566,7 @@ html.bb-paged body table tr{break-inside:avoid}
                             'aria-selected': asideTab === 'toc',
                             onClick: () => setAsideTab('toc'),
                           },
-                          t('tocTab'),
+                          `${t('tocTab')} (${toc.length})`,
                         ),
                         h(
                           'button',
@@ -5996,7 +6577,7 @@ html.bb-paged body table tr{break-inside:avoid}
                             'aria-selected': asideTab === 'bookmarks',
                             onClick: () => setAsideTab('bookmarks'),
                           },
-                          bookmarks.length > 0 ? `${t('bookmarksTab')} (${bookmarks.length})` : t('bookmarksTab'),
+                          `${t('bookmarksTab')} (${readingTabCount})`,
                         ),
                       ),
                       asideTab === 'toc'
@@ -6015,12 +6596,60 @@ html.bb-paged body table tr{break-inside:avoid}
                               entry.label,
                             ),
                           )
-                        : h(BookmarksList, {
-                            t,
-                            bookmarks,
-                            onSelect: (bookmark) => goTo(bookmark.chapterIndex || 0, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0),
-                            onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
-                          }),
+                        : h(
+                            React.Fragment,
+                            null,
+                            h(
+                              'div',
+                              { className: 'bs-reading-tools' },
+                              h(
+                                'select',
+                                {
+                                  className: 'bs-reading-sort',
+                                  'aria-label': t('readingSort'),
+                                  title: t('readingSort'),
+                                  value: readingSort,
+                                  onChange: (event) => setReadingSort(event.target.value),
+                                },
+                                h('option', { value: 'position' }, t('readingSortPosition')),
+                                h('option', { value: 'recent' }, t('readingSortRecent')),
+                                h('option', { value: 'kind' }, t('readingSortKind')),
+                              ),
+                              h('input', {
+                                type: 'search',
+                                className: 'bs-reading-search',
+                                'aria-label': t('readingSearch'),
+                                placeholder: t('readingSearchPlaceholder'),
+                                value: readingQuery,
+                                onChange: (event) => setReadingQuery(event.target.value),
+                              }),
+                            ),
+                            readingListLib !== null
+                              ? h(ReadingList, {
+                                  t,
+                                  items: readingItems,
+                                  emptyLabel: readingQuery.trim() === '' ? t('noReadingItems') : t('noReadingMatches'),
+                                  onSelect: (item) => {
+                                    const source = item.source || {}
+                                    const ratio = item.kind === 'bookmark' ? Number(source.scrollRatio) || 0 : 0
+                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio)
+                                  },
+                                  onDelete: (item) => {
+                                    const source = item.source || {}
+                                    if (item.kind === 'bookmark') {
+                                      readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== source.id) }, true)
+                                      return
+                                    }
+                                    readerState.save({ annotations: annotations.filter((annotation) => annotation.id !== source.id) }, true)
+                                  },
+                                })
+                              : h(BookmarksList, {
+                                  t,
+                                  bookmarks,
+                                  onSelect: (bookmark) => goTo(bookmark.chapterIndex || 0, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0),
+                                  onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
+                                }),
+                          ),
                     )
                   : null,
                 h(
@@ -6055,21 +6684,12 @@ html.bb-paged body table tr{break-inside:avoid}
                       onCopyCite: () => {
                         void copyText(`${selectionMenu.text}\n— ${book.title} · ${chapterLabel(t, chapter)}`)
                       },
-                      onSelectAll: () => {
-                        const liveFrame = frameRef.current
-                        const currentDocument = liveFrame && liveFrame.contentDocument
-                        const currentWindow = liveFrame && liveFrame.contentWindow
-                        if (!currentDocument || !currentWindow || !currentDocument.body) return
-                        const range = currentDocument.createRange()
-                        range.selectNodeContents(currentDocument.body)
-                        const selection = currentWindow.getSelection()
-                        if (selection === null) return
-                        selection.removeAllRanges()
-                        selection.addRange(range)
-                      },
                       onSpeak: () => {
                         void readAloud.speakText(selectionMenu.text)
                       },
+                      onHighlight: () => createAnnotation('highlight'),
+                      onUnderline: () => createAnnotation('underline'),
+                      canAnnotate: selectionMenu.anchor !== null && clientLib('annotations') !== null,
                     })
                   : null,
                 ),
@@ -6077,6 +6697,14 @@ html.bb-paged body table tr{break-inside:avoid}
                   h('section', { className: 'bs-discussion-dialog', role: 'status', 'aria-live': 'polite', 'aria-label': t('discussionCreating') },
                     h('p', null, t('discussionCreating'))) ) : null,
                 discussionState ? h(DiscussionDialog, { t, discussion, workspaces, preferredWorkspaceId: discussionWorkspace, ...discussionState, onClose: closeDiscussion }) : null,
+                annotationOpen
+                  ? h(AnnotationStyleMenu, {
+                      t,
+                      style: annotationStyle,
+                      onChange: saveAnnotationStyle,
+                      onClose: () => setAnnotationOpen(false),
+                    })
+                  : null,
                 settingsOpen
                   ? h(ReaderSettingsPopover, {
                       t,
