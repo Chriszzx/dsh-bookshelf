@@ -235,6 +235,43 @@ try {
     return true;
   })()`), true)
 
+  // The page theme must follow DSH desktop: "follow" mirrors the live scheme,
+  // and the pinned Light/Dark options use the DSH palettes themselves instead of
+  // an approximation of them.
+  assert.equal(await evaluate(`(async()=>{
+    const style=document.createElement('style');
+    style.id='dsh-tokens';
+    style.textContent='body{--dsw-static-neutral-bluish-00:#ffffff;--dsw-alias-bg-base:var(--dsw-static-neutral-bluish-00);--dsw-alias-label-primary:#0f1115;--dsw-alias-label-secondary:#61666b;--dsw-alias-border-l1:rgba(0,0,0,.1);--dsw-alias-brand-primary:#0f1115;--dsw-alias-bg-layer-2:#f1f3f5}body[data-ds-dark-theme]{--dsw-static-neutral-bluish-00:#151517;--dsw-alias-bg-base:var(--dsw-static-neutral-bluish-00);--dsw-alias-label-primary:#f9fafb;--dsw-alias-label-secondary:#cfd3d6;--dsw-alias-border-l1:rgba(255,255,255,.12);--dsw-alias-brand-primary:#f9fafb;--dsw-alias-bg-layer-2:#232324}';
+    document.head.append(style);
+    const frame=document.querySelector('.bs-epub-frame');
+    const root=frame.contentDocument.documentElement;
+    const value=(name)=>root.style.getPropertyValue(name);
+    const scheme=()=>value('--bb-scheme');
+    document.body.setAttribute('data-ds-dark-theme','');
+    await until(()=>scheme()==='dark');
+    check(value('--bb-fg')==='#f9fafb','follow mode must use the DSH dark text: '+value('--bb-fg'));
+    check(value('--bb-bg')==='#151517','follow mode must use the DSH dark surface: '+value('--bb-bg'));
+    document.querySelector('.bs-reader-bar [aria-label="readingSettings"]').click();
+    await until(()=>document.querySelector('.bs-reader-settings'));
+    const pick=(label)=>{const node=[...document.querySelectorAll('.bs-reader-settings button')].find(item=>item.textContent===label);check(!!node,'theme option '+label);node.click()};
+    pick('themeLight');
+    await until(()=>scheme()==='light');
+    check(value('--bb-fg')==='#0f1115','pinned light must use the DSH light text: '+value('--bb-fg'));
+    check(value('--bb-bg')==='#ffffff','pinned light must use the DSH light surface: '+value('--bb-bg'));
+    pick('themeDark');
+    await until(()=>scheme()==='dark');
+    check(value('--bb-fg')==='#f9fafb','pinned dark must use the DSH dark text: '+value('--bb-fg'));
+    pick('themeAuto');
+    await until(()=>scheme()==='dark');
+    document.body.removeAttribute('data-ds-dark-theme');
+    await until(()=>scheme()==='light');
+    check(value('--bb-fg')==='#0f1115','follow mode must track DSH back to light: '+value('--bb-fg'));
+    document.querySelector('.bs-reader-bar [aria-label="readingSettings"]').click();
+    await until(()=>!document.querySelector('.bs-reader-settings'));
+    style.remove();
+    return true;
+  })()`), true)
+
   // The Chinese book picked a Chinese system voice, never the German locale
   // of a shared voice name.
   assert.ok(spoken.some(voice => voice.includes('Tingting')), 'zh book uses a zh voice: ' + spoken.slice(0, 4).join(','))

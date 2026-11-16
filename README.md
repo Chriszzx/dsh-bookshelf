@@ -66,7 +66,11 @@ The bundle inserts `ui-bookshelf`; reload the Web page after replacing client fi
 
 The gear icon opens **Shelf settings** with three tabs: Reading (fonts, size, margins, mode, theme), Read aloud (backend, language-aware voice, speed, API fields, cache) and Other (discussion workspace, Apple Books import).
 
+The page theme follows the desktop app: **Follow** uses the live DSH palette (including custom themes and user overrides), and the pinned **Light**/**Dark** options use the same DSH palettes rather than approximate colors. Switching the app between light and dark repaints the page immediately.
+
 齿轮打开**书架设置**窗口，三个标签页：阅读（字体、字号、边距、模式、主题）、朗读（后端、按语言选音色、语速、API 字段、缓存）、其他（讨论工作区、Apple Books 导入）。
+
+页面主题跟随桌面端：**跟随**直接使用 DSH 的实时调色板（含自定义主题与用户覆盖），**浅色/深色**也取 DSH 自己的两套配色而不是近似值。在桌面端切换明暗，页面会立即重绘。
 
 In the reader, the speaker button opens a frosted-glass dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. Opening the dock immediately selects the sentence at the reading position — the highlight and preview appear before any audio plays. In EPUB the sentence being read is marked with a translucent highlighter stroke laid over the original text, and a floating preview card repeats that sentence; after read-aloud stops both stay at the stopping point, which keeps the reading position visible. Moving to the previous/next sentence only moves the highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the floating card only. Everything floats above the page and never reflows it.
 

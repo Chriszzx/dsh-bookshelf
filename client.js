@@ -516,47 +516,166 @@ html.bb-paged body table tr{break-inside:avoid}
       pageSpread: 'auto',
     }
 
+    // Fallbacks match the DSH desktop palettes so a build without the token
+    // stylesheet still looks native instead of inventing warm paper tones.
     const READING_THEMES = {
       light: {
-        fg: '#1f2328',
-        bg: '#fbfaf7',
-        muted: '#6b7280',
-        border: 'rgba(24,28,35,.14)',
-        accent: '#3155d8',
-        codeBg: '#f0efea',
+        fg: '#0f1115',
+        bg: '#ffffff',
+        muted: '#61666b',
+        border: 'rgba(0,0,0,.10)',
+        accent: '#0f1115',
+        codeBg: '#f1f3f5',
         scheme: 'light',
       },
       dark: {
-        fg: '#e7e8ea',
-        bg: '#17181c',
-        muted: '#a6aab2',
-        border: 'rgba(255,255,255,.14)',
-        accent: '#8fb0ff',
-        codeBg: 'rgba(255,255,255,.06)',
+        fg: '#f9fafb',
+        bg: '#151517',
+        muted: '#cfd3d6',
+        border: 'rgba(255,255,255,.12)',
+        accent: '#f9fafb',
+        codeBg: '#232324',
         scheme: 'dark',
       },
     }
 
-    function readingPalette(settings) {
-      const mode = settings && settings.theme
-      if (READING_THEMES[mode]) return { ...READING_THEMES[mode], mode }
-      const styles = typeof getComputedStyle === 'function' ? getComputedStyle(document.body) : null
-      const read = (name, fallback) => {
-        if (styles === null) return fallback
-        const value = (styles.getPropertyValue(name) || '').trim()
-        return value === '' ? fallback : value
+    const DSH_ALIAS_PROBES = {
+      bg: '--dsw-alias-bg-base',
+      fg: '--dsw-alias-label-primary',
+      muted: '--dsw-alias-label-secondary',
+      border: '--dsw-alias-border-l1',
+      accent: '--dsw-alias-brand-primary',
+      codeBg: '--dsw-alias-bg-layer-2',
+    }
+
+    function dshPrefersDark() {
+      if (typeof document === 'undefined') return false
+      if (document.body && document.body.hasAttribute('data-ds-dark-theme')) return true
+      const root = document.documentElement
+      if (root && root.style && root.style.colorScheme === 'dark') return true
+      if (typeof matchMedia === 'function') {
+        const media = matchMedia('(prefers-color-scheme: dark)')
+        if (media && media.matches === true) return true
       }
-      const dark = document.body.hasAttribute('data-ds-dark-theme')
+      return false
+    }
+
+    // DSH ships both base palettes in one stylesheet: `body{}` carries the light
+    // values and `body[data-ds-dark-theme]{}` the dark ones, with alias tokens
+    // pointing at the static palette through var(). Reading those rules lets a
+    // pinned page theme use the other scheme's exact DSH colors.
+    function dshSheetPalettes() {
+      const result = { light: new Map(), dark: new Map() }
+      if (typeof document === 'undefined' || !document.styleSheets) return result
+      const visit = (rules) => {
+        for (const rule of Array.from(rules || [])) {
+          if (rule.cssRules && rule.cssRules.length > 0) visit(rule.cssRules)
+          const selector = typeof rule.selectorText === 'string' ? rule.selectorText.trim() : ''
+          if (!/^(?:html)?body(?:\[[^\]]*\])?$/i.test(selector)) continue
+          const target = selector.includes('data-ds-dark-theme') ? result.dark : result.light
+          const style = rule.style
+          if (!style) continue
+          for (let index = 0; index < style.length; index += 1) {
+            const name = style.item(index)
+            if (!name.startsWith('--')) continue
+            const value = (style.getPropertyValue(name) || '').trim()
+            if (value !== '') target.set(name, value)
+          }
+        }
+      }
+      const sheets = []
+      for (const sheet of Array.from(document.styleSheets || [])) sheets.push(sheet)
+      for (const sheet of Array.from(document.adoptedStyleSheets || [])) sheets.push(sheet)
+      for (const sheet of sheets) {
+        let rules = null
+        try {
+          rules = sheet.cssRules
+        } catch {
+          rules = null
+        }
+        if (rules) visit(rules)
+      }
+      return result
+    }
+
+    function dshResolveToken(map, name, depth = 0) {
+      if (depth > 8) return ''
+      const raw = map.get(name)
+      if (raw === undefined) return ''
+      const single = /^var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)$/.exec(raw)
+      if (single) {
+        const inner = dshResolveToken(map, single[1], depth + 1)
+        if (inner !== '') return inner
+        return single[2] === undefined ? '' : single[2].trim()
+      }
+      if (!raw.includes('var(')) return raw
+      let failed = false
+      const expanded = raw.replace(/var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)/g, (whole, reference, fallback) => {
+        const inner = dshResolveToken(map, reference, depth + 1)
+        if (inner !== '') return inner
+        if (fallback !== undefined) return fallback.trim()
+        failed = true
+        return ''
+      })
+      return failed ? '' : expanded
+    }
+
+    function dshSheetPalette(mode) {
+      const palettes = dshSheetPalettes()
+      const map = mode === 'dark' ? palettes.dark : palettes.light
+      if (map.size === 0) return null
+      const read = (name) => dshResolveToken(map, name)
+      const fg = read(DSH_ALIAS_PROBES.fg)
+      const bg = read(DSH_ALIAS_PROBES.bg)
+      if (fg === '' || bg === '') return null
+      const fallback = READING_THEMES[mode]
+      return {
+        mode,
+        fg,
+        bg,
+        muted: read(DSH_ALIAS_PROBES.muted) || fallback.muted,
+        border: read(DSH_ALIAS_PROBES.border) || fallback.border,
+        accent: read(DSH_ALIAS_PROBES.accent) || fallback.accent,
+        codeBg: read(DSH_ALIAS_PROBES.codeBg) || fallback.codeBg,
+        scheme: mode,
+      }
+    }
+
+    // Live tokens cover the active scheme exactly, including user theme
+    // overrides and custom registered themes.
+    function dshLivePalette() {
+      if (typeof document === 'undefined' || typeof getComputedStyle !== 'function') return null
+      const body = document.body
+      if (!body) return null
+      const styles = getComputedStyle(body)
+      const read = (name) => (styles.getPropertyValue(name) || '').trim()
+      const fg = read(DSH_ALIAS_PROBES.fg)
+      const bg = read(DSH_ALIAS_PROBES.bg)
+      if (fg === '' || bg === '') return null
+      const dark = dshPrefersDark()
       return {
         mode: 'auto',
-        fg: read('--dsw-alias-label-primary', '#1f2328'),
-        bg: 'transparent',
-        muted: read('--dsw-alias-label-secondary', '#6b7280'),
-        border: read('--dsw-alias-border-l1', 'rgba(120,120,130,.28)'),
-        accent: read('--dsw-alias-brand-primary', '#3155d8'),
-        codeBg: dark ? 'rgba(255,255,255,.06)' : 'rgba(20,24,32,.045)',
+        fg,
+        bg,
+        muted: read(DSH_ALIAS_PROBES.muted) || READING_THEMES[dark ? 'dark' : 'light'].muted,
+        border: read(DSH_ALIAS_PROBES.border) || READING_THEMES[dark ? 'dark' : 'light'].border,
+        accent: read(DSH_ALIAS_PROBES.accent) || fg,
+        codeBg: read(DSH_ALIAS_PROBES.codeBg) || READING_THEMES[dark ? 'dark' : 'light'].codeBg,
         scheme: dark ? 'dark' : 'light',
       }
+    }
+
+    function readingPalette(settings) {
+      const mode = settings && settings.theme
+      if (mode === 'light' || mode === 'dark') {
+        const exact = dshSheetPalette(mode)
+        if (exact !== null) return exact
+        return { ...READING_THEMES[mode], mode }
+      }
+      const live = dshLivePalette()
+      if (live !== null) return live
+      const dark = dshPrefersDark()
+      return { ...READING_THEMES[dark ? 'dark' : 'light'], mode: 'auto' }
     }
 
     // ---------------------------------------------------------------- helpers
@@ -3411,10 +3530,13 @@ html.bb-paged body table tr{break-inside:avoid}
     function useThemeTick() {
       const [tick, setTick] = useState(0)
       useEffect(() => {
-        const target = document.body
-        if (target === null) return undefined
+        if (typeof MutationObserver === 'undefined') return undefined
         const observer = new MutationObserver(() => setTick((value) => value + 1))
-        observer.observe(target, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
+        // DSH toggles the dark palette attribute on the body and the resolved
+        // color-scheme on the root; custom themes may also repaint root styles.
+        if (document.body) observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme'] })
+        const root = document.documentElement
+        if (root) observer.observe(root, { attributes: true, attributeFilter: ['style', 'data-theme', 'class'] })
         return () => observer.disconnect()
       }, [])
       return tick
