@@ -215,6 +215,11 @@ try {
     await until(()=>document.querySelector('.bs-selection-menu'));
     check(items().map(node=>node.textContent).join(',')==='selectionCopy,selectionCopyCite,selectionSpeak,selectionHighlight,selectionUnderline','menu items: '+items().map(node=>node.textContent).join(','));
     check(!item('selectionSelectAll'),'select-all chapter item removed');
+    // The menu must open where the pointer was, not at the sentence box.
+    const frameRect=document.querySelector('.bs-epub-frame').getBoundingClientRect();
+    const menuRect=document.querySelector('.bs-selection-menu').getBoundingClientRect();
+    check(Math.abs(menuRect.left-(frameRect.left+event.clientX))<=1.5,'menu x follows the pointer: '+menuRect.left+' vs '+(frameRect.left+event.clientX));
+    check(Math.abs(menuRect.top-(frameRect.top+event.clientY))<=1.5,'menu y follows the pointer: '+menuRect.top+' vs '+(frameRect.top+event.clientY));
     check(item('selectionHighlight').disabled===false,'highlight action enabled');
     check(item('selectionUnderline').disabled===false,'underline action enabled');
     // Highlight: created through fromSelection with the current style.

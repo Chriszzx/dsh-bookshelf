@@ -173,33 +173,48 @@ try {
     check(menu.getAttribute('aria-label')==='annotationStyle','annotation menu label');
     check(!!document.querySelector('.bs-popover-backdrop'),'popover backdrop');
     const pressed=(selector)=>[...document.querySelectorAll(selector)].find(node=>node.getAttribute('aria-pressed')==='true');
-    check(pressed('.bs-annotation-mode .bs-segment').textContent==='annotationHighlight','default mode is highlight');
+    const tabs=()=>[...document.querySelectorAll('.bs-annotation-tab')];
+    check(tabs().length===2,'two annotation categories: '+tabs().map(node=>node.textContent).join('|'));
+    check(tabs().find(node=>node.getAttribute('aria-selected')==='true').textContent==='annotationHighlight','default category is highlight');
     const colorInput=document.querySelector('.bs-annotation-color-input');
     check(colorInput.getAttribute('type')==='color','colour picker is input[type=color]');
     check(colorInput.value.toLowerCase()===defaults.color,'default colour from the module: '+colorInput.value+' vs '+defaults.color);
     check(Number(document.querySelector('.bs-annotation-strength').value)===Math.round(defaults.strength*100),'default strength');
-    check(Number(document.querySelector('.bs-annotation-thickness').value)===defaults.thickness,'default thickness');
-    check(pressed('.bs-annotation-underline-options .bs-segment').textContent==='underlineSolid','default underline style');
+    check(!document.querySelector('.bs-annotation-thickness'),'highlight category hides underline thickness');
+    check(!document.querySelector('.bs-annotation-underline-options'),'highlight category hides underline styles');
     check(document.querySelector('.bs-annotation-hue').getAttribute('type')==='range','hue is a range input');
     check(document.querySelector('.bs-annotation-preview').textContent==='annotationPreview','live preview label');
-    // Every control writes the style; the preview follows immediately.
-    const segments=(selector)=>[...document.querySelectorAll(selector)];
-    segments('.bs-annotation-mode .bs-segment').find(node=>node.textContent==='annotationUnderline').click();
+    // The preview is exclusive: highlight mode paints a background and never an
+    // underline.
+    const highlightPreview=getComputedStyle(document.querySelector('.bs-annotation-preview'));
+    check(highlightPreview.textDecorationLine==='none','highlight preview has no underline: '+highlightPreview.textDecorationLine);
+    check(highlightPreview.backgroundColor!=='rgba(0, 0, 0, 0)','highlight preview shows its tint: '+highlightPreview.backgroundColor);
+    // Underline is its own category with only its own sub-options.
+    tabs().find(node=>node.textContent==='annotationUnderline').click();
     await until(()=>document.querySelector('.bs-annotation-preview').getAttribute('data-mode')==='underline');
+    check(!document.querySelector('.bs-annotation-strength'),'underline category hides highlight strength');
+    check(Number(document.querySelector('.bs-annotation-thickness').value)===defaults.thickness,'default thickness');
+    check(pressed('.bs-annotation-underline-options .bs-segment').textContent==='underlineSolid','default underline style');
     setValue(colorInput,'#112233');
-    setValue(document.querySelector('.bs-annotation-strength'),'50');
     setValue(document.querySelector('.bs-annotation-thickness'),'4');
-    segments('.bs-annotation-underline-options .bs-segment').find(node=>node.textContent==='underlineWavy').click();
+    [...document.querySelectorAll('.bs-annotation-underline-options .bs-segment')].find(node=>node.textContent==='underlineWavy').click();
     await wait(120);
     const preview=getComputedStyle(document.querySelector('.bs-annotation-preview'));
     check(preview.textDecorationStyle==='wavy','preview underline style: '+preview.textDecorationStyle);
     check(preview.textDecorationColor==='rgb(17, 34, 51)','preview colour: '+preview.textDecorationColor);
     check(preview.textDecorationThickness==='4px','preview thickness: '+preview.textDecorationThickness);
+    check(preview.backgroundColor==='rgba(0, 0, 0, 0)','underline preview must not paint a highlight background: '+preview.backgroundColor);
+    // Back to the highlight category: its own sub-options return and strength
+    // changes do not leak into the underline preview.
+    tabs().find(node=>node.textContent==='annotationHighlight').click();
+    await until(()=>document.querySelector('.bs-annotation-preview').getAttribute('data-mode')==='highlight');
+    setValue(document.querySelector('.bs-annotation-strength'),'50');
+    await wait(120);
     // Persisted in state.settings.annotationStyle through the Host sanitizer.
     await untilAsync(async()=>{
       const {state}=await stateFor('Annotations');
       const saved=state.settings&&state.settings.annotationStyle;
-      return saved&&saved.mode==='underline'&&saved.color==='#112233'&&saved.strength===0.5&&saved.thickness===4&&saved.underlineStyle==='wavy';
+      return saved&&saved.mode==='highlight'&&saved.color==='#112233'&&saved.strength===0.5&&saved.thickness===4&&saved.underlineStyle==='wavy';
     });
     // The style is per book: leaving and reopening the reader restores it.
     document.querySelector('.bs-annotation-menu [aria-label="dismiss"]').click();
@@ -212,11 +227,13 @@ try {
     });
     document.querySelector('.bs-reader-bar [aria-label="annotationStyle"]').click();
     await until(()=>document.querySelector('.bs-annotation-menu'));
-    check(document.querySelector('.bs-annotation-preview').getAttribute('data-mode')==='underline','saved mode is restored');
+    check(document.querySelector('.bs-annotation-preview').getAttribute('data-mode')==='highlight','saved category is restored');
     check(document.querySelector('.bs-annotation-color-input').value.toLowerCase()==='#112233','saved colour is restored: '+document.querySelector('.bs-annotation-color-input').value);
     check(Number(document.querySelector('.bs-annotation-strength').value)===50,'saved strength is restored');
+    [...document.querySelectorAll('.bs-annotation-tab')].find(node=>node.textContent==='annotationUnderline').click();
+    await until(()=>document.querySelector('.bs-annotation-preview').getAttribute('data-mode')==='underline');
     check(Number(document.querySelector('.bs-annotation-thickness').value)===4,'saved thickness is restored');
-    check(document.querySelector('.bs-annotation-underline-options .bs-segment[aria-pressed="true"]').textContent==='underlineWavy','saved underline style is restored');
+    check(pressed('.bs-annotation-underline-options .bs-segment').textContent==='underlineWavy','saved underline style is restored');
     // Escape closes the popover without leaving the book.
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
     await until(()=>!document.querySelector('.bs-annotation-menu'));

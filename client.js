@@ -316,7 +316,12 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-text-button[aria-pressed="true"]{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-brand-primary)}
 .bs-text-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 /* ----- [styles:annotations] ----- */
-.bs-annotation-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;width:min(304px,calc(100vw - 28px));max-height:calc(100% - var(--bs-popover-top) - 12px);overflow:auto;padding:10px 13px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-annotation-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;width:min(304px,calc(100vw - 28px));max-height:calc(100% - var(--bs-popover-top) - 12px);overflow:auto;display:flex;flex-direction:column;gap:8px;padding:10px 13px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-annotation-tabs{display:flex;gap:4px;padding-bottom:6px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-annotation-tab{flex:1;min-width:0;font:inherit;font-size:12px;line-height:1.4;padding:5px 6px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap}
+.bs-annotation-tab:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-annotation-tab[aria-selected="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
+.bs-annotation-tab:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
 .bs-annotation-preview{display:flex;align-items:center;justify-content:center;min-height:46px;margin:2px 0 2px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:15px;line-height:1.6;text-align:center;overflow-wrap:anywhere}
 .bs-annotation-color-row{display:flex;align-items:center;gap:8px}
 .bs-annotation-hue{flex:1;min-width:0;height:16px;margin:0;padding:0;appearance:none;-webkit-appearance:none;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:linear-gradient(90deg,#ff2d2d,#ffd23f,#54d34f,#3fc8d6,#3f6cd8,#b84fd8,#ff2d2d);cursor:pointer}
@@ -1662,19 +1667,20 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    // Annotation style popover: opens from the toolbar marker button next to the
-    // bookmark button. Every control writes one field of
-    // state.settings.annotationStyle (see assets/lib/annotations.mjs for the
-    // model) and the preview follows immediately.
+    // Annotation style popover: two categories (highlight / underline), each
+    // with its own sub-options. The preview is exclusive: it only renders the
+    // category being edited, so strength never shows up on an underline preview
+    // and thickness never shows up on a highlight one.
     function AnnotationStyleMenu({ t, style, onChange, onClose }) {
       const fallback = defaultAnnotationStyle()
+      const mode = style.mode === 'underline' ? 'underline' : 'highlight'
       const storedColor = typeof style.color === 'string' && ANNOTATION_COLOR_PATTERN.test(style.color) ? style.color : fallback.color
       const paint = storedColor.toLowerCase()
       const hue = hueForAnnotationColor(paint)
       const strength = Math.round(Math.min(0.9, Math.max(0.05, style.strength)) * 100)
       const thickness = Math.round(Math.min(6, Math.max(1, style.thickness)))
       const underlineStyle = ANNOTATION_UNDERLINE_STYLES.includes(style.underlineStyle) ? style.underlineStyle : fallback.underlineStyle
-      const preview = style.mode === 'underline'
+      const preview = mode === 'underline'
         ? {
             textDecorationLine: 'underline',
             textDecorationColor: paint,
@@ -1682,13 +1688,14 @@ html.bb-paged body table tr{break-inside:avoid}
             textDecorationStyle: underlineStyle,
           }
         : { backgroundColor: `color-mix(in srgb, ${paint} ${strength}%, transparent)` }
-      const segment = (value, label) => h(
+      const tab = (value, label) => h(
         'button',
         {
           key: value,
           type: 'button',
-          className: 'bs-segment',
-          'aria-pressed': style.mode === value,
+          role: 'tab',
+          className: 'bs-annotation-tab',
+          'aria-selected': mode === value,
           onClick: () => onChange({ mode: value }),
         },
         label,
@@ -1703,6 +1710,34 @@ html.bb-paged body table tr{break-inside:avoid}
           onClick: () => onChange({ underlineStyle: value }),
         },
         label,
+      )
+      const colorRow = () => h(
+        'div',
+        { className: 'bs-setting-row' },
+        h('span', { className: 'bs-setting-label' }, t('annotationColor')),
+        h(
+          'div',
+          { className: 'bs-annotation-color-row' },
+          h('input', {
+            type: 'range',
+            className: 'bs-annotation-hue',
+            min: 0,
+            max: 359,
+            step: 1,
+            value: hue,
+            'aria-label': t('annotationColor'),
+            title: t('annotationColor'),
+            onChange: (event) => onChange({ color: annotationColorForHue(Number(event.target.value)) }),
+          }),
+          h('input', {
+            type: 'color',
+            className: 'bs-annotation-color-input',
+            value: paint,
+            'aria-label': t('annotationColorPick'),
+            title: t('annotationColorPick'),
+            onChange: (event) => onChange({ color: event.target.value }),
+          }),
+        ),
       )
       return h(
         React.Fragment,
@@ -1721,89 +1756,62 @@ html.bb-paged body table tr{break-inside:avoid}
               h(CloseIcon),
             ),
           ),
-          h('div', { className: 'bs-annotation-preview', 'data-mode': style.mode, style: preview }, t('annotationPreview')),
           h(
             'div',
-            { className: 'bs-setting-row' },
-            h('span', { className: 'bs-setting-label' }, t('annotationMode')),
-            h(
-              'div',
-              { className: 'bs-segmented bs-annotation-mode', role: 'group', 'aria-label': t('annotationMode') },
-              segment('highlight', t('annotationHighlight')),
-              segment('underline', t('annotationUnderline')),
-            ),
+            { className: 'bs-annotation-tabs', role: 'tablist', 'aria-label': t('annotationMode') },
+            tab('highlight', t('annotationHighlight')),
+            tab('underline', t('annotationUnderline')),
           ),
-          h(
-            'div',
-            { className: 'bs-setting-row' },
-            h('span', { className: 'bs-setting-label' }, t('annotationColor')),
-            h(
-              'div',
-              { className: 'bs-annotation-color-row' },
-              h('input', {
-                type: 'range',
-                className: 'bs-annotation-hue',
-                min: 0,
-                max: 359,
-                step: 1,
-                value: hue,
-                'aria-label': t('annotationColor'),
-                title: t('annotationColor'),
-                onChange: (event) => onChange({ color: annotationColorForHue(Number(event.target.value)) }),
-              }),
-              h('input', {
-                type: 'color',
-                className: 'bs-annotation-color-input',
-                value: paint,
-                'aria-label': t('annotationColorPick'),
-                title: t('annotationColorPick'),
-                onChange: (event) => onChange({ color: event.target.value }),
-              }),
-            ),
-          ),
-          h(
-            'div',
-            { className: 'bs-setting-row' },
-            h('span', { className: 'bs-setting-label' }, t('annotationStrength'), h('span', { className: 'bs-annotation-value' }, `${strength}%`)),
-            h('input', {
-              type: 'range',
-              className: 'bs-annotation-range bs-annotation-strength',
-              min: 5,
-              max: 90,
-              step: 1,
-              value: strength,
-              'aria-label': t('annotationStrength'),
-              title: t('annotationStrength'),
-              onChange: (event) => onChange({ strength: Number(event.target.value) / 100 }),
-            }),
-          ),
-          h(
-            'div',
-            { className: 'bs-setting-row' },
-            h('span', { className: 'bs-setting-label' }, t('annotationThickness'), h('span', { className: 'bs-annotation-value' }, `${thickness}px`)),
-            h('input', {
-              type: 'range',
-              className: 'bs-annotation-range bs-annotation-thickness',
-              min: 1,
-              max: 6,
-              step: 1,
-              value: thickness,
-              'aria-label': t('annotationThickness'),
-              title: t('annotationThickness'),
-              onChange: (event) => onChange({ thickness: Number(event.target.value) }),
-            }),
-          ),
-          h(
-            'div',
-            { className: 'bs-setting-row' },
-            h('span', { className: 'bs-setting-label' }, t('annotationUnderlineStyle')),
-            h(
-              'div',
-              { className: 'bs-segmented bs-annotation-underline-options', role: 'group', 'aria-label': t('annotationUnderlineStyle') },
-              ANNOTATION_UNDERLINE_STYLES.map((value) =>
-                underlineOption(value, t(`underline${value[0].toUpperCase()}${value.slice(1)}`))),
-            ),
-          ),
+          h('div', { className: 'bs-annotation-preview', 'data-mode': mode, style: preview }, t('annotationPreview')),
+          colorRow(),
+          mode === 'highlight'
+            ? h(
+                'div',
+                { className: 'bs-setting-row' },
+                h('span', { className: 'bs-setting-label' }, t('annotationStrength'), h('span', { className: 'bs-annotation-value' }, `${strength}%`)),
+                h('input', {
+                  type: 'range',
+                  className: 'bs-annotation-range bs-annotation-strength',
+                  min: 5,
+                  max: 90,
+                  step: 1,
+                  value: strength,
+                  'aria-label': t('annotationStrength'),
+                  title: t('annotationStrength'),
+                  onChange: (event) => onChange({ strength: Number(event.target.value) / 100 }),
+                }),
+              )
+            : h(
+                React.Fragment,
+                null,
+                h(
+                  'div',
+                  { className: 'bs-setting-row' },
+                  h('span', { className: 'bs-setting-label' }, t('annotationThickness'), h('span', { className: 'bs-annotation-value' }, `${thickness}px`)),
+                  h('input', {
+                    type: 'range',
+                    className: 'bs-annotation-range bs-annotation-thickness',
+                    min: 1,
+                    max: 6,
+                    step: 1,
+                    value: thickness,
+                    'aria-label': t('annotationThickness'),
+                    title: t('annotationThickness'),
+                    onChange: (event) => onChange({ thickness: Number(event.target.value) }),
+                  }),
+                ),
+                h(
+                  'div',
+                  { className: 'bs-setting-row' },
+                  h('span', { className: 'bs-setting-label' }, t('annotationUnderlineStyle')),
+                  h(
+                    'div',
+                    { className: 'bs-segmented bs-annotation-underline-options', role: 'group', 'aria-label': t('annotationUnderlineStyle') },
+                    ANNOTATION_UNDERLINE_STYLES.map((value) =>
+                      underlineOption(value, t(`underline${value[0].toUpperCase()}${value.slice(1)}`))),
+                  ),
+                ),
+              ),
         ),
       )
     }
@@ -3169,6 +3177,18 @@ html.bb-paged body table tr{break-inside:avoid}
         const node = ref.current
         if (node !== null && typeof node.focus === 'function') node.focus({ preventScroll: true })
       }, [])
+      // The menu opens at the pointer, so it must be nudged back inside the
+      // reading area instead of being cut off at the right or bottom edge.
+      useLayoutEffect(() => {
+        const node = ref.current
+        if (node === null) return
+        const parent = node.offsetParent
+        if (parent === null) return
+        const maxLeft = Math.max(8, parent.clientWidth - node.offsetWidth - 8)
+        const maxTop = Math.max(8, parent.clientHeight - node.offsetHeight - 8)
+        node.style.left = `${Math.min(Math.max(8, menu.x), maxLeft)}px`
+        node.style.top = `${Math.min(Math.max(8, menu.y), maxTop)}px`
+      }, [menu.x, menu.y])
       const item = (label, action, disabled = false) => h('button', {
         type: 'button',
         className: 'bs-selection-item',
@@ -5896,21 +5916,21 @@ html.bb-paged body table tr{break-inside:avoid}
             // Capture the anchor while the selection is still live: the menu
             // click must not depend on the iframe selection surviving the click.
             const anchor = annotationAnchorForSelection(documentNode, selection, chapterRef.current)
-            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-            const box = range === null ? null : range.getBoundingClientRect()
             const liveFrame = frameRef.current
             const host = menuHostRef.current
             const frameRect = liveFrame === null ? null : liveFrame.getBoundingClientRect()
             const hostRect = host === null ? null : host.getBoundingClientRect()
-            if (box === null || frameRect === null || hostRect === null) {
+            if (frameRect === null || hostRect === null) {
               setSelectionMenu({ text, anchor, x: 12, y: 12 })
               return
             }
+            // Anchor the menu at the pointer, not at the sentence: the user
+            // right-clicked a specific place and expects the menu there.
             setSelectionMenu({
               text,
               anchor,
-              x: Math.max(8, Math.round(frameRect.left - hostRect.left + box.left)),
-              y: Math.max(8, Math.round(frameRect.top - hostRect.top + box.bottom + 6)),
+              x: Math.round(frameRect.left - hostRect.left + event.clientX),
+              y: Math.round(frameRect.top - hostRect.top + event.clientY),
             })
           })
         }
