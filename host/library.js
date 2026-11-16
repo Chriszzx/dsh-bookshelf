@@ -8,7 +8,7 @@ import { FINISHED_PERCENT, isTagId, READING_STATUSES, readingStatusOf, TAG_LIMIT
 
 import { API_PREFIX, COVER_TYPES, FORMAT_MIME, HttpError, MAX_COVER_BYTES, MAX_IMPORT_BYTES, MAX_STATE_BYTES } from './http.js'
 import { exactRoute, regexRoute } from './routes.js'
-import { cleanText, sanitizeBookmarks, sanitizeProgress, sanitizeSettings } from './states.js'
+import { cleanText, sanitizeAnnotations, sanitizeBookmarks, sanitizeProgress, sanitizeSettings } from './states.js'
 
 // Book records: import, metadata, covers, file serving and per-book state
 // routes. Helpers shared with the link and Apple Books routes are exported.
@@ -107,6 +107,12 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     if ('bookmarks' in payload) {
       if (!Array.isArray(payload.bookmarks)) throw new HttpError(400, 'bookmarks must be an array')
       next.bookmarks = sanitizeBookmarks(payload.bookmarks)
+    }
+    // Annotations are stored next to bookmarks. The shared model drops malformed
+    // entries one by one, so only a non-array request is a client error.
+    if ('annotations' in payload) {
+      if (!Array.isArray(payload.annotations)) throw new HttpError(400, 'annotations must be an array')
+      next.annotations = sanitizeAnnotations(payload.annotations)
     }
     if ('settings' in payload) {
       if (!payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) {

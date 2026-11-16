@@ -113,6 +113,9 @@ export function createTtsRoutes({ http, tts, secrets } = {}) {
       voice: cleanText(body.voice, '', 64),
       speed: body.speed,
       text: typeof body.text === 'string' ? body.text : '',
+      // Selection read-aloud asks for `cache: false`; only a literal false opts
+      // out, so older clients and a missing field keep the cached path.
+      cache: body.cache !== false,
     })
     // Hand back a same-origin URL: browser CSP blocks blob: media, while a
     // plain Host URL plays everywhere.

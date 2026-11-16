@@ -38,6 +38,24 @@ export function createTtsService({
   let pendingWrite = Promise.resolve()
   let readyPromise = Promise.resolve()
 
+  // Selection read-aloud synthesizes into `tts-scratch/` and never touches the
+  // sentence cache. Stale scratch files are pruned once when the service starts
+  // (this factory runs during Host composition) and again before every uncached
+  // synthesis, so a long reading session cannot accumulate them.
+  let scratchCleanup = null
+
+  function cleanScratchOnce() {
+    if (scratchCleanup === null) {
+      scratchCleanup = cache.scratch.clean().catch((error) => {
+        logger.warn?.(`bookshelf: TTS scratch cleanup failed: ${error instanceof Error ? error.message : String(error)}`)
+        return 0
+      })
+    }
+    return scratchCleanup
+  }
+
+  void cleanScratchOnce()
+
   const providers = new Map()
   providers.set('deepseek', createDeepseekProvider({ fetchImpl, resolveSecret }))
   providers.set('openai', createOpenaiProvider({ fetchImpl, getSettings: () => settings, resolveSecret }))
@@ -109,7 +127,7 @@ export function createTtsService({
     return hash
   }
 
-  async function synthesize({ provider: providerId, voice, text, speed }) {
+  async function synthesize({ provider: providerId, voice, text, speed, cache: cacheEnabled } = {}) {
     if (providerId !== undefined && providerId !== '' && !TTS_PROVIDERS.includes(providerId)) {
       throw new TtsError(400, `unknown TTS provider: ${providerId}`)
     }
@@ -127,20 +145,45 @@ export function createTtsService({
     }
     const rate = Math.round(clampNumber(speed, 0.5, 2, settings.speed) * 100) / 100
     const voiceId = cleanText(voice, TTS_LIMITS.maxVoiceLength) || settings.voice
-    const name = cacheName(id, voiceId, rate, utterance)
-    // A broken cache directory must degrade to "no cache", not to a failed read.
-    try {
-      const cached = await cache.get(`${name}.wav`)
-      if (cached !== null) return { audio: cached, mime: 'audio/wav', ext: '.wav', name: `${name}.wav`, cached: true }
-      const cachedMp3 = await cache.get(`${name}.mp3`)
-      if (cachedMp3 !== null) return { audio: cachedMp3, mime: 'audio/mpeg', ext: '.mp3', name: `${name}.mp3`, cached: true }
-    } catch (error) {
-      logger.warn?.(`bookshelf: TTS cache read failed: ${error instanceof Error ? error.message : String(error)}`)
+    // Only a literal `false` opts out of the cache, so every existing caller and
+    // an unset request field stay on the unchanged default path.
+    const useCache = cacheEnabled !== false
+    const name = useCache ? cacheName(id, voiceId, rate, utterance) : null
+    if (useCache) {
+      // A broken cache directory must degrade to "no cache", not to a failed read.
+      try {
+        const cached = await cache.get(`${name}.wav`)
+        if (cached !== null) return { audio: cached, mime: 'audio/wav', ext: '.wav', name: `${name}.wav`, cached: true }
+        const cachedMp3 = await cache.get(`${name}.mp3`)
+        if (cachedMp3 !== null) return { audio: cachedMp3, mime: 'audio/mpeg', ext: '.mp3', name: `${name}.mp3`, cached: true }
+      } catch (error) {
+        logger.warn?.(`bookshelf: TTS cache read failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    } else {
+      // Prune stale scratch audio first; a broken scratch directory must not stop
+      // playback, the write below still reports its own failure.
+      await cache.scratch.clean().catch((error) => {
+        logger.warn?.(`bookshelf: TTS scratch cleanup failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
     }
 
     const result = await target.synthesize({ text: utterance, voice: voiceId, speed: rate })
     if (!result || !Buffer.isBuffer(result.audio) || result.audio.length === 0) {
       throw new TtsError(502, '语音服务没有返回音频')
+    }
+    if (!useCache) {
+      // The URL handed to the browser must match the strict audio route, so the
+      // scratch name is always internally generated and limited to wav/mp3.
+      const ext = result.ext === '.mp3' ? '.mp3' : result.ext === '.wav' ? '.wav' : null
+      if (ext === null) throw new TtsError(502, '语音服务返回了不支持的音频格式')
+      const scratchName = cache.scratch.name(ext)
+      try {
+        await cache.scratch.put(scratchName, result.audio)
+      } catch (error) {
+        logger.warn?.(`bookshelf: TTS scratch write failed: ${error instanceof Error ? error.message : String(error)}`)
+        throw new TtsError(500, '无法写入临时音频文件')
+      }
+      return { audio: result.audio, mime: result.mime, ext, name: scratchName, cached: false }
     }
     try {
       await cache.put(`${name}${result.ext}`, result.audio)
@@ -204,12 +247,17 @@ export function createTtsService({
   const AUDIO_NAME = /^[0-9a-f]{64}\.(wav|mp3)$/
 
   // Audio is played from a same-origin URL, so the browser media element only
-  // needs the plain Host URL: no blob:, no CSP exception.
+  // needs the plain Host URL: no blob:, no CSP exception. Cached sentences use a
+  // content hash; uncached selection audio uses a random scratch name, and both
+  // are looked up behind the same strict name pattern.
   async function readAudio(name) {
     if (typeof name !== 'string' || !AUDIO_NAME.test(name)) return null
-    const audio = await cache.get(name)
-    if (audio === null) return null
-    return { audio, mime: name.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg' }
+    const mime = name.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg'
+    const cached = await cache.get(name)
+    if (cached !== null) return { audio: cached, mime }
+    const scratch = await cache.scratch.get(name)
+    if (scratch !== null) return { audio: scratch, mime }
+    return null
   }
 
   async function voices(providerId) {
@@ -221,7 +269,9 @@ export function createTtsService({
 
   return {
     load() {
-      readyPromise = readSettingsFile()
+      // The startup cleanup runs once; awaiting it here keeps `ready()` honest for
+      // callers that want the scratch directory settled before the first request.
+      readyPromise = Promise.all([readSettingsFile(), cleanScratchOnce()]).then(([value]) => value)
       return readyPromise
     },
     ready() {

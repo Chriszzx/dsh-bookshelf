@@ -1,10 +1,17 @@
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 
 import { replaceFile } from '../assets/atomic-file.mjs'
 
 import { TTS_LIMITS } from './settings.js'
+
+// Audio synthesized for a read-aloud selection is deliberately not cached: it is
+// written to `tts-scratch/` and pruned by age instead of by the LRU size budget,
+// so a one-off selection can neither evict a cached sentence nor inflate the
+// cache statistics. Scratch names are generated in-process only.
+const SCRATCH_TTL_MS = 10 * 60 * 1000
+const AUDIO_NAME = /^[0-9a-f]{64}\.(?:wav|mp3)$/
 
 // ---------------------------------------------------------------- audio cache
 
@@ -13,9 +20,10 @@ import { TTS_LIMITS } from './settings.js'
  * affects the bytes, so a hit needs no metadata lookup; eviction is by mtime
  * once the directory exceeds the configured size.
  */
-export function createTtsCache({ rootDir, limitBytes = TTS_LIMITS.maxCacheBytes } = {}) {
+export function createTtsCache({ rootDir, limitBytes = TTS_LIMITS.maxCacheBytes, scratchTtlMs = SCRATCH_TTL_MS } = {}) {
   if (typeof rootDir !== 'string' || rootDir === '') throw new TypeError('a cache directory is required')
   const dir = join(rootDir, 'tts-cache')
+  const scratchDir = join(rootDir, 'tts-scratch')
   let totalBytes = 0
   let scanned = false
   let pendingScan = null
@@ -132,5 +140,75 @@ export function createTtsCache({ rootDir, limitBytes = TTS_LIMITS.maxCacheBytes 
     return { ok: true }
   }
 
-  return { dir, get, put, stats, clear }
+  // --------------------------------------------------------------- scratch audio
+  // The uncached path: files live in their own directory, are never counted in
+  // `stats()` and are evicted by age rather than by the LRU budget. A fixed TTL
+  // keeps a long reading session from filling the disk with one-off sentences.
+
+  function scratchName(ext) {
+    if (ext !== '.wav' && ext !== '.mp3') throw new TypeError('scratch audio must be .wav or .mp3')
+    return `${randomBytes(32).toString('hex')}${ext}`
+  }
+
+  function scratchPath(name) {
+    if (typeof name !== 'string' || !AUDIO_NAME.test(name)) return null
+    return join(scratchDir, name)
+  }
+
+  async function cleanScratch(now = Date.now()) {
+    let entries
+    try {
+      entries = await fs.readdir(scratchDir, { withFileTypes: true })
+    } catch {
+      // A missing scratch directory is the normal state before the first
+      // uncached synthesis; there is nothing to clean then.
+      return 0
+    }
+    let removed = 0
+    for (const entry of entries) {
+      const path = scratchPath(entry.name)
+      if (path === null || !entry.isFile()) continue
+      try {
+        const info = await fs.stat(path)
+        if (now - info.mtimeMs <= scratchTtlMs) continue
+        await fs.rm(path, { force: true })
+        removed += 1
+      } catch {
+        // A concurrent cleanup already removed it, or it is unreadable.
+      }
+    }
+    return removed
+  }
+
+  async function getScratch(name) {
+    const path = scratchPath(name)
+    if (path === null) return null
+    try {
+      const buffer = await fs.readFile(path)
+      // Recency means "last played", matching the cached-audio recency rule: a
+      // sentence being listened to right now is not pruned mid-playback.
+      const now = new Date()
+      await fs.utimes(path, now, now).catch(() => undefined)
+      return buffer
+    } catch {
+      return null
+    }
+  }
+
+  async function putScratch(name, buffer) {
+    const path = scratchPath(name)
+    if (path === null) throw new TypeError('invalid scratch audio name')
+    await fs.mkdir(scratchDir, { recursive: true })
+    await fs.writeFile(path, buffer)
+  }
+
+  return {
+    dir,
+    scratchDir,
+    get,
+    put,
+    stats,
+    clear,
+    scratch: { dir: scratchDir, name: scratchName, get: getScratch, put: putScratch, clean: cleanScratch },
+  }
 }

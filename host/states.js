@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
+import { normalizeAnnotationStyle, sanitizeAnnotations } from '../assets/lib/annotations.mjs'
 import { sanitizeFontSettings } from '../assets/reading-fonts.mjs'
 
 // Sanitizers for the per-book `state.json` payload. Every stored value is
@@ -92,11 +93,19 @@ function sanitizeSettings(value) {
   const pdfZoom = clampNumber(value.pdfZoom, 0.5, 3)
   if (pdfZoom !== undefined) settings.pdfZoom = Math.round(pdfZoom * 100) / 100
   if (SETTING_PDF_VIEWS.has(value.pdfView)) settings.pdfView = value.pdfView
+  // The Reader remembers the annotation style per book (§4.1 of the plan). It
+  // is additive: a settings object without it keeps exactly its old shape, and
+  // unknown modes/colours fall back field by field instead of rejecting the
+  // whole write.
+  if ('annotationStyle' in value) settings.annotationStyle = normalizeAnnotationStyle(value.annotationStyle)
   return settings
 }
 
-// Annotations are the next field to land here: `sanitizeAnnotations` will sit
-// beside `sanitizeBookmarks`, be called from the PUT state handler in
-// `host/library.js`, and keep the validation of the existing fields unchanged.
+// Annotations are stored next to `bookmarks` and share their model with the
+// Reader: `assets/lib/annotations.mjs` owns the field validation (bounds,
+// truncation, colour whitelist, ≤1000 entries per book) and drops malformed
+// entries instead of failing the whole write. Re-exported here so every state
+// sanitizer stays behind the same module boundary.
+export { sanitizeAnnotations }
 
 export { cleanText, clampNumber, sanitizeProgress, sanitizeBookmarks, sanitizeSettings }
