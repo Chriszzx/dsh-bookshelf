@@ -186,6 +186,12 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tts-caption-close{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .bs-tts-caption-close:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-tts-caption-text{max-height:5.4em;overflow:hidden;font-size:13.5px;line-height:1.6;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.bs-selection-menu{position:absolute;z-index:12;display:flex;flex-direction:column;min-width:178px;max-width:min(260px,calc(100% - 16px));padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-overlay);box-shadow:0 18px 42px -22px rgba(0,0,0,.55)}
+.bs-selection-preview{padding:3px 9px 5px;font-size:10.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-selection-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;line-height:1.4;text-align:left;cursor:pointer;white-space:nowrap}
+.bs-selection-item:hover{background:var(--dsw-alias-bg-layer-2)}
+.bs-selection-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-selection-divider{height:1px;margin:3px 6px;background:var(--dsw-alias-border-l1)}
 .bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px)}
 .bs-tts-file-open{justify-content:flex-start}
 .bs-tts-file-time{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
@@ -2224,6 +2230,25 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }, [])
 
+      // Read an explicit text (a selection) without following the page: the
+      // queue is a plain sentence list, so the reader keeps its position while
+      // the selection is spoken.
+      const speakText = useCallback(async (text) => {
+        const value = String(text || '').trim()
+        if (value === '') return
+        let module
+        try {
+          module = await loadTtsSentences(base)
+        } catch {
+          return
+        }
+        const sentences = module.splitSentences(value)
+        if (sentences.length === 0) return
+        driverRef.current = null
+        unlock()
+        await playBatch(sentences.map((sentence) => ({ text: sentence })), 0)
+      }, [base, playBatch, unlock])
+
       const toggle = useCallback(() => {
         if (status === 'playing') {
           const audio = audioRef.current
@@ -2340,7 +2365,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return {
         status, caption, error, settings, providers, secrets,
-        activeVoiceLabel, unlock, setLanguage, start, preview, toggle, stop, clearCaption, prev: () => step(-1), next: () => step(1),
+        activeVoiceLabel, unlock, setLanguage, start, preview, speakText, toggle, stop, clearCaption, prev: () => step(-1), next: () => step(1),
         saveSettings, refresh, applySettings,
         running: status === 'playing' || status === 'paused' || status === 'loading',
       }
@@ -2755,6 +2780,67 @@ html.bb-paged body table tr{break-inside:avoid}
           }, h(CloseIcon, { size: 12 })),
         ),
         h('div', { className: 'bs-tts-caption-text' }, caption),
+      )
+    }
+
+    async function writeClipboard(text) {
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(text)
+          return true
+        }
+      } catch {
+        // Permission denied: fall through to the legacy path.
+      }
+      try {
+        const area = document.createElement('textarea')
+        area.value = text
+        area.setAttribute('readonly', '')
+        area.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0'
+        document.body.appendChild(area)
+        area.select()
+        const copied = document.execCommand('copy')
+        area.remove()
+        return copied
+      } catch {
+        return false
+      }
+    }
+
+    // Reader-owned menu for a text selection: the desktop menu only offers Copy,
+    // so the reader adds citation copy, select-all and reading the selection.
+    function SelectionMenu({ t, menu, onClose, onCopy, onCopyCite, onSelectAll, onSpeak }) {
+      const ref = useRef(null)
+      useEffect(() => {
+        const node = ref.current
+        if (node !== null && typeof node.focus === 'function') node.focus({ preventScroll: true })
+      }, [])
+      const item = (label, action) => h('button', {
+        type: 'button',
+        className: 'bs-selection-item',
+        role: 'menuitem',
+        onClick: () => {
+          action()
+          onClose()
+        },
+      }, label)
+      return h(
+        'div',
+        {
+          ref,
+          className: 'bs-selection-menu',
+          role: 'menu',
+          'aria-label': t('selectionMenuLabel'),
+          tabIndex: -1,
+          style: { left: `${menu.x}px`, top: `${menu.y}px` },
+          onContextMenu: (event) => event.preventDefault(),
+        },
+        h('div', { className: 'bs-selection-preview' }, menu.text),
+        item(t('selectionCopy'), onCopy),
+        item(t('selectionCopyCite'), onCopyCite),
+        h('div', { className: 'bs-selection-divider' }),
+        item(t('selectionSelectAll'), onSelectAll),
+        item(t('selectionSpeak'), onSpeak),
       )
     }
 
@@ -4559,7 +4645,9 @@ html.bb-paged body table tr{break-inside:avoid}
       const [pageColumns, setPageColumns] = useState(1)
       const [bookPageCounts, setBookPageCounts] = useState(null)
       const [frameSize, setFrameSize] = useState({ width: 0, height: 0 })
+      const [selectionMenu, setSelectionMenu] = useState(null)
       const frameRef = useRef(null)
+      const menuHostRef = useRef(null)
       const displayedChapterRef = useRef(null)
       const frameWrapRef = useRef(null)
       const probeFrameRef = useRef(null)
@@ -5052,6 +5140,36 @@ html.bb-paged body table tr{break-inside:avoid}
         turnPageRef.current = turnPage
       }, [turnPage])
 
+      // The selection menu belongs to one place in one chapter; moving away or
+      // clicking elsewhere retires it.
+      useEffect(() => {
+        setSelectionMenu(null)
+      }, [chapter, pageIndex])
+
+      useEffect(() => {
+        if (selectionMenu === null) return undefined
+        const close = (event) => {
+          if (event && event.target && typeof event.target.closest === 'function' && event.target.closest('.bs-selection-menu') !== null) return
+          setSelectionMenu(null)
+        }
+        const onKey = (event) => {
+          if (event.key !== 'Escape') return
+          // Dismissing this menu must not also trigger the shell-level Escape
+          // action (leaving the book), so the event stops here.
+          event.preventDefault()
+          event.stopPropagation()
+          setSelectionMenu(null)
+        }
+        document.addEventListener('mousedown', close, true)
+        document.addEventListener('keydown', onKey)
+        window.addEventListener('resize', close)
+        return () => {
+          document.removeEventListener('mousedown', close, true)
+          document.removeEventListener('keydown', onKey)
+          window.removeEventListener('resize', close)
+        }
+      }, [selectionMenu])
+
       const onFrameLoad = useCallback(() => {
         const frame = frameRef.current
         const documentNode = frame && frame.contentDocument
@@ -5063,6 +5181,7 @@ html.bb-paged body table tr{break-inside:avoid}
         if (typeof documentNode.__bsBound !== 'boolean') {
           documentNode.__bsBound = true
           documentNode.addEventListener('click', (event) => {
+            setSelectionMenu((current) => (current === null ? current : null))
             const target = event.target
             const link = target && typeof target.closest === 'function' ? target.closest('a') : null
             if (!link) return
@@ -5096,6 +5215,32 @@ html.bb-paged body table tr{break-inside:avoid}
               if (href) window.open(href, '_blank', 'noopener,noreferrer')
             }
           })
+          // A selection gets the reader's own menu: the desktop menu only knows
+          // Copy, and the extra actions need the chapter text and read-aloud.
+          documentNode.addEventListener('contextmenu', (event) => {
+            const selection = typeof windowNode.getSelection === 'function' ? windowNode.getSelection() : null
+            const text = selection === null ? '' : String(selection).trim()
+            if (text === '') {
+              setSelectionMenu((current) => (current === null ? current : null))
+              return
+            }
+            event.preventDefault()
+            const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+            const box = range === null ? null : range.getBoundingClientRect()
+            const liveFrame = frameRef.current
+            const host = menuHostRef.current
+            const frameRect = liveFrame === null ? null : liveFrame.getBoundingClientRect()
+            const hostRect = host === null ? null : host.getBoundingClientRect()
+            if (box === null || frameRect === null || hostRect === null) {
+              setSelectionMenu({ text, x: 12, y: 12 })
+              return
+            }
+            setSelectionMenu({
+              text,
+              x: Math.max(8, Math.round(frameRect.left - hostRect.left + box.left)),
+              y: Math.max(8, Math.round(frameRect.top - hostRect.top + box.bottom + 6)),
+            })
+          })
         }
         documentNode.addEventListener('keydown', (event) => {
           if (settingsRef.current.pageMode !== 'paged' || event.defaultPrevented) return
@@ -5118,6 +5263,7 @@ html.bb-paged body table tr{break-inside:avoid}
         let saveTimer = 0
         let glassTimer = 0
         const onScroll = () => {
+          setSelectionMenu((current) => (current === null ? current : null))
           if (restoringRef.current || settingsRef.current.pageMode === 'paged') return
           anchorRef.current = ''
           // The glass bands are viewport-fixed, so a manual scroll leaves them
@@ -5808,7 +5954,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 null,
                 h(
                 'div',
-                { className: 'bs-epub-body', style: { backgroundColor: palette.bg === 'transparent' ? 'var(--dsw-alias-bg-base)' : palette.bg } },
+                { ref: menuHostRef, className: 'bs-epub-body', style: { backgroundColor: palette.bg === 'transparent' ? 'var(--dsw-alias-bg-base)' : palette.bg } },
                 tocOpen
                   ? h(
                       'aside',
@@ -5884,6 +6030,34 @@ html.bb-paged body table tr{break-inside:avoid}
                   'aria-hidden': 'true',
                   tabIndex: -1,
                 }),
+                selectionMenu !== null
+                  ? h(SelectionMenu, {
+                      t,
+                      menu: selectionMenu,
+                      onClose: () => setSelectionMenu(null),
+                      onCopy: () => {
+                        void writeClipboard(selectionMenu.text)
+                      },
+                      onCopyCite: () => {
+                        void writeClipboard(`${selectionMenu.text}\n— ${book.title} · ${chapterLabel(t, chapter)}`)
+                      },
+                      onSelectAll: () => {
+                        const liveFrame = frameRef.current
+                        const currentDocument = liveFrame && liveFrame.contentDocument
+                        const currentWindow = liveFrame && liveFrame.contentWindow
+                        if (!currentDocument || !currentWindow || !currentDocument.body) return
+                        const range = currentDocument.createRange()
+                        range.selectNodeContents(currentDocument.body)
+                        const selection = currentWindow.getSelection()
+                        if (selection === null) return
+                        selection.removeAllRanges()
+                        selection.addRange(range)
+                      },
+                      onSpeak: () => {
+                        void readAloud.speakText(selectionMenu.text)
+                      },
+                    })
+                  : null,
                 ),
                 directBusy ? h('div', { className: 'bs-discussion-backdrop' },
                   h('section', { className: 'bs-discussion-dialog', role: 'status', 'aria-live': 'polite', 'aria-label': t('discussionCreating') },
@@ -9091,6 +9265,11 @@ html.bb-paged body table tr{break-inside:avoid}
       ttsCaptionNow: 'Reading now',
       ttsCaptionLast: 'Stopped reading at',
       ttsHideText: 'Hide reading text',
+      selectionMenuLabel: 'Selection actions',
+      selectionCopy: 'Copy',
+      selectionCopyCite: 'Copy with source',
+      selectionSelectAll: 'Select all',
+      selectionSpeak: 'Read selection',
       ttsFailed: 'Read aloud failed',
       ttsNotReady: 'Read-aloud settings are still loading.',
       ttsChapterTimeout: 'The next chapter did not finish loading.',
@@ -9469,6 +9648,11 @@ html.bb-paged body table tr{break-inside:avoid}
       ttsCaptionNow: '正在朗读',
       ttsCaptionLast: '朗读停止于',
       ttsHideText: '隐藏朗读文本',
+      selectionMenuLabel: '选中文字操作',
+      selectionCopy: '复制',
+      selectionCopyCite: '复制并附出处',
+      selectionSelectAll: '全选本章',
+      selectionSpeak: '朗读选中文字',
       ttsFailed: '朗读失败',
       ttsNotReady: '朗读设置尚未载入。',
       ttsChapterTimeout: '下一章没有加载完成。',

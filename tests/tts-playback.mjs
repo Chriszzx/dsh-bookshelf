@@ -272,6 +272,101 @@ try {
     return true;
   })()`), true)
 
+  // Selecting text opens the reader's own context menu. Before this change the
+  // reader had no contextmenu handler, so right-click fell through to the
+  // desktop menu whose only action was Copy.
+  assert.equal(await evaluate(`(async()=>{
+    window.__audioMs=120;
+    window.__clipped=[];
+    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(text)=>{window.__clipped.push(text)}}});
+    const SENTENCE='第二章第一句话。';
+    const current=()=>{
+      const frame=document.querySelector('.bs-epub-frame');
+      check(!!frame,'reader frame present');
+      return {frame,document:frame.contentDocument,window:frame.contentWindow};
+    };
+    const selectSentence=()=>{
+      const targets=current();
+      const walker=targets.document.createTreeWalker(targets.document.body,NodeFilter.SHOW_TEXT);
+      let node=null;
+      while((node=walker.nextNode())){ if((node.nodeValue||'').includes('第二章第一句话')) break }
+      check(!!node,'chapter text present');
+      const offset=node.nodeValue.indexOf(SENTENCE);
+      const range=targets.document.createRange();
+      range.setStart(node,offset);
+      range.setEnd(node,offset+SENTENCE.length);
+      const selection=targets.window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return {node,range,window:targets.window};
+    };
+    const openMenu=()=>{
+      const target=selectSentence();
+      const box=target.range.getBoundingClientRect();
+      const event=new target.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:box.left+4,clientY:box.top+4});
+      target.node.parentElement.dispatchEvent(event);
+      return event;
+    };
+    const items=()=>[...document.querySelectorAll('.bs-selection-menu .bs-selection-item')];
+    const clickItem=(label)=>{
+      const item=items().find(node=>node.textContent===label);
+      check(!!item,'menu item '+label+': '+items().map(node=>node.textContent).join('|'));
+      item.click();
+    };
+    const event=openMenu();
+    check(event.defaultPrevented===true,'the reader must own the selection menu');
+    await until(()=>document.querySelector('.bs-selection-menu'));
+    const menu=document.querySelector('.bs-selection-menu');
+    check(menu.getAttribute('role')==='menu','menu role');
+    for(const label of ['selectionCopy','selectionCopyCite','selectionSelectAll','selectionSpeak']){
+      check(items().some(node=>node.textContent===label),'missing menu item '+label+': '+items().map(node=>node.textContent).join('|'));
+    }
+    const host=document.querySelector('.bs-epub-body').getBoundingClientRect();
+    const menuRect=menu.getBoundingClientRect();
+    check(menuRect.width>0&&menuRect.height>0,'menu is visible');
+    check(menuRect.left>=host.left-1&&menuRect.top>=host.top-1,'menu stays inside the reading area');
+    clickItem('selectionCopy');
+    await until(()=>window.__clipped.length>0);
+    check(window.__clipped[0]===SENTENCE,'copy keeps the selection: '+window.__clipped[0]);
+    await until(()=>!document.querySelector('.bs-selection-menu'));
+    openMenu();
+    await until(()=>document.querySelector('.bs-selection-menu'));
+    clickItem('selectionCopyCite');
+    await until(()=>window.__clipped.length>1);
+    check(window.__clipped[1].includes(SENTENCE),'cite copy keeps the text');
+    check(window.__clipped[1].includes('Speech'),'cite copy names the book: '+window.__clipped[1]);
+    await until(()=>!document.querySelector('.bs-selection-menu'));
+    openMenu();
+    await until(()=>document.querySelector('.bs-selection-menu'));
+    clickItem('selectionSelectAll');
+    await wait(150);
+    const afterAll=current();
+    check(String(afterAll.window.getSelection()).includes('第二章第三句话'),'select all covers the chapter');
+    check(!document.querySelector('.bs-selection-menu'),'menu closes after an action');
+    const chapterBefore=document.querySelector('.bs-reader-sub').textContent;
+    const plays=window.audioEvents('play').length;
+    openMenu();
+    await until(()=>document.querySelector('.bs-selection-menu'));
+    clickItem('selectionSpeak');
+    await until(()=>window.audioEvents('play').length>plays);
+    await until(()=>caption().includes('第二章第一句话'));
+    check(document.querySelector('.bs-reader-sub').textContent===chapterBefore,'reading a selection must not follow the page');
+    openMenu();
+    await until(()=>document.querySelector('.bs-selection-menu'));
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await until(()=>!document.querySelector('.bs-selection-menu'));
+    const cleared=current();
+    const rest=cleared.window.getSelection();
+    if(rest)rest.removeAllRanges();
+    const plain=new cleared.window.MouseEvent('contextmenu',{bubbles:true,cancelable:true});
+    cleared.document.body.dispatchEvent(plain);
+    await wait(200);
+    check(!document.querySelector('.bs-selection-menu'),'no menu without a selection');
+    check(plain.defaultPrevented===false,'plain right-click keeps the desktop menu');
+    window.__audioMs=260;
+    return true;
+  })()`), true)
+
   // The Chinese book picked a Chinese system voice, never the German locale
   // of a shared voice name.
   assert.ok(spoken.some(voice => voice.includes('Tingting')), 'zh book uses a zh voice: ' + spoken.slice(0, 4).join(','))

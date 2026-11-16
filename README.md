@@ -76,6 +76,10 @@ In the reader, the speaker button opens a frosted-glass dock at the bottom of th
 
 阅读器里点朗读按钮会在页面底部打开**毛玻璃**控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。打开浮条就会立即选中当前阅读位置的句子，高亮与预览无需等音频开始即可显示。EPUB 中正在朗读的句子会用一层**半透明荧光笔高亮**盖在原句上（文字保持清晰），同时上方浮动预览卡片重复当前句子；停止朗读后两者都留在停止位置，方便定位阅读进度。切换上/下一句只移动高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，只显示浮动卡片。浮条与高亮都浮在页面上方，不会引起重排。
 
+Selecting book text and right-clicking opens the reader's own menu: **Copy**, **Copy with source** (adds the book title and chapter), **Select all** of the chapter and **Read selection** aloud without moving the reading position. Plain right-click without a selection keeps the normal app menu.
+
+在书里选中文字后右键，会打开阅读器自己的菜单：**复制**、**复制并附出处**（附书名与章节）、**全选本章**、**朗读选中文字**（不会移动阅读位置）。没有选中文字时右键仍使用系统默认菜单。
+
 ## Data / 数据
 
 Everything lives in `$DSH_HOME/bookshelf`: `library.json`, `state.json`, `tags.json`, `tts.json`, `tts-secrets.json` (0600, never echoed back) and `tts-cache/` (LRU, 512 MB). API keys can also come from `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`.
