@@ -1382,19 +1382,41 @@ export function apply(ctx, options = {}) {
         const record = await findBook(audiobookFile[1])
         const file = await audiobooks.file(record.id)
         if (file === null) throw new HttpError(404, 'audio not found')
-        response.writeHead(200, {
+        // Browsers seek and stream media with byte ranges; without them a long
+        // book WAV cannot be scrubbed and some players refuse to start.
+        const size = file.bytes
+        let start = 0
+        let end = size - 1
+        let status = 200
+        const rangeHeader = typeof request.headers.range === 'string' ? request.headers.range.trim() : ''
+        if (/^bytes=\d*-\d*$/.test(rangeHeader)) {
+          const [from, to] = rangeHeader.slice(6).split('-')
+          if (from === '') start = Math.max(0, size - Number(to))
+          else start = Number(from)
+          if (to !== '' && from !== '') end = Math.min(size - 1, Number(to))
+          if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+            response.writeHead(416, { ...baseHeaders(request), 'Content-Range': `bytes */${size}` })
+            response.end()
+            return
+          }
+          status = 206
+        }
+        const headers = {
           ...baseHeaders(request),
           'Content-Type': 'audio/wav',
-          'Content-Length': file.bytes,
-          'Content-Disposition': `attachment; filename="${record.id}.wav"`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': end - start + 1,
+          'Content-Disposition': `inline; filename="${record.id}.wav"`,
           'Cache-Control': 'no-store',
-        })
+        }
+        if (status === 206) headers['Content-Range'] = `bytes ${start}-${end}/${size}`
+        response.writeHead(status, headers)
         if (request.method === 'HEAD') {
           response.end()
           return
         }
         await new Promise((resolve, reject) => {
-          const stream = createReadStream(file.path)
+          const stream = createReadStream(file.path, status === 206 ? { start, end } : undefined)
           stream.once('error', reject)
           response.once('close', resolve)
           response.once('finish', resolve)

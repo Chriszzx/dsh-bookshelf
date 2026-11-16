@@ -178,6 +178,10 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
 .bs-tts-voice-readout{flex:0 1 auto;min-width:0;max-width:100%;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-tts-caption{min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.bs-tts-file-open{justify-content:flex-start}
+.bs-tts-file-time{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.bs-tts-file-hint{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
 .bs-tts-error{color:var(--dsw-alias-state-error-primary)}
 .bs-tts-speed{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--dsw-alias-label-secondary);flex:none}
 .bs-tts-select{font:inherit;font-size:11.5px;line-height:1.4;padding:3px 5px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
@@ -2458,8 +2462,9 @@ html.bb-paged body table tr{break-inside:avoid}
       return secrets
     }
 
-    function ReadAloudBar({ t, readAloud, onClose, onStart }) {
+    function ReadAloudBar({ t, readAloud, audiobook, onClose, onStart }) {
       const [voiceOpen, setVoiceOpen] = useState(false)
+      const [fileConfirm, setFileConfirm] = useState(false)
       const settings = readAloud.settings
       const provider = readAloud.providers.find((item) => item.id === (settings ? settings.provider : ''))
       const speed = settings ? settings.speed : 1
@@ -2528,6 +2533,7 @@ html.bb-paged body table tr{break-inside:avoid}
           h('button', {
             type: 'button', className: 'bs-icon-button',
             onClick: () => {
+              if (audiobook && audiobook.running) audiobook.stop()
               if (status === 'idle') {
                 // This click is the gesture that permits later programmatic playback.
                 readAloud.unlock()
@@ -2554,6 +2560,74 @@ html.bb-paged body table tr{break-inside:avoid}
         h('div', { className: 'bs-tts-caption', title: readAloud.caption }, status === 'error'
           ? h('span', { className: 'bs-tts-error' }, `${t('ttsFailed')}: ${readAloud.error}`)
           : status === 'loading' ? t('ttsLoading') : readAloud.caption || t('ttsIdle')),
+        audiobook && audiobook.info !== null
+          ? h(
+              'div',
+              { className: 'bs-tts-file' },
+              audiobook.status === 'playing' || audiobook.status === 'paused'
+                ? h(
+                    React.Fragment,
+                    null,
+                    h(
+                      'div',
+                      { className: 'bs-tts-controls' },
+                      h('button', {
+                        type: 'button',
+                        className: 'bs-icon-button',
+                        onClick: () => {
+                          if (audiobook.status === 'playing') audiobook.pause()
+                          else void audiobook.play()
+                        },
+                        title: audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+                        'aria-label': audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+                      }, audiobook.status === 'playing' ? h(PauseIcon) : h(PlayIcon)),
+                      h('span', { className: 'bs-tts-file-time' },
+                        `${formatDuration(audiobook.current)} / ${formatDuration(audiobook.duration || audiobook.info.seconds || 0)}`),
+                      h('button', {
+                        type: 'button',
+                        className: 'bs-icon-button',
+                        onClick: () => audiobook.stop(),
+                        title: t('audiobookStop'),
+                        'aria-label': t('audiobookStop'),
+                      }, h(CloseIcon)),
+                    ),
+                    h('p', { className: 'bs-tts-file-hint' }, t('audiobookFileHint')),
+                    audiobook.error !== '' ? h('p', { className: 'bs-tts-file-hint bs-tts-error' }, audiobook.error) : null,
+                  )
+                : fileConfirm
+                  ? h(
+                      React.Fragment,
+                      null,
+                      h('p', { className: 'bs-tts-file-hint' },
+                        t('audiobookUseConfirm', {
+                          seconds: formatDuration(audiobook.info.seconds || 0),
+                          size: formatBytes(audiobook.info.bytes || 0),
+                        })),
+                      h(
+                        'div',
+                        { className: 'bs-tts-controls' },
+                        h('button', { type: 'button', className: 'bs-button', onClick: () => setFileConfirm(false) }, t('cancel')),
+                        h('button', {
+                          type: 'button',
+                          className: 'bs-button bs-button-primary',
+                          onClick: () => {
+                            setFileConfirm(false)
+                            readAloud.stop()
+                            void audiobook.play()
+                          },
+                        }, t('audiobookUseConfirmAction')),
+                      ),
+                    )
+                  : h('button', {
+                      type: 'button',
+                      className: 'bs-button bs-tts-file-open',
+                      onClick: () => setFileConfirm(true),
+                    }, t('audiobookUseExisting', {
+                      seconds: formatDuration(audiobook.info.seconds || 0),
+                      size: formatBytes(audiobook.info.bytes || 0),
+                    })),
+            )
+          : null,
         h(
           'div',
           { className: 'bs-tts-controls' },
@@ -2833,12 +2907,115 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    function ReaderShell({ t, book, onBack, controls, children, state, progress, speech }) {
+    // Plays the whole-book WAV rendered from the shelf menu. It is a single
+    // file, so it has no sentence captions and never follows the page; the
+    // reader keeps that mode separate from live read-aloud on purpose.
+    function useAudiobookFile({ base, book }) {
+      const [info, setInfo] = useState(null)
+      const [status, setStatus] = useState('idle')
+      const [current, setCurrent] = useState(0)
+      const [duration, setDuration] = useState(0)
+      const [error, setError] = useState('')
+      const audioRef = useRef(null)
+      const aliveRef = useRef(true)
+      const url = resourceUrl(base, `${API_ROOT}/books/${book.id}/audio/file`)
+
+      const refresh = useCallback(async () => {
+        try {
+          const payload = await requestJson(base, `/books/${book.id}/audio`)
+          if (!aliveRef.current) return
+          setInfo(payload.state && payload.state.audio ? payload.state.audio : null)
+        } catch {
+          // No generated audio is a normal state, not an error.
+        }
+      }, [base, book.id])
+
+      useEffect(() => {
+        aliveRef.current = true
+        void refresh()
+        return () => { aliveRef.current = false }
+      }, [refresh])
+
+      const element = useCallback(() => {
+        if (audioRef.current === null) {
+          const node = new Audio(url)
+          node.preload = 'metadata'
+          node.addEventListener('loadedmetadata', () => {
+            if (Number.isFinite(node.duration) && node.duration > 0) setDuration(node.duration)
+          })
+          node.addEventListener('timeupdate', () => setCurrent(node.currentTime || 0))
+          node.addEventListener('ended', () => { setCurrent(0); setStatus('idle') })
+          node.addEventListener('playing', () => { setError(''); setStatus('playing') })
+          node.addEventListener('pause', () => setStatus((value) => (value === 'playing' ? 'paused' : value)))
+          node.addEventListener('error', () => {
+            setStatus('idle')
+            setError('audio playback failed')
+          })
+          audioRef.current = node
+        }
+        return audioRef.current
+      }, [url])
+
+      const play = useCallback(async () => {
+        try {
+          const node = element()
+          await node.play()
+          if (aliveRef.current) setStatus('playing')
+        } catch (failure) {
+          if (!aliveRef.current) return
+          setError(failure instanceof Error ? failure.message : String(failure))
+          setStatus('idle')
+        }
+      }, [element])
+
+      const pause = useCallback(() => {
+        if (audioRef.current !== null) audioRef.current.pause()
+      }, [])
+
+      const stop = useCallback(() => {
+        const node = audioRef.current
+        if (node !== null) {
+          node.pause()
+          try { node.currentTime = 0 } catch { /* not seekable yet */ }
+        }
+        setCurrent(0)
+        setStatus('idle')
+      }, [])
+
+      useEffect(() => () => {
+        const node = audioRef.current
+        if (node !== null) {
+          node.pause()
+          node.removeAttribute('src')
+          try { node.load() } catch { /* detached */ }
+        }
+      }, [])
+
+      return {
+        info,
+        status,
+        current,
+        duration,
+        error,
+        refresh,
+        play,
+        pause,
+        stop,
+        running: status === 'playing' || status === 'paused',
+      }
+    }
+
+    function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
       const [isFullscreen, setIsFullscreen] = useState(false)
       const [ttsOpen, setTtsOpen] = useState(false)
+      const audiobook = useAudiobookFile({ base, book })
+
+      useEffect(() => {
+        if (ttsOpen) void audiobook.refresh()
+      }, [ttsOpen, audiobook.refresh])
 
       useEffect(() => {
         if (focusMode) setTtsOpen(false)
@@ -2940,7 +3117,7 @@ html.bb-paged body table tr{break-inside:avoid}
                         type: 'button',
                         className: 'bs-icon-button',
                         onClick: () => setTtsOpen((value) => !value),
-                        'aria-pressed': speech.readAloud.running,
+                        'aria-pressed': speech.readAloud.running || audiobook.running,
                         'aria-expanded': ttsOpen,
                         title: t('readAloud'),
                         'aria-label': t('readAloud'),
@@ -2985,9 +3162,14 @@ html.bb-paged body table tr{break-inside:avoid}
               h(ReadAloudBar, {
                 t,
                 readAloud: speech.readAloud,
-                onStart: speech.start,
+                audiobook,
+                onStart: () => {
+                  audiobook.stop()
+                  speech.start()
+                },
                 onClose: () => {
                   speech.readAloud.stop()
+                  audiobook.stop()
                   setTtsOpen(false)
                 },
               }),
@@ -3923,6 +4105,7 @@ html.bb-paged body table tr{break-inside:avoid}
         ReaderShell,
         {
           t,
+          base,
           book,
           onBack: exitReader,
           controls,
@@ -5240,6 +5423,7 @@ html.bb-paged body table tr{break-inside:avoid}
         ReaderShell,
         {
           t,
+          base,
           book,
           onBack: exitReader,
           controls,
@@ -8452,6 +8636,11 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookNoText: 'This book has no readable text.',
       audiobookNoKey: 'DeepSeek API key is not configured. Add it under Read aloud settings and reopen this window.',
       audiobookFailed: 'Audiobook generation failed.',
+      audiobookUseExisting: 'Play generated audio · {seconds} · {size}',
+      audiobookUseConfirm: 'Play the generated whole-book audio? It is one WAV ({seconds}, {size}); it does not follow pages or cost new speech credit.',
+      audiobookUseConfirmAction: 'Play audio',
+      audiobookFileHint: 'File playback does not follow pages; switch back to live read-aloud above.',
+      audiobookStop: 'Stop audio',
       settingsTitle: 'Shelf settings',
       settingsHint: 'Reading, read-aloud and workspace options.',
       settingsTabReading: 'Reading',
@@ -8815,6 +9004,11 @@ html.bb-paged body table tr{break-inside:avoid}
       audiobookNoText: '这本书没有可朗读的文本。',
       audiobookNoKey: '尚未配置 DeepSeek API Key。请先在朗读设置里填写，再重新打开此窗口。',
       audiobookFailed: '整书语音生成失败。',
+      audiobookUseExisting: '播放已生成音频 · {seconds} · {size}',
+      audiobookUseConfirm: '播放已生成的整书音频？它是单个 WAV（{seconds}，{size}），不会跟随页码，也不产生新的合成费用。',
+      audiobookUseConfirmAction: '确认播放',
+      audiobookFileHint: '文件播放不会跟随页码；可切回上方的逐句朗读。',
+      audiobookStop: '停止音频',
       settingsTitle: '书架设置',
       settingsHint: '阅读、朗读与工作区设置。',
       settingsTabReading: '阅读',

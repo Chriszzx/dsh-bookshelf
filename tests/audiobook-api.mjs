@@ -140,10 +140,20 @@ test('audiobook routes plan, render, download and delete with a stubbed provider
   const download = await fetch(`${origin}/books/${book.id}/audio/file`)
   assert.equal(download.status, 200)
   assert.equal(download.headers.get('content-type'), 'audio/wav')
-  assert.match(download.headers.get('content-disposition'), /attachment/)
+  assert.match(download.headers.get('content-disposition'), /inline/)
   const bytes = Buffer.from(await download.arrayBuffer())
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF')
   assert.equal(bytes.readUInt32LE(40), 16 * 2)
+  assert.equal(download.headers.get('accept-ranges'), 'bytes')
+
+  // Media elements stream with byte ranges; the reader relies on this to seek.
+  const ranged = await fetch(`${origin}/books/${book.id}/audio/file`, { headers: { range: 'bytes=0-43' } })
+  assert.equal(ranged.status, 206)
+  assert.equal(ranged.headers.get('content-range'), `bytes 0-43/${bytes.length}`)
+  assert.equal(ranged.headers.get('content-length'), '44')
+  assert.equal(Buffer.from(await ranged.arrayBuffer()).toString('ascii', 0, 4), 'RIFF')
+  const tooWide = await fetch(`${origin}/books/${book.id}/audio/file`, { headers: { range: `bytes=${bytes.length}-` } })
+  assert.equal(tooWide.status, 416)
 
   assert.equal((await json(`/books/${book.id}/audio`, { method: 'DELETE' })).status, 200)
   assert.equal((await fetch(`${origin}/books/${book.id}/audio/file`)).status, 404)
