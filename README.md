@@ -72,19 +72,23 @@ The page theme follows the desktop app: **Follow** uses the live DSH palette (in
 
 页面主题跟随桌面端：**跟随**直接使用 DSH 的实时调色板（含自定义主题与用户覆盖），**浅色/深色**也取 DSH 自己的两套配色而不是近似值。在桌面端切换明暗，页面会立即重绘。
 
-In the reader, the speaker button opens a frosted-glass dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. Opening the dock immediately selects the sentence at the reading position — the highlight and preview appear before any audio plays. In EPUB the sentence being read is marked with a translucent highlighter stroke laid over the original text, and a floating preview card repeats that sentence; after read-aloud stops both stay at the stopping point, which keeps the reading position visible. Moving to the previous/next sentence only moves the highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the floating card only. Everything floats above the page and never reflows it.
+In the reader, the speaker button opens a frosted-glass dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. Opening the dock immediately selects the sentence at the reading position — the highlight and preview appear before any audio plays. In EPUB the sentence being read is inverted against the page: on a light page it becomes dark text on a light bar, on a dark page light text on a dark bar (colors come from the DSH palette), and a floating preview card repeats that sentence; after read-aloud stops both stay at the stopping point, which keeps the reading position visible. Moving to the previous/next sentence only moves the highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the floating card only. Everything floats above the page and never reflows it.
 
-阅读器里点朗读按钮会在页面底部打开**毛玻璃**控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。打开浮条就会立即选中当前阅读位置的句子，高亮与预览无需等音频开始即可显示。EPUB 中正在朗读的句子会用一层**半透明荧光笔高亮**盖在原句上（文字保持清晰），同时上方浮动预览卡片重复当前句子；停止朗读后两者都留在停止位置，方便定位阅读进度。切换上/下一句只移动高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，只显示浮动卡片。浮条与高亮都浮在页面上方，不会引起重排。
+阅读器里点朗读按钮会在页面底部打开**毛玻璃**控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。打开浮条就会立即选中当前阅读位置的句子，高亮与预览无需等音频开始即可显示。EPUB 中正在朗读的句子会以**页面反色**显示：浅色页是深底浅字，深色页是浅底深字（颜色取自 DSH 调色板），同时上方浮动预览卡片重复当前句子；停止朗读后两者都留在停止位置，方便定位阅读进度。切换上/下一句只移动高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，只显示浮动卡片。浮条与高亮都浮在页面上方，不会引起重排。
 
-Selecting book text and right-clicking opens the reader's own menu: **Copy**, **Copy with source** (adds the book title and chapter), **Select all** of the chapter and **Read selection** aloud without moving the reading position. Plain right-click without a selection keeps the normal app menu.
+Selecting book text and right-clicking opens the reader's own menu: **Copy**, **Copy with source** (adds the book title and chapter), **Read selection**, **Highlight** and **Underline**. Reading a selection speaks it without caching the audio and relocates read-aloud to that point: playback continues from the last sentence of the selection, which is read again. Highlight and underline use the current annotation style, are stored with the book and appear in the bookmarks panel. Plain right-click without a selection keeps the normal app menu.
 
-在书里选中文字后右键，会打开阅读器自己的菜单：**复制**、**复制并附出处**（附书名与章节）、**全选本章**、**朗读选中文字**（不会移动阅读位置）。没有选中文字时右键仍使用系统默认菜单。
+在书里选中文字后右键，会打开阅读器自己的菜单：**复制**、**复制并附出处**（附书名与章节）、**朗读选中文字**、**高亮**、**下划线**。朗读选中文字不会缓存这段音频，并把朗读位置重定位到这里：读完选区后从选区最后一句继续（该句会再读一次）。高亮与下划线使用当前标注样式，随书保存并出现在书签面板。没有选中文字时右键仍使用系统默认菜单。
+
+The marker button to the right of the bookmark icon opens the annotation style panel: highlight or underline, a rainbow hue slider plus a colour picker, strength, thickness and underline style (solid, dashed, dotted, wavy) with a live preview. The style is remembered per book. The bookmarks tab lists page bookmarks, highlights and underlines together with distinct icons, and offers sorting (position, time, kind) plus text search.
+
+书签图标右侧的标记笔按钮打开标注样式面板：在高亮/下划线之间切换，提供彩虹色相条 + 取色框、强度、粗细与下划线样式（实线/虚线/点线/波浪），并带实时预览。样式按书记忆。书签标签页把整页书签、高亮、下划线合并列出并用不同图标区分，支持排序（位置/时间/类型）与文字搜索。
 
 ## Data / 数据
 
-Everything lives in `$DSH_HOME/bookshelf`: `library.json`, `state.json`, `tags.json`, `tts.json`, `tts-secrets.json` (0600, never echoed back) and `tts-cache/` (LRU, 512 MB). API keys can also come from `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`.
+Everything lives in `$DSH_HOME/bookshelf`: `library.json`, `state.json` (progress, bookmarks, highlights and underlines), `tags.json`, `tts.json`, `tts-secrets.json` (0600, never echoed back), `tts-cache/` (LRU, 512 MB) and `tts-scratch/` (uncached selection audio, 10-minute TTL). API keys can also come from `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`.
 
-所有数据都在 `$DSH_HOME/bookshelf`：`library.json`、`state.json`、`tags.json`、`tts.json`、`tts-secrets.json`（0600，不会回显）和 `tts-cache/`（LRU，512 MB）。API Key 也可来自 `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`。
+所有数据都在 `$DSH_HOME/bookshelf`：`library.json`、`state.json`（进度、书签、高亮与下划线）、`tags.json`、`tts.json`、`tts-secrets.json`（0600，不会回显）、`tts-cache/`（LRU，512 MB）与 `tts-scratch/`（选区朗读的不缓存音频，10 分钟 TTL）。API Key 也可来自 `DEEPSEEK_API_KEY` / `BOOKSHELF_TTS_OPENAI_KEY`。
 
 Edge speech sends the text to Microsoft's public read-aloud endpoint; system voices stay offline.
 

@@ -9,7 +9,10 @@ const ROUTE_PREFIX = '/bookshelf'
 const API_PREFIX = '/bookshelf/api'
 const ASSET_PREFIX = '/bookshelf/assets'
 const MAX_IMPORT_BYTES = 256 * 1024 * 1024
-const MAX_STATE_BYTES = 512 * 1024
+// Per-book state carries bookmarks and text annotations; 1000 annotations with
+// long quotes legitimately exceed a few hundred kilobytes, so the cap is sized
+// for the model limit rather than for progress-only writes.
+const MAX_STATE_BYTES = 4 * 1024 * 1024
 const MAX_COVER_BYTES = 8 * 1024 * 1024
 
 const FORMAT_MIME = {

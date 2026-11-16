@@ -11,8 +11,8 @@
 | W0 R2 Host 拆分 | ✅ 已合并（`7ca5c84`） | `host/` 11 个模块、`tts/` 4 个模块、`tts.js` 之门面、audiobook 纯函数外置；index.js 1544→88 行 |
 | W0 回归 | ✅ | 语法 77 模块、单元 80 项（78 通过/2 跳过）、13 个浏览器套件全绿 |
 | W1 M1–M5 | ✅ 已提交（`00ea13b`） | `assets/lib/{annotations,highlights,selection-speech,reading-list}.mjs`；Host 标注持久化 + `cache:false` scratch；单元 150 项（148 通过/2 跳过） |
-| W2 G1/G2 | ⏳ 进行中 | 两个 worktree 并行接线 client.js |
-| W3 集成 | ⏳ 待开始 | 合并、全量回归、文档、版本 |
+| W2 G1/G2 | ✅ 已合并（`87e56f9`、`2a84de0`） | client.js 接入标注样式面板、选区标注、书签/标注面板排序搜索、朗读反色与选区重定位；新增 5 个浏览器套件 |
+| W3 集成 | ✅ | 全量回归（92 语法模块、150 单元、18 浏览器套件）、文档更新、状态上限调整 |
 
 ### W1 交付的模块契约
 

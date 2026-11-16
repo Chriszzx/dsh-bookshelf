@@ -3,6 +3,8 @@
 下一版从本仓库的 `next` 分支继续开发。插件正式名称保持 `dsh-bookshelf`；0.5.0 在
 0.4.0 的基础上加入标签与阅读状态（0.5.1 补上读完确认与「已读完 100%」显示，0.5.2 加入列表排列，0.6.0 加入朗读：系统音色、Edge、DeepSeek、OpenAI 兼容、本地占位，按书籍语言自动选音色，设置窗口与音频缓存；0.6.1 加入整书语音：任意可用语音服务、字数/时长/体积与 DeepSeek 费用估算、Host 后台合成、阅读器直接播放已生成文件），功能变更在发布时递增版本号。
 
+0.6.1 之后的一轮工作把大文件拆成模块，并加入阅读标注：客户端纯逻辑与词条移入 `assets/lib` / `assets/locales`，Host 拆成 `host/` 与 `tts/`；阅读器支持下划线/高亮（样式面板、按书持久化、与整页书签混排并支持排序搜索），朗读当前句改为页面反色，选区菜单可朗读选中文字并把朗读位置重定位到选区末尾句（该次朗读不进缓存）。
+
 ## 开发安装
 
 在 DSH 当前 profile 的「插件」中，选择本仓库的绝对目录进行本地安装，例如：
@@ -80,10 +82,26 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
 | 文件 | 内容 | 加载方式 |
 | --- | --- | --- |
 | `client.js` | React 胶水、样式字符串、同步渲染路径、首帧词条与 `apply` | DSH 直接加载 |
-| `assets/lib/text-index.mjs` | PDF 文本拼接、章节文本索引、句子 Range；只被异步朗读路径使用 | 阅读器打开前预加载 |
+| `assets/lib/text-index.mjs` | PDF 文本拼接、章节文本索引、句子 Range；标注锚点也复用它的归一化偏移 | 阅读器打开前预加载 |
 | `assets/lib/clipboard.mjs` | 选区菜单的剪贴板写入（Async Clipboard，失败回退旧路径） | 阅读器打开前预加载 |
+| `assets/lib/annotations.mjs` | 标注模型：id、锚点清洗、样式规范、`fromSelection`、同锚点判定 | 阅读器打开前预加载；Host 静态 import |
+| `assets/lib/highlights.mjs` | 渲染计划：朗读反色层、标注层与优先级、`CSS.highlights` 应用/清理、回退判定 | 阅读器打开前预加载 |
+| `assets/lib/selection-speech.mjs` | 选区切句、末尾句锚点、重定位下标与「不缓存」策略 | 阅读器打开前预加载 |
+| `assets/lib/reading-list.mjs` | 书签+标注合并列表、排序、搜索、计数 | 阅读器打开前预加载 |
+| `assets/lib/audiobook-audio.mjs`、`assets/lib/audiobook-pricing.mjs` | 整书语音的 WAV/MP3 合并与计费（纯函数） | Host 静态 import（客户端不要动态导入） |
 | `assets/locales/<domain>.mjs` | 按领域拆分的 `en`/`zh` 词条：`import`、`apple-books`、`audiobook`、`speech`、`selection`、`reader`、`tags`、`settings`、`discussion`、`sidebar` | `apply` 后异步加载 |
 | `assets/epub.mjs`、`assets/tts-sentences.mjs`、`assets/reading-fonts.mjs`、`assets/reading-snapshot.mjs`、`assets/discussion.mjs`、`assets/pdf*.mjs` | 既有的解析器与辅助模块 | 按需动态导入 |
+
+### Host 模块（Node ESM，静态 import）
+| 文件 | 内容 |
+| --- | --- |
+| `index.js` | 只做 imports、`apply()`、路由表装配与依赖注入 |
+| `host/http.js` | `HttpError`、请求体读取、JSON 响应、MIME 与体积上限 |
+| `host/store.js` | `library.json` / `state.json` / `tags.json` 的读写、原子替换与锁 |
+| `host/library.js` | 书籍导入/删除/重命名/封面，`PUT /books/:id/state`（进度、书签、标注、设置） |
+| `host/states.js` | 每本书 state 的清洗（progress / bookmarks / annotations / settings） |
+| `host/assets-route.js`、`host/tts-routes.js`、`host/audiobook-routes.js`、`host/apple-books-routes.js`、`host/link-routes.js`、`host/discussion-routes.js`、`host/routes.js` | 各路由族与分发表 |
+| `tts/settings.js`、`tts/cache.js`、`tts/providers.js`、`tts/service.js` | 朗读设置、磁盘缓存（含 `tts-scratch/` 不缓存路径）、provider 与合成服务；`tts.js` 只是 re-export 门面 |
 
 `client.js` 内用区块 banner 排列；`===== [name] =====` 是主区块，
 `----- [section:sub] -----` 是子区块，便于定位和人工合并：
@@ -108,9 +126,8 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
    `Object.assign`，重复 key 会让 inline 版本胜出。
 5. **改了 `assets/**` 后刷新 DSH 页面**即可（模块 URL 带 `ASSET_VERSION`，路由对
    `.mjs` 返回 `no-cache`）；改 Host 代码需要重启 DSH。
-6. `scripts/check-syntax.mjs` 自动收集 `scripts`、`tests`、`host`、`tts`、`assets/lib`
-   等目录；`assets/locales` 目前不在它的收集列表里，由浏览器回归与本地
-   `node --check` 覆盖。
+6. `scripts/check-syntax.mjs` 自动收集 `scripts`、`tests`、`host`、`tts`、`assets/lib`、
+   `assets/locales` 等目录；新增这些目录下的文件无需登记。
 
 ## 常用命令
 
@@ -123,7 +140,7 @@ pnpm run test:all
 
 - `test:syntax`：检查自有运行代码、测试辅助代码和测试脚本的语法。
 - `test`：运行 manifest、Host、会话交接和平台／导入测试，无需浏览器。
-- `test:browser`：依次运行可见文本捕获、文件导入、讨论交接、阅读状态恢复、分页几何、书架布局／字体设置、标签与阅读状态、读完确认、书架排列、朗读（含按书籍语言自动选音色、固定音色、分页只前进、关闭后不弹回），以及设置窗口测试。
+- `test:browser`：依次运行可见文本捕获、文件导入、讨论交接、阅读状态恢复、分页几何、书架布局／字体设置、标签与阅读状态、读完确认、书架排列、朗读（含按书籍语言自动选音色、固定音色、分页只前进、关闭后不弹回）、设置窗口、整书语音、标注样式面板、书签/标注面板、选区菜单、朗读反色与选区朗读重定位。
 - `test:all`：依次执行以上三类检查。
 
 单独运行一组浏览器回归：
@@ -137,6 +154,8 @@ pnpm run test:browser finish-prompt
 pnpm run test:browser list-layout
 pnpm run test:browser tts-playback
 pnpm run test:browser settings-dialog
+pnpm run test:browser annotations-ui annotations-panel
+pnpm run test:browser selection-menu highlights-browser selection-speech-browser
 ```
 
 ## 浏览器与测试数据
@@ -225,6 +244,32 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 真实 DeepSeek 或第三方 TTS 的冒烟测试需要自己的 Key，默认不在 CI 中运行；人工验证时
 在阅读器里选好 provider 与音色即可。
 
+## 标注与朗读高亮回归
+
+标注锚点是**章节归一化文本偏移**（`text-index.buildSpeechIndex` 的 flat 偏移，`end` 不含），
+所以创建端与渲染端必须共用同一个索引：`client.js` 在选区菜单里用 `entries[start]`…`entries[end-1]`
+计算，朗读绘制也用同一模块把 `annotation.start/end` 解析回 `Range`。换字体、改字号、分页重排
+都不会移动锚点；章节内容来自 EPUB 包，不会变化。
+
+渲染走 CSS Custom Highlight：朗读当前句是 `bb-ra`（priority 0，`color: palette.bg` +
+`background-color: palette.fg`，即页面反色），标注是 `bb-an-<id>`（priority 100，高亮用
+`color-mix(in srgb, <色> <强度>%, transparent)`，下划线用 `text-decoration-*`）。
+**标注重叠时覆盖朗读反色**；浏览器不支持 `CSS.highlights` 时回退旧的 overlay 色带
+（朗读退化为荧光笔，不再反色）。检测必须在**章节 iframe 的 window** 上做（父窗口有 API
+不代表子窗口有）。
+
+选区菜单「朗读选中文字」用 `cache:false` 合成（Host 写 `tts-scratch/`，不进 LRU），播放完
+从选区末尾句重新开始连续朗读（该句再读一次）；`tts-scratch/` 里的音频被清理后播放失败会
+重合成一次。
+
+回归：`annotations-ui`（工具条按钮、预览、默认值、持久化、Escape）、`annotations-panel`
+（tab 计数、三类图标、三种排序、搜索、删除、跳转）、`selection-menu`（菜单项、锚点创建、
+同锚点替换、样式、不可锚定禁用、复制）、`highlights-browser`（反色规则、标注覆盖、
+重建/清理、回退路径）、`selection-speech-browser`（不缓存请求、scratch 重试、续读序列）。
+宿主契约由 `tests/annotations-model.mjs`、`tests/highlights-plan.mjs`、
+`tests/selection-speech.mjs`、`tests/reading-list.mjs`、`tests/annotations-api.mjs`、
+`tests/tts-no-cache.mjs` 覆盖。
+
 ## 字体与布局回归
 
 `layout-fonts` 保持窗口宽度不变，改变主面板宽度来模拟侧栏开合，验证卡片尺寸、左对齐与窄面板布局；同时检查 Windows／macOS 顶部安全区和设置弹窗位置。字体访问使用受控的成功／拒绝响应，验证点击手势、原生字重／斜体元数据、默认设置与单书设置隔离、重新打开后的恢复，以及换字体后的分页锚点。测试不授予真实系统字体访问权限；真实授权弹窗和字体渲染效果需要在现有 GUI 中人工验收。
@@ -234,9 +279,9 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 正式发布或提交前按顺序确认：
 
 1. `node scripts/run-checks.mjs all` 全绿（语法、单元/接口、全部浏览器回归）；网络类 provider 不参与自动化测试。
-2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs` 与 `assets/locales/*.mjs`，且不含 `tests/`、截图和本机路径。
+2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`host/**`、`tts/**`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs` 与 `assets/locales/*.mjs`，且不含 `tests/`、截图和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
-   `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts.js` 中出现。
+   `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts/providers.js` 中出现。
 4. 文档版本号与 `package.json` 一致（当前 `0.6.1`），README 中英两节同步描述 provider、自动音色、超时、整书语音与平台差异。
 5. 需要真实 Edge `say` 冒烟时手动执行，失败不阻塞提交；DSH 重启后再做一次人工验收（朗读入口、设置窗口、自动音色）。
 6. 未经确认不要推送到远端，也不要改动版本号。
