@@ -68,9 +68,9 @@ The gear icon opens **Shelf settings** with three tabs: Reading (fonts, size, ma
 
 齿轮打开**书架设置**窗口，三个标签页：阅读（字体、字号、边距、模式、主题）、朗读（后端、按语言选音色、语速、API 字段、缓存）、其他（讨论工作区、Apple Books 导入）。
 
-In the reader, the speaker button opens a frosted-glass dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. In EPUB the sentence being read is marked with a translucent highlighter stroke laid over the original text, and a floating preview card repeats that sentence; after read-aloud stops both stay at the stopping point, which keeps the reading position visible. Moving to the previous/next sentence only moves the highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the floating card only. Everything floats above the page and never reflows it.
+In the reader, the speaker button opens a frosted-glass dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. Opening the dock immediately selects the sentence at the reading position — the highlight and preview appear before any audio plays. In EPUB the sentence being read is marked with a translucent highlighter stroke laid over the original text, and a floating preview card repeats that sentence; after read-aloud stops both stay at the stopping point, which keeps the reading position visible. Moving to the previous/next sentence only moves the highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the floating card only. Everything floats above the page and never reflows it.
 
-阅读器里点朗读按钮会在页面底部打开**毛玻璃**控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。EPUB 中正在朗读的句子会用一层**半透明荧光笔高亮**盖在原句上（文字保持清晰），同时上方浮动预览卡片重复当前句子；停止朗读后两者都留在停止位置，方便定位阅读进度。切换上/下一句只移动高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，只显示浮动卡片。浮条与高亮都浮在页面上方，不会引起重排。
+阅读器里点朗读按钮会在页面底部打开**毛玻璃**控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。打开浮条就会立即选中当前阅读位置的句子，高亮与预览无需等音频开始即可显示。EPUB 中正在朗读的句子会用一层**半透明荧光笔高亮**盖在原句上（文字保持清晰），同时上方浮动预览卡片重复当前句子；停止朗读后两者都留在停止位置，方便定位阅读进度。切换上/下一句只移动高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，只显示浮动卡片。浮条与高亮都浮在页面上方，不会引起重排。
 
 ## Data / 数据
 

@@ -2072,6 +2072,39 @@ html.bb-paged body table tr{break-inside:avoid}
         await playBatch(batch, 0)
       }, [playBatch])
 
+      // Select the sentence the reader is on without starting playback, so the
+      // highlight and preview appear the moment read-aloud is opened. Playback
+      // then continues from this selection instead of repeating the page start.
+      const preview = useCallback(async (driver) => {
+        if (!driver) return
+        const run = ++runRef.current
+        driverRef.current = driver
+        pausedRef.current = false
+        let batch
+        try {
+          batch = await driver.current()
+        } catch {
+          return
+        }
+        if (runRef.current !== run) return
+        if (batch === null || batch.length === 0) return
+        batchRef.current = batch
+        indexRef.current = 0
+        setError('')
+        setCaption(batch[0].text)
+        setStatus('stopped')
+        const item = batch[0]
+        // Preview must not scroll or turn a page; readers only paint a sentence
+        // that is already on screen.
+        if (typeof item.preview === 'function') {
+          try {
+            await item.preview()
+          } catch {
+            // A preview that cannot paint still leaves the caption in place.
+          }
+        }
+      }, [])
+
       const toggle = useCallback(() => {
         if (status === 'playing') {
           const audio = audioRef.current
@@ -2188,7 +2221,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return {
         status, caption, error, settings, providers, secrets,
-        activeVoiceLabel, unlock, setLanguage, start, toggle, stop, clearCaption, prev: () => step(-1), next: () => step(1),
+        activeVoiceLabel, unlock, setLanguage, start, preview, toggle, stop, clearCaption, prev: () => step(-1), next: () => step(1),
         saveSettings, refresh, applySettings,
         running: status === 'playing' || status === 'paused' || status === 'loading',
       }
@@ -3136,6 +3169,20 @@ html.bb-paged body table tr{break-inside:avoid}
       useEffect(() => {
         if (ttsOpen) void audiobook.refresh()
       }, [ttsOpen, audiobook.refresh])
+
+      // Opening the dock selects the current sentence right away: the highlight
+      // and preview must not wait for the first audio request.
+      const speechRef = useRef(null)
+      useEffect(() => {
+        speechRef.current = speech
+      }, [speech])
+      useEffect(() => {
+        if (!ttsOpen || focusMode) return
+        const current = speechRef.current
+        if (!current || typeof current.preview !== 'function') return
+        if (current.readAloud.running) return
+        void current.preview()
+      }, [ttsOpen, focusMode])
 
       useEffect(() => {
         if (focusMode) setTtsOpen(false)
@@ -4185,15 +4232,15 @@ html.bb-paged body table tr{break-inside:avoid}
       const [speechLanguage, setSpeechLanguage] = useState('')
       const readAloud = useReadAloud({ base, t, language: speechLanguage })
 
-      const startReadAloud = useCallback(() => {
-        const document = pdfDocumentRef.current
-        if (document === null) return
-        const total = document.numPages
+      const createSpeechDriver = useCallback(() => {
+        const pdfDocument = pdfDocumentRef.current
+        if (pdfDocument === null) return null
+        const total = pdfDocument.numPages
         const modulePromise = loadTtsSentences(base)
         // A PDF rarely declares a language: read the first page and detect it.
         void (async () => {
           try {
-            const firstPage = await document.getPage(Math.min(total, Math.max(1, currentPageRef.current)))
+            const firstPage = await pdfDocument.getPage(Math.min(total, Math.max(1, currentPageRef.current)))
             const detected = detectSpeechLanguage(joinPdfItems((await firstPage.getTextContent()).items))
             if (detected !== '') {
               readAloud.setLanguage(detected)
@@ -4205,7 +4252,7 @@ html.bb-paged body table tr{break-inside:avoid}
         })()
         const batchForPage = async (page) => {
           const module = await modulePromise
-          const pdfPage = await document.getPage(page)
+          const pdfPage = await pdfDocument.getPage(page)
           const content = await pdfPage.getTextContent()
           const sentences = module.splitSentences(joinPdfItems(content.items))
           return sentences.map((text) => ({
@@ -4217,18 +4264,27 @@ html.bb-paged body table tr{break-inside:avoid}
             },
           }))
         }
-        const driver = {
+        return {
           current: () => batchForPage(Math.min(total, Math.max(1, currentPageRef.current))),
           advance: async () => {
             const next = currentPageRef.current + 1
             if (next > total) return null
             // Re-check the live document: it may have been replaced by a reload.
-            if (pdfDocumentRef.current !== document) return null
+            if (pdfDocumentRef.current !== pdfDocument) return null
             return batchForPage(next)
           },
         }
-        void readAloud.start(driver)
       }, [base, readAloud, scrollToPage, t])
+
+      const startReadAloud = useCallback(() => {
+        const driver = createSpeechDriver()
+        if (driver !== null) void readAloud.start(driver)
+      }, [createSpeechDriver, readAloud])
+
+      const previewReadAloud = useCallback(() => {
+        const driver = createSpeechDriver()
+        if (driver !== null) void readAloud.preview(driver)
+      }, [createSpeechDriver, readAloud])
 
       return h(
         ReaderShell,
@@ -4240,7 +4296,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: status === 'ready' && pdfDocument ? t('pdfPages', { total: pdfDocument.numPages }) : undefined,
           progress: status === 'ready' && pdfDocument ? { percent, onSeek: onSeekProgress } : undefined,
-          speech: { readAloud, start: startReadAloud },
+          speech: { readAloud, start: startReadAloud, preview: previewReadAloud },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('rendering') })
@@ -5497,8 +5553,8 @@ html.bb-paged body table tr{break-inside:avoid}
         throw new Error(t('ttsChapterTimeout'))
       }, [t])
 
-      const startReadAloud = useCallback(() => {
-        if (data === null) return
+      const createSpeechDriver = useCallback(() => {
+        if (data === null) return null
         const chapters = data.chapters
         const modulePromise = loadTtsSentences(base)
 
@@ -5557,10 +5613,31 @@ html.bb-paged body table tr{break-inside:avoid}
               }
               windowNode.requestAnimationFrame(paint)
             },
+            // Select without moving the reader: only paint when the sentence
+            // already sits on the visible page.
+            preview: async () => {
+              if (entry.range === null) return
+              const frameNode = frameRef.current
+              const currentDocument = frameNode && frameNode.contentDocument
+              if (currentDocument !== documentNode) return
+              if (paged) {
+                const page = rangePage(documentNode, windowNode, entry.range)
+                if (page === null || page !== pageIndexRef.current) return
+              } else {
+                const rect = entry.range.getBoundingClientRect()
+                if (rect.bottom <= 0 || rect.top >= windowNode.innerHeight) return
+              }
+              speechRangeRef.current = entry.range
+              windowNode.requestAnimationFrame(() => {
+                const live = frameRef.current
+                if (!live || live.contentDocument !== documentNode) return
+                paintSpeechGlass(documentNode, entry.range)
+              })
+            },
           }))
         }
 
-        const driver = {
+        return {
           current: () => batchForChapter(chapterRef.current),
           advance: async () => {
             const next = chapterRef.current + 1
@@ -5571,8 +5648,17 @@ html.bb-paged body table tr{break-inside:avoid}
             return batchForChapter(next, previousDocument)
           },
         }
-        void readAloud.start(driver)
-      }, [base, data, goTo, layoutPagedFrame, readAloud, t, waitForSpeechChapter])
+      }, [base, data, goTo, layoutPagedFrame, t, waitForSpeechChapter])
+
+      const startReadAloud = useCallback(() => {
+        const driver = createSpeechDriver()
+        if (driver !== null) void readAloud.start(driver)
+      }, [createSpeechDriver, readAloud])
+
+      const previewReadAloud = useCallback(() => {
+        const driver = createSpeechDriver()
+        if (driver !== null) void readAloud.preview(driver)
+      }, [createSpeechDriver, readAloud])
 
       return h(
         ReaderShell,
@@ -5584,7 +5670,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
-          speech: { readAloud, start: startReadAloud, inlineHighlight: true },
+          speech: { readAloud, start: startReadAloud, preview: previewReadAloud },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('parsing') })

@@ -204,7 +204,20 @@ try {
     await until(()=>document.querySelector('.bs-epub-frame'));
     window.__caps=[];
     const poll=setInterval(()=>{const value=caption();if(value&&window.__caps[window.__caps.length-1]!==value)window.__caps.push(value)},12);
+    // Opening read-aloud must select the sentence immediately: the highlight and
+    // preview may not wait for the first audio request.
+    const playsBefore=window.audioEvents('play').length;
+    document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
+    await until(()=>document.querySelector('.bs-tts-dock'));
+    await until(()=>caption().length>0);
+    window.__preview=caption();
+    const previewFrame=document.querySelector('.bs-epub-frame');
+    await until(()=>previewFrame.contentDocument.querySelector('[data-bb-glass-band]'));
+    await wait(200);
+    check(window.audioEvents('play').length===playsBefore,'preview must not play audio');
+    check(!!document.querySelector('.bs-tts-caption'),'preview card appears before play');
     await startReading();
+    await until(()=>window.__caps[0]===window.__preview);
     await until(()=>window.__caps.includes('第二章第一句话。'));
     clearInterval(poll);
     const seen=window.__caps;
@@ -337,6 +350,13 @@ try {
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('Mixed');
     await until(()=>document.querySelector('.bs-pdf-page canvas'));
+    // PDF has no text layer: the preview shows the sentence in the floating card.
+    const pdfPlays=window.audioEvents('play').length;
+    document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
+    await until(()=>document.querySelector('.bs-tts-dock'));
+    await until(()=>caption().includes('Generated test page 1'));
+    await wait(200);
+    check(window.audioEvents('play').length===pdfPlays,'PDF preview must not play audio');
     await startReading();
     await until(()=>caption().includes('Generated test page 1'));
     await until(()=>caption().includes('Generated test page 2'));
