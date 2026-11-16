@@ -8,10 +8,10 @@ import { join } from 'node:path'
 import {
   billedCharacters,
   estimateAudiobook,
-  mergeWavBuffers,
-  createAudiobookService,
   sanitizeAudiobookProvider,
-} from '../audiobook.js'
+} from '../assets/lib/audiobook-pricing.mjs'
+import { mergeWavBuffers } from '../assets/lib/audiobook-audio.mjs'
+import { createAudiobookService } from '../audiobook.js'
 import { splitSentences } from '../assets/tts-sentences.mjs'
 
 function makeWav(samples, { sampleRate = 24000, channels = 1, bitsPerSample = 16 } = {}) {
