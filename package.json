@@ -1,6 +1,6 @@
 {
   "name": "dsh-bookshelf",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "A local PDF and EPUB bookshelf for the DSH Web GUI with built-in readers and a shelf-owned Books sidebar.",
   "type": "module",
   "icon": "icon.svg",

@@ -14,6 +14,10 @@ window.__ModuleLoader__.load({
     const ASSET_VERSION = '6'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
+    // Shelf arrangement is a reading preference, so it survives a page reload
+    // unlike the transient search/sort/category view state.
+    const LAYOUT_STORAGE_KEY = 'bookshelf.layout.v1'
+    const SHELF_LAYOUTS = ['grid', 'list']
     const BOOKS_TAB_KIND = 'bookshelf-reader'
     // Kept stable across the package rename so an open Books tab and existing
     // page-snapshot sessions keep their ids.
@@ -298,6 +302,9 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
+  .bs-row-open{padding:8px 40px 8px 8px;gap:10px}
+  .bs-row-thumb{width:40px;height:52px}
+  .bs-row-confirming{padding:8px;gap:8px}
   .bs-tabs{padding:0 12px 6px;gap:5px}
   .bs-sort-label{display:none}
   .bs-apple-button-label{display:none}
@@ -320,6 +327,43 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-cover-menu button{display:block;width:100%;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1.4;text-align:left;cursor:pointer;white-space:nowrap}
 .bs-cover-menu button:hover{background:var(--dsw-alias-bg-layer-2)}
 .bs-cover-menu button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-list{display:flex;flex-direction:column;gap:4px;width:100%;min-width:0;margin:0}
+.bs-row{position:relative;display:flex;align-items:center;gap:0;min-width:0;border-bottom:1px solid var(--dsw-alias-border-l1);border-radius:8px}
+.bs-row:hover{background:var(--dsw-alias-bg-layer-1)}
+.bs-row-open{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:10px 44px 10px 10px;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.bs-row-open:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-row-thumb{position:relative;flex:none;width:44px;height:58px;border-radius:6px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.bs-row-cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.bs-row-format{position:absolute;left:4px;bottom:4px;font-size:7.5px;font-weight:700;letter-spacing:.06em;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.bs-row-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bs-row-title{font-size:13.5px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-row-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-row-progress{height:2px;margin-top:2px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
+.bs-row-progress-fill{display:block;height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);transition:width .2s ease}
+.bs-row-actions{position:absolute;top:50%;right:6px;z-index:5;display:flex;align-items:center;transform:translateY(-50%)}
+.bs-row-more{display:flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:0;border-radius:7px;background:transparent;color:var(--dsw-alias-label-secondary);opacity:0;cursor:pointer;transition:opacity .14s ease,background .14s ease}
+.bs-row:hover .bs-row-more,.bs-row-more:focus-visible{opacity:1}
+.bs-row-more:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-row-more:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-row-menu{position:absolute;top:calc(100% + 4px);right:0;z-index:9;display:flex;flex-direction:column;min-width:132px;padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-overlay);box-shadow:0 16px 40px -18px rgba(0,0,0,.55)}
+.bs-row-menu-up{top:auto;bottom:calc(100% + 4px)}
+.bs-row-menu button{display:block;width:100%;padding:7px 9px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1.4;text-align:left;cursor:pointer;white-space:nowrap}
+.bs-row-menu button:hover{background:var(--dsw-alias-bg-layer-2)}
+.bs-row-menu button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
+.bs-row-menu .bs-row-menu-danger{color:var(--dsw-alias-state-error-primary)}
+.bs-row-confirming{flex-wrap:wrap;padding:10px;gap:12px;background:var(--dsw-alias-bg-layer-1);border-bottom-color:transparent}
+.bs-row-confirming .bs-row-sub{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.bs-row-confirm-actions{display:flex;align-items:center;gap:6px;flex:none}
+.bs-row-confirm-button{font:inherit;font-size:12px;line-height:1.4;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer;white-space:nowrap}
+.bs-row-confirm-button:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2)}
+.bs-row-confirm-button.danger{background:#b93a3a;border-color:transparent;color:#fff}
+.bs-row-confirm-button:disabled{opacity:.6;cursor:default}
+.bs-row-confirm-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-layout-toggle{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-base);flex:none}
+.bs-layout-button{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.bs-layout-button:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-layout-button[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-layout-button:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .bs-rename-dialog{width:min(430px,calc(100vw - 28px));max-height:calc(100vh - 40px)}
 .bs-rename-form{display:flex;flex-direction:column;min-height:0}
 .bs-rename-body{display:flex;flex-direction:column;gap:12px;padding:10px 18px 14px}
@@ -330,6 +374,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-rename-error{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}
 .bs-rename-foot{justify-content:flex-end}
 @media (hover:none){.bs-more{opacity:1}}
+@media (hover:none){.bs-row-more{opacity:1}}
 `
 
     const READING_CSS = `
@@ -600,6 +645,50 @@ html.bb-paged body table tr{break-inside:avoid}
       return hash
     }
 
+    function readStoredLayout() {
+      try {
+        const stored = localStorage.getItem(LAYOUT_STORAGE_KEY)
+        return SHELF_LAYOUTS.includes(stored) ? stored : 'grid'
+      } catch {
+        return 'grid'
+      }
+    }
+
+    function storeLayout(value) {
+      try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, value)
+      } catch {
+        // Private browsing or a blocked storage area keeps the in-memory choice.
+      }
+    }
+
+    // Shown on both the cover card and the list row so one status rule cannot
+    // drift between the two arrangements.
+    function bookPercent(book) {
+      const progress = book.progress && typeof book.progress === 'object' ? book.progress : null
+      return progress ? Math.min(1, Math.max(0, Number(progress.percent) || 0)) : 0
+    }
+
+    function bookStatus(book) {
+      return STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
+    }
+
+    function bookCoverUrl(book, base) {
+      return book.cover && book.cover.updatedAt && book.id
+        ? resourceUrl(base, `${API_ROOT}/books/${book.id}/cover?v=${book.cover.updatedAt}`)
+        : ''
+    }
+
+    function bookSubParts(book, t) {
+      const percent = bookPercent(book)
+      const status = bookStatus(book)
+      const author = book.author || t('unknownAuthor')
+      if (status === 'finished') return [t('finishedPercent', { percent: 100 }), author]
+      if (book.statusManual) return [t(STATUS_LABEL_KEYS[status]), author]
+      if (percent > 0) return [`${t('continueReading')} ${Math.round(percent * 100)}%`, author]
+      return [author, formatBytes(book.bytes), formatDate(book.addedAt)]
+    }
+
     function coverStyle(book) {
       const hash = hashCode(`${book.title}|${book.author}`)
       const hue = hash % 360
@@ -838,6 +927,15 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function ArrowLeftIcon({ size = 17 }) {
       return svgIcon(size, [h('path', { key: 'a', d: 'M19 12H5M11 6l-6 6 6 6' })])
+    }
+
+    function GridIcon({ size = 16 }) {
+      return svgIcon(size, [
+        h('rect', { key: 'a', x: 4, y: 4, width: 6.5, height: 6.5, rx: 1.4 }),
+        h('rect', { key: 'b', x: 13.5, y: 4, width: 6.5, height: 6.5, rx: 1.4 }),
+        h('rect', { key: 'c', x: 4, y: 13.5, width: 6.5, height: 6.5, rx: 1.4 }),
+        h('rect', { key: 'd', x: 13.5, y: 13.5, width: 6.5, height: 6.5, rx: 1.4 }),
+      ])
     }
 
     function ListIcon({ size = 17 }) {
@@ -4438,25 +4536,14 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     function BookCard({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags }) {
-      const progress = book.progress && typeof book.progress === 'object' ? book.progress : null
-      const percent = progress ? Math.min(1, Math.max(0, Number(progress.percent) || 0)) : 0
       // The Host sends the effective status (manual override or progress). The
       // card label must follow it, or a manual "finished" would still print the
       // percent-derived "continue reading".
-      const status = STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
-      const statusLabel = t(STATUS_LABEL_KEYS[status])
+      const percent = bookPercent(book)
+      const status = bookStatus(book)
       const finished = status === 'finished'
-      const subParts = finished
-        ? [t('finishedPercent', { percent: 100 }), book.author || t('unknownAuthor')]
-        : book.statusManual
-          ? [statusLabel, book.author || t('unknownAuthor')]
-          : percent > 0
-            ? [`${t('continueReading')} ${Math.round(percent * 100)}%`, book.author || t('unknownAuthor')]
-            : [book.author || t('unknownAuthor'), formatBytes(book.bytes), formatDate(book.addedAt)]
-      const coverSrc =
-        book.cover && book.cover.updatedAt && book.id
-          ? resourceUrl(base, `${API_ROOT}/books/${book.id}/cover?v=${book.cover.updatedAt}`)
-          : ''
+      const subParts = bookSubParts(book, t)
+      const coverSrc = bookCoverUrl(book, base)
       const [loadedCover, setLoadedCover] = useState('')
       const [failedCover, setFailedCover] = useState('')
       const [menuOpen, setMenuOpen] = useState(false)
@@ -4633,6 +4720,186 @@ html.bb-paged body table tr{break-inside:avoid}
                 h('div', { className: 'bs-card-progress-fill', style: { width: `${percent * 100}%` } }),
               )
             : null,
+        ),
+      )
+    }
+
+    function BookRow({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags }) {
+      const percent = bookPercent(book)
+      const finished = bookStatus(book) === 'finished'
+      const subParts = bookSubParts(book, t)
+      const coverSrc = bookCoverUrl(book, base)
+      const [coverFailed, setCoverFailed] = useState(false)
+      const [menuOpen, setMenuOpen] = useState(false)
+      const [menuUp, setMenuUp] = useState(false)
+      const actionsRef = useRef(null)
+
+      useEffect(() => {
+        if (!menuOpen) return undefined
+        const onPointerDown = (event) => {
+          const node = actionsRef.current
+          if (node !== null && !node.contains(event.target)) setMenuOpen(false)
+        }
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          event.preventDefault()
+          event.stopPropagation()
+          setMenuOpen(false)
+        }
+        document.addEventListener('pointerdown', onPointerDown)
+        window.addEventListener('keydown', onKeyDown)
+        return () => {
+          document.removeEventListener('pointerdown', onPointerDown)
+          window.removeEventListener('keydown', onKeyDown)
+        }
+      }, [menuOpen])
+
+      const thumb = h(
+        'span',
+        { className: 'bs-row-thumb', style: coverStyle(book) },
+        coverSrc !== '' && !coverFailed
+          ? h('img', {
+              className: 'bs-row-cover',
+              src: coverSrc,
+              alt: '',
+              loading: 'lazy',
+              decoding: 'async',
+              onError: () => setCoverFailed(true),
+            })
+          : null,
+        h('span', { className: 'bs-row-format' }, String(book.format || '').toUpperCase()),
+      )
+
+      if (confirming) {
+        return h(
+          'article',
+          { className: 'bs-row bs-row-confirming', role: 'listitem', 'aria-label': t('deleteTitle') },
+          thumb,
+          h(
+            'div',
+            { className: 'bs-row-text' },
+            h('span', { className: 'bs-row-title' }, t('deleteTitle')),
+            h('span', { className: 'bs-row-sub', title: t('deleteBody', { title: book.title }) }, t('deleteBody', { title: book.title })),
+          ),
+          h(
+            'div',
+            { className: 'bs-row-confirm-actions' },
+            h(
+              'button',
+              { type: 'button', className: 'bs-row-confirm-button danger', disabled: deleting, onClick: () => onDelete(book) },
+              deleting ? t('deleting') : t('confirmDelete'),
+            ),
+            h('button', { type: 'button', className: 'bs-row-confirm-button', disabled: deleting, onClick: onCancelDelete }, t('cancel')),
+          ),
+        )
+      }
+
+      return h(
+        'article',
+        { className: 'bs-row', role: 'listitem', 'data-finished': finished ? 'true' : undefined },
+        h(
+          'button',
+          {
+            type: 'button',
+            className: 'bs-row-open',
+            onClick: () => onOpen(book),
+            'aria-label': t('openBook', { title: book.title || t('untitled') }),
+          },
+          thumb,
+          h(
+            'span',
+            { className: 'bs-row-text' },
+            h('span', { className: 'bs-row-title', title: book.title }, book.title || t('untitled')),
+            h(
+              'span',
+              { className: 'bs-row-sub', title: subParts.filter(Boolean).join(' · ') },
+              subParts.filter(Boolean).join(' · '),
+            ),
+            percent > 0 && !finished
+              ? h(
+                  'span',
+                  {
+                    className: 'bs-row-progress',
+                    role: 'progressbar',
+                    'aria-label': t('readingProgress'),
+                    'aria-valuemin': 0,
+                    'aria-valuemax': 100,
+                    'aria-valuenow': Math.round(percent * 100),
+                  },
+                  h('span', { className: 'bs-row-progress-fill', style: { width: `${percent * 100}%` } }),
+                )
+              : null,
+          ),
+        ),
+        h(
+          'div',
+          { className: 'bs-row-actions', ref: actionsRef },
+          h(
+            'button',
+            {
+              type: 'button',
+              className: 'bs-row-more',
+              onClick: () => {
+                const node = actionsRef.current
+                const button = node ? node.querySelector('.bs-row-more') : null
+                const scroller = node ? node.closest('.bs-scroll') : null
+                if (button && scroller) {
+                  // Roughly the height of the three-item menu: flip it above
+                  // the row so the last rows of a short list stay reachable.
+                  setMenuUp(button.getBoundingClientRect().bottom + 120 > scroller.getBoundingClientRect().bottom)
+                }
+                setMenuOpen((value) => !value)
+              },
+              'aria-haspopup': 'menu',
+              'aria-expanded': menuOpen,
+              title: t('more'),
+              'aria-label': t('more'),
+            },
+            h(MoreIcon),
+          ),
+          !menuOpen
+            ? null
+            : h(
+                'div',
+                { className: menuUp ? 'bs-row-menu bs-row-menu-up' : 'bs-row-menu', role: 'menu', 'aria-label': t('more') },
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onRename(book, 'title')
+                    },
+                  },
+                  t('rename'),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onEditTags(book)
+                    },
+                  },
+                  t('bookTags'),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    className: 'bs-row-menu-danger',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onAskDelete(book)
+                    },
+                  },
+                  t('delete'),
+                ),
+              ),
         ),
       )
     }
@@ -5213,6 +5480,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const [query, setStoredQuery] = useShelfView(viewState, 'query')
       const [sortMode, setStoredSort] = useShelfView(viewState, 'sortMode')
       const [category, setStoredCategory] = useShelfView(viewState, 'category')
+      const [layout, setStoredLayout] = useShelfView(viewState, 'layout')
+      const activeLayout = layout === 'list' ? 'list' : 'grid'
       const [tagDefinitions, setTagDefinitions] = useState([])
       const [finishPrompt, setFinishPrompt] = useState(null)
       const [finishSaving, setFinishSaving] = useState(false)
@@ -5237,6 +5506,13 @@ html.bb-paged body table tr{break-inside:avoid}
         if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = 0
         setStoredCategory(value)
       }, [viewState, setStoredCategory])
+      const setLayout = useCallback((value) => {
+        const next = value === 'list' ? 'list' : 'grid'
+        viewState.scrollTop = 0
+        if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = 0
+        setStoredLayout(next)
+        storeLayout(next)
+      }, [viewState, setStoredLayout])
       const [appleOpen, setAppleOpen] = useState(false)
       const [capabilities, setCapabilities] = useState(null)
       const [appleBooksEnabled, setAppleBooksEnabled] = useState(() => {
@@ -5777,10 +6053,26 @@ html.bb-paged body table tr{break-inside:avoid}
         !loading && error === '' && books !== null && books.length > 0 && visibleBooks.length === 0 && normalizedQuery === ''
       const showNoResults =
         !loading && error === '' && books !== null && books.length > 0 && visibleBooks.length === 0 && normalizedQuery !== ''
+      const bookViewProps = (book) => ({
+        key: book.id,
+        book,
+        base,
+        t,
+        onOpen: (value) => setOpen(value),
+        onDelete: removeBook,
+        onAskDelete: (value) => setDeleteTarget(value),
+        onCancelDelete: () => setDeleteTarget(null),
+        onRename: openRename,
+        onEditTags: openBookTags,
+        confirming: deleteTarget !== null && deleteTarget.id === book.id,
+        deleting: deleting && deleteTarget !== null && deleteTarget.id === book.id,
+      })
+
       return h(
         'div',
         {
           className: 'bs-shelf bs-root',
+          'data-layout': activeLayout,
           onDragEnter,
           onDragOver,
           onDragLeave,
@@ -5953,6 +6245,34 @@ html.bb-paged body table tr{break-inside:avoid}
                   h('option', { value: 'author' }, t('sortAuthor')),
                 ),
               ),
+              h(
+                'div',
+                { className: 'bs-layout-toggle', role: 'group', 'aria-label': t('layoutLabel') },
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'bs-layout-button',
+                    'aria-pressed': activeLayout === 'grid',
+                    title: t('layoutCover'),
+                    'aria-label': t('layoutCover'),
+                    onClick: () => setLayout('grid'),
+                  },
+                  h(GridIcon),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'bs-layout-button',
+                    'aria-pressed': activeLayout === 'list',
+                    title: t('layoutList'),
+                    'aria-label': t('layoutList'),
+                    onClick: () => setLayout('list'),
+                  },
+                  h(ListIcon, { size: 16 }),
+                ),
+              ),
             )
           : null,
         notice !== null
@@ -6036,26 +6356,17 @@ html.bb-paged body table tr{break-inside:avoid}
                         t('clearFilters'),
                       ),
                     )
-                  : h(
-                      'div',
-                      { className: 'bs-grid' },
-                      visibleBooks.map((book) =>
-                        h(BookCard, {
-                          key: book.id,
-                          book,
-                          base,
-                          t,
-                          onOpen: (value) => setOpen(value),
-                          onDelete: removeBook,
-                          onAskDelete: (value) => setDeleteTarget(value),
-                          onCancelDelete: () => setDeleteTarget(null),
-                          onRename: openRename,
-                          onEditTags: openBookTags,
-                          confirming: deleteTarget !== null && deleteTarget.id === book.id,
-                          deleting: deleting && deleteTarget !== null && deleteTarget.id === book.id,
-                        }),
+                  : activeLayout === 'list'
+                    ? h(
+                        'div',
+                        { className: 'bs-list', role: 'list' },
+                        visibleBooks.map((book) => h(BookRow, bookViewProps(book))),
+                      )
+                    : h(
+                        'div',
+                        { className: 'bs-grid' },
+                        visibleBooks.map((book) => h(BookCard, bookViewProps(book))),
                       ),
-                    ),
         ),
         appleBooksAvailable && appleOpen
           ? h(AppleBooksPicker, {
@@ -6195,6 +6506,9 @@ html.bb-paged body table tr{break-inside:avoid}
       sortRead: 'Recently read',
       sortTitle: 'Title',
       sortAuthor: 'Author',
+      layoutLabel: 'Shelf layout',
+      layoutCover: 'Cover view',
+      layoutList: 'List view',
       appleBooks: 'Apple Books',
       more: 'More',
       addLocalBooks: 'Add local books',
@@ -6476,6 +6790,9 @@ html.bb-paged body table tr{break-inside:avoid}
       sortRead: '最近阅读',
       sortTitle: '书名',
       sortAuthor: '作者',
+      layoutLabel: '书架排列',
+      layoutCover: '封面',
+      layoutList: '列表',
       appleBooks: 'Apple Books',
       more: '更多',
       addLocalBooks: '添加本地书籍',
@@ -6749,7 +7066,7 @@ html.bb-paged body table tr{break-inside:avoid}
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'bookshelf: dictionaries')
         const t = ctx.locale.bind(NS)
-        const viewState = { openBookId: null, query: '', sortMode: 'added', category: 'all', scrollTop: 0 }
+        const viewState = { openBookId: null, query: '', sortMode: 'added', category: 'all', layout: readStoredLayout(), scrollTop: 0 }
         let bridge = null, bridgePromise = null, operationPromise = null, disposed = false
         const listeners = new Set()
         const notify = () => { for (const listener of listeners) listener() }

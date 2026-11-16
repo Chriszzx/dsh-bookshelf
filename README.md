@@ -13,6 +13,8 @@ panel. Library, covers, progress, bookmarks and settings live under
 - **Apple Books import** (macOS): search the local library and link a downloaded
   EPUB/PDF; EPUB source folders are packed on demand.
 - **Shelf**: left-aligned, stable-size cover grid that adapts to the panel width; search, sort, rename, delete.
+  Switch to a **list view** for a vertical row per book (thumbnail, title, status/progress);
+  the choice is remembered across reloads.
 - **Tags and reading status**: every book has one built-in status (**Unread**,
   **Reading**, **Finished** — Unread/Reading follow progress, Finished is
   confirmed when you leave the book on its last page or set it yourself) plus any
@@ -62,6 +64,11 @@ Open **Bookshelf** in the sidebar, then **Import books**:
 - **Apple Books** (macOS) — search the local library and link a downloaded book.
 
 EPUB settings separate **Font** from **Typography**. Choose an available common font, or use **Detect system fonts** to include installed custom fonts. Full detection requires browser support and a user-granted font-access permission; denial or unsupported browsers retain the common list. Native font metadata supplies weights and italics, including variable weights. The font inventory stays in browser memory; only the selected family and style are saved. Missing fonts use a fallback without discarding the saved selection. PDF pages keep their document fonts.
+
+Two arrangements are available from the toolbar: the cover grid (default) and a
+vertical row list that shows a thumbnail, title, author and the same status or
+progress line. The list keeps the cover artwork as a small thumbnail, hides the
+progress bar for finished books, and remembers your choice after a reload.
 
 The shelf header lists one tab per category: **All**, the three reading statuses,
 and your own tags. Open a book's **More** menu → **Tags…** to pick a status and
