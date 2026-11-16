@@ -99,7 +99,7 @@ window.wait=ms=>new Promise(r=>setTimeout(r,ms));
 window.until=async(fn)=>{const start=Date.now();while(Date.now()-start<20000){if(fn())return;await wait(40)}throw Error('Timed out: '+fn)};
 window.check=(condition,message)=>{if(!condition)throw Error(message)};
 window.readerButton=(label)=>document.querySelector('.bs-reader-bar [aria-label="'+label+'"]');
-window.menuButton=(label)=>[...document.querySelectorAll('.bs-tts-menu button')].find(node=>node.textContent===label);
+window.menuButton=(label)=>[...document.querySelectorAll('.bs-tts-dock button')].find(node=>node.textContent===label);
 mount();
 </script></body></html>`
 
@@ -195,12 +195,12 @@ try {
     document.querySelector('.bs-cover').click();
     await until(()=>document.querySelector('.bs-epub-frame'));
     readerButton('readAloud').click();
-    await until(()=>document.querySelector('.bs-tts-menu'));
-    await until(()=>[...document.querySelectorAll('.bs-tts-menu button')].some(node=>node.textContent.startsWith('audiobookUseExisting')));
-    const entry=[...document.querySelectorAll('.bs-tts-menu button')].find(node=>node.textContent.startsWith('audiobookUseExisting'));
+    await until(()=>document.querySelector('.bs-tts-dock'));
+    await until(()=>[...document.querySelectorAll('.bs-tts-panels button')].some(node=>node.textContent.startsWith('audiobookUseExisting')));
+    const entry=[...document.querySelectorAll('.bs-tts-panels button')].find(node=>node.textContent.startsWith('audiobookUseExisting'));
     entry.click();
     await until(()=>document.body.textContent.includes('audiobookUseConfirm('));
-    const confirm=[...document.querySelectorAll('.bs-tts-menu button')].find(node=>node.textContent==='audiobookUseConfirmAction');
+    const confirm=[...document.querySelectorAll('.bs-tts-panels button')].find(node=>node.textContent==='audiobookUseConfirmAction');
     check(!!confirm,'confirmation action');
     confirm.click();
     await until(()=>window.__audios.length>0&&window.__audios[0]._src!=='');
@@ -214,7 +214,7 @@ try {
 
   const liveSwitch = await evaluate(`(async()=>{
     window.__audioMs=60000;
-    const live=document.querySelector('.bs-tts-menu [aria-label="ttsPlay"]');
+    const live=document.querySelector('.bs-tts-dock [aria-label="ttsPlay"]');
     check(!!live,'live play button');
     live.click();
     await until(()=>window.__audios.length>1);

@@ -174,11 +174,19 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-settings-notice{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-success-primary)}
 .bs-settings-foot{justify-content:flex-end}
 .bs-settings-actions{display:flex;gap:8px}
-.bs-tts-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;display:flex;flex-direction:column;gap:8px;width:min(370px,calc(100vw - 28px));padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-tts-overlay{position:absolute;left:0;right:0;bottom:14px;z-index:9;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 12px;pointer-events:none}
+.bs-tts-dock{display:flex;align-items:center;gap:4px;max-width:min(780px,100%);min-width:0;padding:6px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 76%,transparent);backdrop-filter:blur(14px) saturate(140%);box-shadow:0 20px 44px -24px rgba(0,0,0,.65);pointer-events:auto}
+.bs-tts-status{flex:1;min-width:0;max-width:240px;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-panels{display:flex;flex-direction:column;gap:8px;width:min(420px,100%);pointer-events:auto}
 .bs-tts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
 .bs-tts-voice-readout{flex:0 1 auto;min-width:0;max-width:100%;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-tts-caption{min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
-.bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.bs-tts-caption{display:flex;flex-direction:column;gap:4px;max-width:min(680px,100%);padding:8px 10px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px) saturate(140%);box-shadow:0 16px 36px -24px rgba(0,0,0,.6);pointer-events:auto}
+.bs-tts-caption-head{display:flex;align-items:center;gap:6px}
+.bs-tts-caption-label{flex:1;min-width:0;font-size:10.5px;line-height:1.4;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-caption-close{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.bs-tts-caption-close:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-tts-caption-text{max-height:5.4em;overflow:hidden;font-size:13.5px;line-height:1.6;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px)}
 .bs-tts-file-open{justify-content:flex-start}
 .bs-tts-file-time{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
 .bs-tts-file-hint{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
@@ -329,7 +337,10 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
-  .bs-tts-menu{right:8px;left:8px;width:auto;padding:8px}
+  .bs-tts-overlay{padding:0 8px;bottom:10px}
+  .bs-tts-dock{max-width:100%;padding:5px 6px}
+  .bs-tts-status{max-width:none}
+  .bs-tts-panels{width:100%}
   .bs-settings-dialog{width:calc(100vw - 16px);max-height:88vh}
   .bs-settings-tabs{padding:0 12px 8px}
   .bs-settings-body{padding:10px 12px}
@@ -1938,7 +1949,7 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         // Batch finished; the reader decides what comes next (page or chapter).
         const driver = driverRef.current
-        if (driver === null) { setStatus('idle'); setCaption(''); return }
+        if (driver === null) { setStatus('idle'); return }
         setStatus('loading')
         let nextBatch
         try {
@@ -1951,8 +1962,9 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         if (runRef.current !== run) return
         if (nextBatch === null || nextBatch.length === 0) {
+          // Keep the last sentence on screen: after the queue ends the reader
+          // still needs to see where read-aloud stopped.
           setStatus('idle')
-          setCaption('')
           return
         }
         await playBatch(nextBatch, 0)
@@ -1971,7 +1983,6 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         if (batch === null || batch.length === 0) {
           setStatus('idle')
-          setCaption('')
           return
         }
         await playBatch(batch, 0)
@@ -2020,6 +2031,11 @@ html.bb-paged body table tr{break-inside:avoid}
         indexRef.current = 0
         driverRef.current = null
         setStatus('idle')
+        // The caption deliberately survives: "stopped" still shows what was
+        // being read, which is the only reliable position cue in paged mode.
+      }, [])
+
+      const clearCaption = useCallback(() => {
         setCaption('')
       }, [])
 
@@ -2069,7 +2085,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return {
         status, caption, error, settings, providers, secrets,
-        activeVoiceLabel, unlock, setLanguage, start, toggle, stop, prev: () => step(-1), next: () => step(1),
+        activeVoiceLabel, unlock, setLanguage, start, toggle, stop, clearCaption, prev: () => step(-1), next: () => step(1),
         saveSettings, refresh, applySettings,
         running: status === 'playing' || status === 'paused' || status === 'loading',
       }
@@ -2463,6 +2479,30 @@ html.bb-paged body table tr{break-inside:avoid}
       return secrets
     }
 
+    // Floating card showing the sentence read-aloud is on, or the last one it
+    // stopped at. It lives outside the control dock so the position cue remains
+    // after the controls are closed.
+    function ReaderSpeechCaption({ t, caption, status, onDismiss }) {
+      const live = status === 'playing' || status === 'paused' || status === 'loading'
+      return h(
+        'div',
+        { className: 'bs-tts-caption', role: 'status', 'aria-live': 'polite' },
+        h(
+          'div',
+          { className: 'bs-tts-caption-head' },
+          h('span', { className: 'bs-tts-caption-label' }, live ? t('ttsCaptionNow') : t('ttsCaptionLast')),
+          h('button', {
+            type: 'button',
+            className: 'bs-tts-caption-close',
+            onClick: onDismiss,
+            title: t('ttsHideText'),
+            'aria-label': t('ttsHideText'),
+          }, h(CloseIcon, { size: 12 })),
+        ),
+        h('div', { className: 'bs-tts-caption-text' }, caption),
+      )
+    }
+
     function ReadAloudBar({ t, readAloud, audiobook, onClose, onStart }) {
       const [voiceOpen, setVoiceOpen] = useState(false)
       const [fileConfirm, setFileConfirm] = useState(false)
@@ -2492,14 +2532,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [voiceOpen])
 
       if (settings === null) {
-        return h('div', { className: 'bs-tts-menu', role: 'dialog', 'aria-label': t('readAloud') },
-          h(
-            'div',
-            { className: 'bs-settings-head' },
-            h('span', { className: 'bs-settings-title' }, t('readAloud')),
-            h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
-          ),
-          h('div', { className: 'bs-tts-caption' }, t('ttsLoading')),
+        return h('div', { className: 'bs-tts-dock', role: 'toolbar', 'aria-label': t('readAloud') },
+          h(Spinner, { small: true }),
+          h('span', { className: 'bs-tts-status' }, t('ttsLoading')),
+          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
         )
       }
 
@@ -2519,18 +2555,85 @@ html.bb-paged body table tr{break-inside:avoid}
       }
 
       const label = provider ? provider.label : (settings.provider || '')
+      const statusText = status === 'error'
+        ? t('ttsFailed') + ': ' + readAloud.error
+        : status === 'loading'
+          ? t('ttsLoading')
+          : status === 'playing'
+            ? t('ttsPlaying')
+            : status === 'paused'
+              ? t('ttsPaused')
+              : readAloud.caption !== '' ? t('ttsStopped') : t('ttsIdle')
+      const panels = []
+      if (audiobook && audiobook.info !== null) {
+        panels.push(h('div', { className: 'bs-tts-file', key: 'audiobook' },
+          audiobook.status === 'playing' || audiobook.status === 'paused'
+            ? h(React.Fragment, null,
+                h('div', { className: 'bs-tts-controls' },
+                  h('button', {
+                    type: 'button', className: 'bs-icon-button',
+                    onClick: () => {
+                      if (audiobook.status === 'playing') audiobook.pause()
+                      else void audiobook.play()
+                    },
+                    title: audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+                    'aria-label': audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
+                  }, audiobook.status === 'playing' ? h(PauseIcon) : h(PlayIcon)),
+                  h('span', { className: 'bs-tts-file-time' },
+                    formatDuration(audiobook.current) + ' / ' + formatDuration(audiobook.duration || audiobook.info.seconds || 0)),
+                  h('button', {
+                    type: 'button', className: 'bs-icon-button', onClick: () => audiobook.stop(),
+                    title: t('audiobookStop'), 'aria-label': t('audiobookStop'),
+                  }, h(CloseIcon)),
+                ),
+                h('p', { className: 'bs-tts-file-hint' }, t('audiobookFileHint')),
+                audiobook.error !== '' ? h('p', { className: 'bs-tts-file-hint bs-tts-error' }, audiobook.error) : null,
+              )
+            : fileConfirm
+              ? h(React.Fragment, null,
+                  h('p', { className: 'bs-tts-file-hint' },
+                    t('audiobookUseConfirm', {
+                      seconds: formatDuration(audiobook.info.seconds || 0),
+                      size: formatBytes(audiobook.info.bytes || 0),
+                    })),
+                  h('div', { className: 'bs-tts-controls' },
+                    h('button', { type: 'button', className: 'bs-button', onClick: () => setFileConfirm(false) }, t('cancel')),
+                    h('button', {
+                      type: 'button', className: 'bs-button bs-button-primary',
+                      onClick: () => {
+                        setFileConfirm(false)
+                        readAloud.stop()
+                        void audiobook.play()
+                      },
+                    }, t('audiobookUseConfirmAction')),
+                  ),
+                )
+              : h('button', {
+                  type: 'button', className: 'bs-button bs-tts-file-open',
+                  onClick: () => setFileConfirm(true),
+                }, t('audiobookUseExisting', {
+                  seconds: formatDuration(audiobook.info.seconds || 0),
+                  size: formatBytes(audiobook.info.bytes || 0),
+                })),
+        ))
+      }
+      if (voiceOpen && draft !== null) {
+        panels.push(h('div', { className: 'bs-tts-settings', key: 'voice', role: 'dialog', 'aria-label': t('ttsVoice') },
+          h(TtsConfigFields, { t, providers: readAloud.providers, secrets: readAloud.secrets, draft, onChange: setDraft }),
+          saveError !== '' ? h('p', { className: 'bs-tts-error' }, saveError) : null,
+          h('div', { className: 'bs-tts-actions' },
+            h('button', { type: 'button', className: 'bs-button', onClick: () => setVoiceOpen(false), disabled: saving }, t('cancel')),
+            h('button', { type: 'button', className: 'bs-button bs-button-primary', onClick: save, disabled: saving }, saving ? t('saving') : t('save')),
+          ),
+        ))
+      }
       return h(
-        'div',
-        { className: 'bs-tts-menu', role: 'dialog', 'aria-label': t('readAloud') },
+        React.Fragment,
+        null,
+        panels.length > 0 ? h('div', { className: 'bs-tts-panels' }, panels) : null,
         h(
           'div',
-          { className: 'bs-settings-head' },
-          h('span', { className: 'bs-settings-title' }, t('readAloud')),
-          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
-        ),
-        h(
-          'div',
-          { className: 'bs-tts-controls' },
+          { className: 'bs-tts-dock', role: 'toolbar', 'aria-label': t('readAloud') },
           h('button', {
             type: 'button', className: 'bs-icon-button',
             onClick: () => {
@@ -2554,84 +2657,7 @@ html.bb-paged body table tr{break-inside:avoid}
             type: 'button', className: 'bs-icon-button', onClick: readAloud.next,
             title: t('ttsNext'), 'aria-label': t('ttsNext'),
           }, h(ChevronRightIcon, { size: 15 })),
-          readAloud.activeVoiceLabel !== ''
-            ? h('span', { className: 'bs-tts-voice-readout', title: readAloud.activeVoiceLabel }, readAloud.activeVoiceLabel)
-            : null,
-        ),
-        h('div', { className: 'bs-tts-caption', title: readAloud.caption }, status === 'error'
-          ? h('span', { className: 'bs-tts-error' }, `${t('ttsFailed')}: ${readAloud.error}`)
-          : status === 'loading' ? t('ttsLoading') : readAloud.caption || t('ttsIdle')),
-        audiobook && audiobook.info !== null
-          ? h(
-              'div',
-              { className: 'bs-tts-file' },
-              audiobook.status === 'playing' || audiobook.status === 'paused'
-                ? h(
-                    React.Fragment,
-                    null,
-                    h(
-                      'div',
-                      { className: 'bs-tts-controls' },
-                      h('button', {
-                        type: 'button',
-                        className: 'bs-icon-button',
-                        onClick: () => {
-                          if (audiobook.status === 'playing') audiobook.pause()
-                          else void audiobook.play()
-                        },
-                        title: audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
-                        'aria-label': audiobook.status === 'playing' ? t('ttsPause') : t('ttsPlay'),
-                      }, audiobook.status === 'playing' ? h(PauseIcon) : h(PlayIcon)),
-                      h('span', { className: 'bs-tts-file-time' },
-                        `${formatDuration(audiobook.current)} / ${formatDuration(audiobook.duration || audiobook.info.seconds || 0)}`),
-                      h('button', {
-                        type: 'button',
-                        className: 'bs-icon-button',
-                        onClick: () => audiobook.stop(),
-                        title: t('audiobookStop'),
-                        'aria-label': t('audiobookStop'),
-                      }, h(CloseIcon)),
-                    ),
-                    h('p', { className: 'bs-tts-file-hint' }, t('audiobookFileHint')),
-                    audiobook.error !== '' ? h('p', { className: 'bs-tts-file-hint bs-tts-error' }, audiobook.error) : null,
-                  )
-                : fileConfirm
-                  ? h(
-                      React.Fragment,
-                      null,
-                      h('p', { className: 'bs-tts-file-hint' },
-                        t('audiobookUseConfirm', {
-                          seconds: formatDuration(audiobook.info.seconds || 0),
-                          size: formatBytes(audiobook.info.bytes || 0),
-                        })),
-                      h(
-                        'div',
-                        { className: 'bs-tts-controls' },
-                        h('button', { type: 'button', className: 'bs-button', onClick: () => setFileConfirm(false) }, t('cancel')),
-                        h('button', {
-                          type: 'button',
-                          className: 'bs-button bs-button-primary',
-                          onClick: () => {
-                            setFileConfirm(false)
-                            readAloud.stop()
-                            void audiobook.play()
-                          },
-                        }, t('audiobookUseConfirmAction')),
-                      ),
-                    )
-                  : h('button', {
-                      type: 'button',
-                      className: 'bs-button bs-tts-file-open',
-                      onClick: () => setFileConfirm(true),
-                    }, t('audiobookUseExisting', {
-                      seconds: formatDuration(audiobook.info.seconds || 0),
-                      size: formatBytes(audiobook.info.bytes || 0),
-                    })),
-            )
-          : null,
-        h(
-          'div',
-          { className: 'bs-tts-controls' },
+          h('span', { className: 'bs-tts-status', title: statusText }, statusText),
           h(
             'label',
             { className: 'bs-tts-speed' },
@@ -2641,27 +2667,16 @@ html.bb-paged body table tr{break-inside:avoid}
               value: String(speed),
               'aria-label': t('ttsSpeed'),
               onChange: (event) => { void readAloud.saveSettings({ speed: Number(event.target.value) }) },
-            }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, `${value}×`))),
+            }, [0.75, 1, 1.25, 1.5, 2].map((value) => h('option', { key: value, value: String(value) }, value + '×'))),
           ),
           h('button', {
             type: 'button', className: 'bs-button bs-tts-voice', onClick: () => setVoiceOpen((value) => !value),
-            title: t('ttsVoice'), 'aria-label': t('ttsVoice'), 'aria-expanded': voiceOpen,
+            title: readAloud.activeVoiceLabel !== '' ? label + ' · ' + readAloud.activeVoiceLabel : t('ttsVoice'),
+            'aria-label': t('ttsVoice'),
+            'aria-expanded': voiceOpen,
           }, label),
+          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
         ),
-        voiceOpen && draft !== null
-          ? h(
-              'div',
-              { className: 'bs-tts-settings', role: 'dialog', 'aria-label': t('ttsVoice') },
-              h(TtsConfigFields, { t, providers: readAloud.providers, secrets: readAloud.secrets, draft, onChange: setDraft }),
-              saveError !== '' ? h('p', { className: 'bs-tts-error' }, saveError) : null,
-              h(
-                'div',
-                { className: 'bs-tts-actions' },
-                h('button', { type: 'button', className: 'bs-button', onClick: () => setVoiceOpen(false), disabled: saving }, t('cancel')),
-                h('button', { type: 'button', className: 'bs-button bs-button-primary', onClick: save, disabled: saving }, saving ? t('saving') : t('save')),
-              ),
-            )
-          : null,
       )
     }
 
@@ -3155,26 +3170,35 @@ html.bb-paged body table tr{break-inside:avoid}
               ),
             ),
         children,
-        focusMode || !speech || !ttsOpen
+        focusMode || !speech
           ? null
           : h(
-              React.Fragment,
-              null,
-              h('div', { className: 'bs-popover-backdrop', onClick: () => setTtsOpen(false) }),
-              h(ReadAloudBar, {
-                t,
-                readAloud: speech.readAloud,
-                audiobook,
-                onStart: () => {
-                  audiobook.stop()
-                  speech.start()
-                },
-                onClose: () => {
-                  speech.readAloud.stop()
-                  audiobook.stop()
-                  setTtsOpen(false)
-                },
-              }),
+              'div',
+              { className: 'bs-tts-overlay', 'data-dock': ttsOpen ? 'open' : 'closed' },
+              speech.readAloud.caption !== ''
+                ? h(ReaderSpeechCaption, {
+                    t,
+                    caption: speech.readAloud.caption,
+                    status: speech.readAloud.status,
+                    onDismiss: speech.readAloud.clearCaption,
+                  })
+                : null,
+              ttsOpen
+                ? h(ReadAloudBar, {
+                    t,
+                    readAloud: speech.readAloud,
+                    audiobook,
+                    onStart: () => {
+                      audiobook.stop()
+                      speech.start()
+                    },
+                    onClose: () => {
+                      speech.readAloud.stop()
+                      audiobook.stop()
+                      setTtsOpen(false)
+                    },
+                  })
+                : null,
             ),
         focusMode ? null : progress ? h(ReadingProgress, { t, percent: progress.percent, onSeek: progress.onSeek }) : null,
         focusMode
@@ -8724,6 +8748,12 @@ html.bb-paged body table tr{break-inside:avoid}
       ttsKeySet: 'API key is set',
       ttsLoading: 'Preparing audio…',
       ttsIdle: 'Read aloud is off',
+      ttsPlaying: 'Reading…',
+      ttsPaused: 'Paused',
+      ttsStopped: 'Stopped',
+      ttsCaptionNow: 'Reading now',
+      ttsCaptionLast: 'Stopped reading at',
+      ttsHideText: 'Hide reading text',
       ttsFailed: 'Read aloud failed',
       ttsNotReady: 'Read-aloud settings are still loading.',
       ttsChapterTimeout: 'The next chapter did not finish loading.',
@@ -9096,6 +9126,12 @@ html.bb-paged body table tr{break-inside:avoid}
       ttsKeySet: 'API Key 已设置',
       ttsLoading: '正在准备音频…',
       ttsIdle: '朗读已停止',
+      ttsPlaying: '朗读中',
+      ttsPaused: '已暂停',
+      ttsStopped: '已停止',
+      ttsCaptionNow: '正在朗读',
+      ttsCaptionLast: '朗读停止于',
+      ttsHideText: '隐藏朗读文本',
       ttsFailed: '朗读失败',
       ttsNotReady: '朗读设置尚未载入。',
       ttsChapterTimeout: '下一章没有加载完成。',

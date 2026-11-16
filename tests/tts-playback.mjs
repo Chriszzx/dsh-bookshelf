@@ -89,11 +89,11 @@ window.mount=()=>ReactDOM.flushSync(()=>root.render(React.createElement(Panel,{t
 window.wait=ms=>new Promise(r=>setTimeout(r,ms));
 window.until=async(fn)=>{const start=Date.now();while(Date.now()-start<15000){if(fn())return;await wait(40)}throw Error('Timed out: '+fn)};
 window.check=(condition,message)=>{if(!condition)throw Error(message)};
-window.caption=()=>document.querySelector('.bs-tts-caption')?.textContent||'';
-window.barButton=(label)=>document.querySelector('.bs-tts-menu [aria-label="'+label+'"]');
-window.barClick=(label)=>{const node=barButton(label);if(!node)throw Error('missing menu button '+label+' menu='+Boolean(document.querySelector('.bs-tts-menu'))+' caption='+caption());node.click()};
+window.caption=()=>document.querySelector('.bs-tts-caption-text')?.textContent||'';
+window.barButton=(label)=>document.querySelector('.bs-tts-dock [aria-label="'+label+'"]');
+window.barClick=(label)=>{const node=barButton(label);if(!node)throw Error('missing menu button '+label+' menu='+Boolean(document.querySelector('.bs-tts-dock'))+' caption='+caption());node.click()};
 window.openBook=async(title)=>{const card=[...document.querySelectorAll('.bs-card')].find(node=>node.querySelector('.bs-book-title')?.textContent===title);check(!!card,'book card '+title);card.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-reader'))};
-window.openTts=async()=>{if(!document.querySelector('.bs-tts-menu')){document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click()}await until(()=>document.querySelector('.bs-tts-menu'))};
+window.openTts=async()=>{if(!document.querySelector('.bs-tts-dock')){document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click()}await until(()=>document.querySelector('.bs-tts-dock'))};
 window.startReading=async()=>{await openTts();await until(()=>barButton('ttsPlay')||barButton('ttsPause'));if(barButton('ttsPlay'))barClick('ttsPlay')};
 window.audioEvents=(type)=>window.__audio.filter(item=>!type||item.type===type);
 mount();
@@ -230,9 +230,9 @@ try {
   // The in-reader panel used to reset its draft on every render, so every
   // change snapped back to the saved settings.
   assert.equal(await evaluate(`(async()=>{
-    if(!document.querySelector('.bs-tts-menu')){
+    if(!document.querySelector('.bs-tts-dock')){
       document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
-      await until(()=>document.querySelector('.bs-tts-menu'));
+      await until(()=>document.querySelector('.bs-tts-dock'));
     }
     await until(()=>document.querySelector('.bs-tts-voice'));
     const voiceButton=document.querySelector('.bs-tts-voice');
@@ -261,12 +261,12 @@ try {
     // Slow the fake player and restart the queue so this block cannot race the
     // end of the previous one.
     window.__audioMs=2000;
-    if(document.querySelector('.bs-tts-menu')){
+    if(document.querySelector('.bs-tts-dock')){
       barClick('dismiss');
-      await until(()=>!document.querySelector('.bs-tts-menu'));
+      await until(()=>!document.querySelector('.bs-tts-dock'));
     }
     document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
-    await until(()=>document.querySelector('.bs-tts-menu'));
+    await until(()=>document.querySelector('.bs-tts-dock'));
     if(!barButton('ttsPause')&&barButton('ttsPlay'))barClick('ttsPlay');
     await until(()=>barButton('ttsPause'));
     barClick('ttsPause');
@@ -282,13 +282,23 @@ try {
     return true;
   })()`), true)
 
-  // Closing the bar stops playback and hides the controls.
+  // Closing the dock stops playback but keeps the last sentence on screen: in
+  // paged mode that text is the only reliable position cue. The floating text
+  // can be dismissed on its own.
   assert.equal(await evaluate(`(async()=>{
+    const before=caption();
+    check(before.length>0,'a caption must be visible while playing: '+before);
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-menu'));
-    const before=window.audioEvents('play').length;
+    await until(()=>!document.querySelector('.bs-tts-dock'));
+    const shown=document.querySelector('.bs-tts-caption-text');
+    check(!!shown,'caption overlay must survive stopping read-aloud');
+    check(shown.textContent===before,'stopped caption differs: '+before+' -> '+shown.textContent);
+    check(document.querySelector('.bs-tts-caption-label').textContent==='ttsCaptionLast','stopped label');
+    const plays=window.audioEvents('play').length;
     await wait(200);
-    check(window.audioEvents('play').length===before,'closing must stop the queue');
+    check(window.audioEvents('play').length===plays,'closing must stop the queue');
+    document.querySelector('.bs-tts-caption-close').click();
+    await until(()=>!document.querySelector('.bs-tts-caption'));
     check(window.errors.length===0,'console errors: '+window.errors.join(' | '));
     return true;
   })()`), true)
@@ -303,7 +313,7 @@ try {
     await until(()=>document.querySelector('.bs-tts-settings'));
     [...document.querySelectorAll('.bs-tts-settings .bs-button')].find(node=>node.textContent==='cancel').click();
     await until(()=>!document.querySelector('.bs-tts-settings'));
-    const select=document.querySelector('.bs-tts-menu .bs-tts-speed select');
+    const select=document.querySelector('.bs-tts-dock .bs-tts-speed select');
     const setter=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value').set;
     setter.call(select,'1.5');select.dispatchEvent(new Event('change',{bubbles:true}));
     await wait(400);
@@ -316,7 +326,7 @@ try {
   // PDF: reading advances page by page automatically.
   assert.equal(await evaluate(`(async()=>{
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-menu'));
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('Mixed');
@@ -330,9 +340,9 @@ try {
   // An English book switches to an English voice automatically.
   spoken.length = 0
   assert.equal(await evaluate(`(async()=>{
-    const dismiss=document.querySelector('.bs-tts-menu [aria-label="dismiss"]');
+    const dismiss=document.querySelector('.bs-tts-dock [aria-label="dismiss"]');
     if(dismiss)dismiss.click();
-    await until(()=>!document.querySelector('.bs-tts-menu'));
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('English');
@@ -352,8 +362,8 @@ try {
   })
   spoken.length = 0
   assert.equal(await evaluate(`(async()=>{
-    document.querySelector('.bs-tts-menu [aria-label="dismiss"]')?.click();
-    await until(()=>!document.querySelector('.bs-tts-menu'));
+    document.querySelector('.bs-tts-dock [aria-label="dismiss"]')?.click();
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('English');
@@ -410,11 +420,20 @@ try {
     window.__audioMs=6000;
     await startReading();
     await wait(900);
-    check(document.querySelector('.bs-tts-menu'),'read-aloud menu is open');
+    check(document.querySelector('.bs-tts-dock'),'read-aloud dock is open');
+    const layerStyle=getComputedStyle(document.querySelector('.bs-tts-overlay'));
+    check(layerStyle.position==='absolute','controls must float above the page');
+    const dockStyle=getComputedStyle(document.querySelector('.bs-tts-dock'));
+    check(parseFloat(dockStyle.borderTopLeftRadius)>=20,'dock must be a rounded bar');
+    check(dockStyle.backdropFilter.includes('blur'),'dock must be translucent');
+    const overlay=document.querySelector('.bs-tts-caption');
+    check(!!overlay,'caption overlay shows the selected sentence');
+    check(overlay.getBoundingClientRect().width>0,'caption overlay is visible');
+    check(document.querySelector('.bs-tts-caption-label').textContent==='ttsCaptionNow','live label');
     check(frameHeight()===beforeHeight,'read-aloud menu resized the reading area: '+beforeHeight+' -> '+frameHeight());
     check(pageNumber()===beforePage,'starting read-aloud moved the page: '+beforePage+' -> '+pageNumber());
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-menu'));
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     await wait(500);
     check(frameHeight()===beforeHeight,'closing read-aloud resized the reading area');
     check(pageNumber()===beforePage,'closing read-aloud moved the page: '+beforePage+' -> '+pageNumber());
@@ -435,7 +454,7 @@ try {
     }
     const beforeClose=pageNumber();
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-menu'));
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     await wait(700);
     check(pageNumber()===beforeClose,'closing read-aloud moved the page: '+beforeClose+' -> '+pageNumber());
     return true;

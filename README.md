@@ -68,9 +68,9 @@ The gear icon opens **Shelf settings** with three tabs: Reading (fonts, size, ma
 
 齿轮打开**书架设置**窗口，三个标签页：阅读（字体、字号、边距、模式、主题）、朗读（后端、按语言选音色、语速、API 字段、缓存）、其他（讨论工作区、Apple Books 导入）。
 
-In the reader, the speaker button opens a floating read-aloud menu with start/pause, previous/next sentence, speed, voice and close. It floats above the page, so opening it does not reflow or turn the page.
+In the reader, the speaker button opens a translucent rounded control dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. A floating caption card above it shows the sentence being read; when read-aloud stops, the card keeps the last sentence and labels it as the stopping point, so the reading position stays visible. Both float above the page and never reflow it, and the caption can be dismissed on its own.
 
-阅读器里点朗读按钮打开浮动朗读菜单，内含开始/暂停、上/下句、语速、音色与关闭。菜单浮在页面上方，打开时不会触发重排或翻页。
+阅读器里点朗读按钮会在页面底部打开半透明圆角控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。上方浮层显示正在朗读的句子；停止朗读后仍保留最后一句并标注为停止位置，方便定位阅读进度。两者都浮在页面上方、不会引起重排，朗读文本浮层可单独关闭。
 
 ## Data / 数据
 
