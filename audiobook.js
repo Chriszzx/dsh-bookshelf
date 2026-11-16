@@ -97,13 +97,19 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     const meta = await readJson(metaPath(id))
     let ext = meta && (meta.ext === '.wav' || meta.ext === '.mp3') ? meta.ext : null
     if (ext === null) {
-      try {
-        await fs.stat(audioPath(id, '.wav'))
-        ext = '.wav'
-      } catch (error) {
-        if (!error || error.code !== 'ENOENT') throw error
-        return null
+      // Older renders wrote book.wav with a meta file that had no extension;
+      // probe both audio names instead of assuming WAV so a finished render can
+      // never look missing between the audio rename and the meta write.
+      for (const candidate of ['.wav', '.mp3']) {
+        try {
+          await fs.stat(audioPath(id, candidate))
+          ext = candidate
+          break
+        } catch (error) {
+          if (!error || error.code !== 'ENOENT') throw error
+        }
       }
+      if (ext === null) return null
     }
     try {
       const info = await fs.stat(audioPath(id, ext))
@@ -256,11 +262,13 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
       handle = null
       await fs.rm(audioPath(id, ext === '.wav' ? '.mp3' : '.wav'), { force: true }).catch(() => undefined)
       await replaceFile(temporary, audioPath(id, ext))
-      job.status = 'done'
-      job.finishedAt = new Date().toISOString()
+      const finishedAt = new Date().toISOString()
       const seconds = ext === '.wav' && wavFormat
         ? Math.round((dataBytes / (wavFormat.sampleRate * wavFormat.channels * (wavFormat.bitsPerSample / 8))) * 10) / 10
         : planValue && Number.isFinite(planValue.durationSeconds) ? planValue.durationSeconds : null
+      // Publish the meta before reporting completion: `file()` resolves the
+      // audio through this file, so flipping the state first would open a window
+      // where a finished render looks missing to a concurrent reader.
       await writeJson(metaPath(id), {
         provider: job.provider,
         voice: job.voice,
@@ -271,8 +279,10 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
         ext,
         mime: ext === '.wav' ? 'audio/wav' : 'audio/mpeg',
         format: ext.slice(1),
-        finishedAt: job.finishedAt,
+        finishedAt,
       })
+      job.finishedAt = finishedAt
+      job.status = 'done'
     } catch (error) {
       job.status = job.cancelled ? 'cancelled' : 'failed'
       job.error = error instanceof Error ? error.message : String(error)

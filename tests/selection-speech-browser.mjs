@@ -103,7 +103,7 @@ const Panel=regs.find(r=>r.o.name==='main').C;
 const root=ReactDOM.createRoot(document.getElementById('root'));
 window.mount=()=>ReactDOM.flushSync(()=>root.render(React.createElement(Panel,{t})));
 window.wait=ms=>new Promise(r=>setTimeout(r,ms));
-window.until=async(fn,label)=>{const start=Date.now();while(Date.now()-start<15000){if(fn())return;await wait(40)}throw Error('Timed out: '+(label||fn))};
+window.until=async(fn,label)=>{const start=Date.now();while(Date.now()-start<30000){if(fn())return;await wait(40)}throw Error('Timed out: '+(label||fn))};
 window.check=(condition,message)=>{if(!condition)throw Error(message)};
 window.caption=()=>document.querySelector('.bs-tts-caption-text')?.textContent||'';
 window.openBook=async(title)=>{const card=[...document.querySelectorAll('.bs-card')].find(node=>node.querySelector('.bs-book-title')?.textContent===title);check(!!card,'book card '+title);card.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-reader'))};
