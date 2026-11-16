@@ -1,6 +1,11 @@
 window.__ModuleLoader__.load({
   id: 'dsh-bookshelf',
   factory(require) {
+    // ===== [prelude] =====
+    // Plugin identity, storage keys and the constants every later section
+    // reads. This file is a classic script: the factory receives React and
+    // nothing else, so browser modules are loaded with dynamic imports.
+
     const React = require('react')
     const h = React.createElement
     const { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } = React
@@ -36,6 +41,11 @@ window.__ModuleLoader__.load({
     // Share of the book that counts as its last page; must match the Host's
     // FINISHED_PERCENT in tags.js.
     const FINISHED_PERCENT = 0.995
+
+    // ===== [styles] =====
+    // App CSS plus the reading typography tables and the DSH theme-token
+    // resolution used to paint the reading frame. This stays inline: the
+    // first paint needs it synchronously.
 
     const CSS = `
 .bs-root{--bs-top-clearance:0px;--bs-popover-top:calc(var(--bs-top-clearance) + 56px);box-sizing:border-box;position:relative;display:flex;flex-direction:column;container:bookshelf / inline-size;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
@@ -684,7 +694,9 @@ html.bb-paged body table tr{break-inside:avoid}
       return { ...READING_THEMES[dark ? 'dark' : 'light'], mode: 'auto' }
     }
 
-    // ---------------------------------------------------------------- helpers
+    // ----- [prelude:helpers] -----
+    // Transport/fetch wrappers, storage helpers and small formatting helpers
+    // shared by the shelf and both readers.
 
     function transportBase() {
       // The Web page and the Desktop application both forward relative URLs:
@@ -950,7 +962,9 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
-    // ------------------------------------------------------------- module loads
+    // ----- [prelude:module-loads] -----
+    // Browser assets are imported on demand through the Host asset route.
+    // Each loader caches one promise and retries after a failure.
 
     let pdfjsPromise = null
     let epubModulePromise = null
@@ -1053,7 +1067,52 @@ html.bb-paged body table tr{break-inside:avoid}
       return epubModulePromise
     }
 
-    // ------------------------------------------------------------------- icons
+    // Dynamic browser modules shared by the readers' asynchronous paths. A
+    // record keeps the loaded module object so later call sites can read it
+    // synchronously after the reader awaited the preload; the cached promise
+    // deduplicates concurrent loads and is dropped on failure so a retry
+    // fetches the module again.
+    const CLIENT_LIB_NAMES = ['text-index', 'clipboard']
+    const clientLibs = new Map()
+
+    function loadClientLib(base, name) {
+      let record = clientLibs.get(name)
+      if (record === undefined) {
+        record = { module: null, promise: null }
+        clientLibs.set(name, record)
+      }
+      if (record.module !== null) return Promise.resolve(record.module)
+      if (record.promise === null) {
+        record.promise = import(absoluteServiceUrl(base, `${ASSET_ROOT}/lib/${name}.mjs?v=${ASSET_VERSION}`)).then((module) => {
+          record.module = module
+          return module
+        }).catch((error) => {
+          record.promise = null
+          throw error
+        })
+      }
+      return record.promise
+    }
+
+    // Read a preloaded module object synchronously (render and event paths).
+    function clientLib(name) {
+      const record = clientLibs.get(name)
+      return record === undefined ? null : record.module
+    }
+
+    // Warm browser modules the reader's async paths need. A failed import is
+    // reported once and tolerated: the reader still opens, and a call site that
+    // needs the module retries the load instead of failing the whole open.
+    function preloadClientLibs(base, names = CLIENT_LIB_NAMES) {
+      return Promise.all(names.map((name) => loadClientLib(base, name))).catch((failure) => {
+        console.error('bookshelf: client library preload failed', failure)
+        return []
+      })
+    }
+
+    // ===== [ui] =====
+    // Icons and the shared React widgets (reading controls, speech controls,
+    // dialogs) that the readers and the shelf compose.
 
     const SIDEBAR_CSS = `
 .bsb-reader{box-sizing:border-box;display:flex;flex-direction:column;min-width:0;height:100%;color:var(--dsw-alias-label-primary);font:inherit}
@@ -1257,7 +1316,8 @@ html.bb-paged body table tr{break-inside:avoid}
       return h('span', { className: small ? 'bs-spinner bs-spinner-small' : 'bs-spinner', 'aria-hidden': true })
     }
 
-    // ------------------------------------------------------------------ reader
+    // ----- [hooks:state] -----
+    // Per-book reader state: initial load, optimistic save queue, exit flush.
 
     function useReaderState(base, book) {
       const [state, setState] = useState(null)
@@ -1340,6 +1400,10 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return { state, loaded: state !== null, stateRef, save, flush }
     }
+
+    // ----- [ui:reader] -----
+    // Reader chrome widgets: progress slider, bookmarks list and the settings
+    // field groups shared by the popover and the shelf settings dialog.
 
     function ReadingProgress({ t, percent, onSeek }) {
       const trackRef = useRef(null)
@@ -1745,7 +1809,9 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    // ------------------------------------------------------------ read aloud
+    // ===== [hooks] =====
+    // Read-aloud state machine, the speech helpers that stay synchronous and
+    // the speech controls bound to it.
     // The Host owns synthesis and caching; the browser walks the text into
     // sentences, requests one utterance at a time, and follows along by turning
     // pages and advancing chapters.
@@ -1774,80 +1840,6 @@ html.bb-paged body table tr{break-inside:avoid}
     const TTS_TEST_TIMEOUT_MS = 12_000
     const TTS_SENTENCE_TIMEOUT_MS = 30_000
     const isTimeoutFailure = (failure) => failure instanceof Error && (failure.name === 'TimeoutError' || failure.name === 'AbortError')
-
-    const SPEECH_SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'])
-    const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/
-
-    // Join PDF text runs without inserting spaces between CJK characters.
-    function joinPdfItems(items) {
-      let out = ''
-      let previous = ''
-      for (const item of items || []) {
-        const value = typeof item.str === 'string' ? item.str : ''
-        if (value === '') continue
-        if (out !== '' && item.hasEOL) out += '\n'
-        else if (out !== '' && !CJK_RE.test(previous.slice(-1)) && !CJK_RE.test(value.slice(0, 1))) out += ' '
-        out += value
-        previous = value
-      }
-      return out
-    }
-
-    // Flatten the chapter into whitespace-normalised text plus a per-character
-    // map back to (text node, offset). Sentences come from innerText, where block
-    // boundaries become newlines, so matching has to ignore whitespace layout.
-    function buildSpeechIndex(doc) {
-      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
-      let flat = ''
-      const entries = []
-      let node
-      while ((node = walker.nextNode())) {
-        const parent = node.parentElement
-        if (parent !== null && SPEECH_SKIP.has(parent.tagName)) continue
-        const value = node.nodeValue || ''
-        for (let offset = 0; offset < value.length; offset += 1) {
-          const character = value[offset]
-          if (/\s/u.test(character)) {
-            // One space stands for any run of layout whitespace.
-            if (flat === '' || flat[flat.length - 1] === ' ') continue
-            flat += ' '
-            entries.push({ node, offset })
-            continue
-          }
-          flat += character
-          entries.push({ node, offset })
-        }
-      }
-      return { flat, entries }
-    }
-
-    function speechRangeFor(index, sentence, cursor) {
-      const target = sentence.replace(/\s+/gu, ' ').trim()
-      if (target === '' || index.entries.length === 0) return { range: null, cursor }
-      const at = index.flat.indexOf(target, cursor)
-      if (at < 0) return { range: null, cursor }
-      const first = index.entries[at]
-      const last = index.entries[Math.min(index.entries.length - 1, at + target.length - 1)]
-      const range = first && first.node.ownerDocument.createRange()
-      if (!range) return { range: null, cursor }
-      range.setStart(first.node, first.offset)
-      range.setEnd(last.node, last.offset + 1)
-      return { range, cursor: at + target.length }
-    }
-
-    // One index per chapter, then a full-sentence range for every sentence so
-    // the highlight covers the whole utterance instead of just its opening.
-    function buildSpeechBatches(doc, sentences) {
-      const index = buildSpeechIndex(doc)
-      let cursor = 0
-      const batches = []
-      for (const sentence of sentences) {
-        const found = speechRangeFor(index, sentence, cursor)
-        cursor = found.cursor
-        batches.push({ text: sentence, range: found.range })
-      }
-      return batches
-    }
 
     // Read-aloud follows the book's own language when the provider offers a
     // matching voice: declared EPUB metadata wins, otherwise a cheap script
@@ -2371,6 +2363,9 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
+    // ----- [ui:speech] -----
+    // Provider presets, voice picker, TTS settings fields and the caption bar.
+
     // Shared read-aloud settings fields: the in-reader panel and the shelf
     // settings window render the same controls from the same draft shape.
     const OPENAI_TTS_PRESETS = [
@@ -2783,30 +2778,6 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    async function writeClipboard(text) {
-      try {
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-          await navigator.clipboard.writeText(text)
-          return true
-        }
-      } catch {
-        // Permission denied: fall through to the legacy path.
-      }
-      try {
-        const area = document.createElement('textarea')
-        area.value = text
-        area.setAttribute('readonly', '')
-        area.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0'
-        document.body.appendChild(area)
-        area.select()
-        const copied = document.execCommand('copy')
-        area.remove()
-        return copied
-      } catch {
-        return false
-      }
-    }
-
     // Reader-owned menu for a text selection: the desktop menu only offers Copy,
     // so the reader adds citation copy, select-all and reading the selection.
     function SelectionMenu({ t, menu, onClose, onCopy, onCopyCite, onSelectAll, onSpeak }) {
@@ -3020,6 +2991,10 @@ html.bb-paged body table tr{break-inside:avoid}
         ),
       )
     }
+
+    // ----- [ui:dialogs] -----
+    // Shelf settings dialog (reading/speech/other tabs) and the audiobook file
+    // loader that follows it.
 
     // The shelf settings used to be a popover; it now opens as a window with
     // tabs because reading, read-aloud and workspace options no longer fit.
@@ -3363,6 +3338,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
+    // ===== [chrome] =====
+    // Reader shell: top bar, aside, read-aloud dock, selection menu and the
+    // overlay chrome they open.
+
     function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
@@ -3613,6 +3592,9 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    // ----- [hooks:theme] -----
+    // Repaint the reading palette when DSH switches theme.
+
     function useThemeTick() {
       const [tick, setTick] = useState(0)
       useEffect(() => {
@@ -3627,6 +3609,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [])
       return tick
     }
+
+    // ===== [frame] =====
+    // Reading-frame primitives: palette painting, paged columns and page
+    // metrics shared by the EPUB and PDF readers.
 
     function paintFrame(documentNode, settings) {
       if (!documentNode || !documentNode.documentElement) return
@@ -3742,7 +3728,9 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
-    // --------------------------------------------------------------- PDF view
+    // ===== [reader] =====
+    // PDF reader: page rendering, zoom/fit modes, bookmarks and read-aloud page
+    // batches.
 
     function PdfPage({ pdfDocument, pageNumber, pageWidth, zoom, t }) {
       const holderRef = useRef(null)
@@ -3979,7 +3967,8 @@ html.bb-paged body table tr{break-inside:avoid}
         setPageAspect(0)
         ;(async () => {
           try {
-            pdfjs = await loadPdfjs(base)
+            const [pdfjsModule] = await Promise.all([loadPdfjs(base), preloadClientLibs(base, ['text-index'])])
+            pdfjs = pdfjsModule
             const response = await fetch(resourceUrl(base, `${API_ROOT}/books/${book.id}/file`))
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
             const data = new Uint8Array(await response.arrayBuffer())
@@ -4445,11 +4434,15 @@ html.bb-paged body table tr{break-inside:avoid}
         if (pdfDocument === null) return null
         const total = pdfDocument.numPages
         const modulePromise = loadTtsSentences(base)
+        // The reader awaited preloadClientLibs() before opening, so the text
+        // index module object is available synchronously here.
+        const textIndex = clientLib('text-index')
         // A PDF rarely declares a language: read the first page and detect it.
         void (async () => {
           try {
+            if (textIndex === null) return
             const firstPage = await pdfDocument.getPage(Math.min(total, Math.max(1, currentPageRef.current)))
-            const detected = detectSpeechLanguage(joinPdfItems((await firstPage.getTextContent()).items))
+            const detected = detectSpeechLanguage(textIndex.joinPdfItems((await firstPage.getTextContent()).items))
             if (detected !== '') {
               readAloud.setLanguage(detected)
               setSpeechLanguage(detected)
@@ -4460,9 +4453,10 @@ html.bb-paged body table tr{break-inside:avoid}
         })()
         const batchForPage = async (page) => {
           const module = await modulePromise
+          if (textIndex === null) throw new Error(t('ttsFailed'))
           const pdfPage = await pdfDocument.getPage(page)
           const content = await pdfPage.getTextContent()
-          const sentences = module.splitSentences(joinPdfItems(content.items))
+          const sentences = module.splitSentences(textIndex.joinPdfItems(content.items))
           return sentences.map((text) => ({
             text,
             enter: async () => {
@@ -4528,7 +4522,8 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    // -------------------------------------------------------------- EPUB view
+    // ----- [frame:epub] -----
+    // Scroll-frame helper for the EPUB reader.
 
     function frameScrollRatio(frame) {
       const documentNode = frame && frame.contentDocument
@@ -4540,6 +4535,9 @@ html.bb-paged body table tr{break-inside:avoid}
       if (maximum <= 0) return 0
       return Math.min(1, Math.max(0, root.scrollTop / maximum))
     }
+
+    // ----- [chrome:dialog] -----
+    // "Discuss this page" handoff dialog.
 
     function DiscussionDialog({ t, discussion, workspaces, snapshot, captureError, onClose, preferredWorkspaceId, startError, initialCompleted }) {
       const dialogRef = useRef(null)
@@ -4620,6 +4618,10 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    // ----- [reader:epub] -----
+    // EPUB reader: chapter frame, paged layout, TOC/bookmarks aside and
+    // read-aloud sentence mapping.
+
     function EpubReader({ t, book, onBack, defaultSettings, discussion, workspaces, discussionWorkspace }) {
       const base = useMemo(() => transportBase(), [])
       const readerState = useReaderState(base, book)
@@ -4673,6 +4675,14 @@ html.bb-paged body table tr{break-inside:avoid}
       const themeTick = useThemeTick()
       const settingsRef = useRef(settings)
       const palette = useMemo(() => readingPalette(settings), [settings, themeTick])
+
+      // The reader preloads the clipboard helper, so copying stays synchronous
+      // on the gesture; the promise fallback keeps a lost preload recoverable.
+      const copyText = useCallback((text) => {
+        const module = clientLib('clipboard')
+        if (module !== null) return module.writeClipboard(text)
+        return loadClientLib(base, 'clipboard').then((loaded) => loaded.writeClipboard(text)).catch(() => false)
+      }, [base])
 
       const metrics = useMemo(() => buildChapterMetrics(data ? data.chapters : []), [data])
       const toc = useMemo(() => {
@@ -4916,6 +4926,8 @@ html.bb-paged body table tr{break-inside:avoid}
                 return null
               }),
               loadReadingFonts(base),
+              // Warm the shared browser modules before the reader renders.
+              preloadClientLibs(base),
             ])
             const response = await fetch(resourceUrl(base, `${API_ROOT}/books/${book.id}/file`))
             if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -5828,12 +5840,14 @@ html.bb-paged body table tr{break-inside:avoid}
 
         const batchForChapter = async (index, previousDocument = null) => {
           const module = await modulePromise
+          const textIndex = clientLib('text-index')
+          if (textIndex === null) throw new Error(t('ttsFailed'))
           const documentNode = await waitForSpeechChapter(index, previousDocument)
           const frame = frameRef.current
           const windowNode = frame && frame.contentWindow
           if (!windowNode) return []
           const sentences = module.splitSentences(documentNode.body.innerText || '')
-          const entries = buildSpeechBatches(documentNode, sentences)
+          const entries = textIndex.buildSpeechBatches(documentNode, sentences)
           const paged = settingsRef.current.pageMode === 'paged'
           const startPage = pageIndexRef.current
           let start = 0
@@ -6036,10 +6050,10 @@ html.bb-paged body table tr{break-inside:avoid}
                       menu: selectionMenu,
                       onClose: () => setSelectionMenu(null),
                       onCopy: () => {
-                        void writeClipboard(selectionMenu.text)
+                        void copyText(selectionMenu.text)
                       },
                       onCopyCite: () => {
-                        void writeClipboard(`${selectionMenu.text}\n— ${book.title} · ${chapterLabel(t, chapter)}`)
+                        void copyText(`${selectionMenu.text}\n— ${book.title} · ${chapterLabel(t, chapter)}`)
                       },
                       onSelectAll: () => {
                         const liveFrame = frameRef.current
@@ -6075,7 +6089,8 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    // ------------------------------------------------------------------ shelf
+    // ===== [shelf] =====
+    // Shelf dialogs, cards, the main panel and the right-sidebar helpers.
 
     function AppleBooksPicker({ t, base, onClose, onImported }) {
       const [query, setQuery] = useState('')
@@ -6763,7 +6778,7 @@ html.bb-paged body table tr{break-inside:avoid}
         return parts.join('\n\n')
       }
       if (book.format === 'pdf') {
-        const pdfjs = await loadPdfjs(base)
+        const [pdfjs, textIndex] = await Promise.all([loadPdfjs(base), loadClientLib(base, 'text-index')])
         const loading = pdfjs.getDocument({
           data: bytes,
           cMapUrl: absoluteServiceUrl(base, `${ASSET_ROOT}/cmaps/`),
@@ -6778,7 +6793,7 @@ html.bb-paged body table tr{break-inside:avoid}
           for (let number = 1; number <= document.numPages; number += 1) {
             const page = await document.getPage(number)
             const content = await page.getTextContent()
-            parts.push(joinPdfItems(content.items))
+            parts.push(textIndex.joinPdfItems(content.items))
           }
           return parts.join('\n\n')
         } finally {
@@ -7520,7 +7535,8 @@ html.bb-paged body table tr{break-inside:avoid}
       })
     }
 
-    // ------------------------------------------------------------ shelf tags
+    // ----- [shelf:tags] -----
+    // Tag manager and per-book tag assignment.
     function BookTagsDialog({ t, book, tags, saving, error, onClose, onSave, onCreateTag }) {
       const [status, setStatus] = useState(book.statusManual ? book.status : 'auto')
       const [selected, setSelected] = useState(() => new Set(Array.isArray(book.tags) ? book.tags : []))
@@ -9093,7 +9109,19 @@ html.bb-paged body table tr{break-inside:avoid}
       return h(BookshelfBoundary, { t: props.t }, h(Bookshelf, { t: props.t, viewState: props.viewState, discussion: props.discussion, workspaces }))
     }
 
-    const en = {
+    // ===== [locales] =====
+    // The shelf dictionary ships inline so the very first paint is translated
+    // before any browser asset module arrives. Every other dictionary lives in
+    // assets/locales/*.mjs; once those modules load, the loader swaps the
+    // bootstrap registration for the merged full set (dictionary registration
+    // bumps the locale revision, so already-rendered outlets re-render).
+    //
+    // Keep bootstrap keys out of the locale modules: the merge below is a plain
+    // Object.assign over disjoint domains, and a duplicated key would let the
+    // inline string win over the module string.
+    const LOCALE_DOMAINS = ['import', 'apple-books', 'audiobook', 'speech', 'selection', 'reader', 'tags', 'settings', 'discussion', 'sidebar']
+
+    const bootstrapEn = {
       panel: 'Bookshelf',
       title: 'Bookshelf',
       subtitle: 'Import PDF and EPUB books and read them here.',
@@ -9112,71 +9140,10 @@ html.bb-paged body table tr{break-inside:avoid}
       appleBooks: 'Apple Books',
       more: 'More',
       addLocalBooks: 'Add local books',
-      linkImportHint: 'Choose a folder with EPUB or PDF books. Each book is soft-linked when the system allows it; otherwise the shelf stores a copy. The original is never deleted.',
-      linkChooseTitle: 'Link books from a folder',
-      linkPickHint: 'Pick the folder that contains your books. The shelf links each book when possible and falls back to a copy on Windows; removing an entry never deletes the original.',
-      linkPickFolder: 'Choose folder…',
-      linkPicking: 'Waiting for the folder picker…',
-      linkPickCancelled: 'No folder selected',
-      linkPickFailed: 'Could not open the folder picker: {message}',
-      linkNoFiles: 'No EPUB or PDF here',
-      linkNoFilesHint: 'Choose another folder, or download the book into this folder first.',
-      linkFilterPlaceholder: 'Filter files in this folder',
-      linkAdd: 'Add',
-      linkAdding: 'Adding…',
-      linkAdded: 'Added “{title}”',
-      linkAlready: 'On shelf',
-      linkChooseAnother: 'Choose another folder',
-      linkDone: 'Done',
-      linkFailed: 'Could not add: {message}',
-      linkFileCount: '{count} files',
-      linkSoftNote: 'Soft links when supported; otherwise shelf copies. Removing an entry never deletes the original.',
-      linkSoftShort: 'soft link',
-      linkCopyShort: 'copy',
-      linkAddedCopy: 'Copied “{title}” into the shelf; a symbolic link was not available.',
-      rename: 'Rename',
-      bookTitleLabel: 'Title',
-      bookAuthorLabel: 'Author',
-      save: 'Save',
-      saving: 'Saving…',
-      renameFailed: 'Could not save: {message}',
-      renamed: 'Book details updated',
-      importAppleBooks: 'Import from Apple Books',
-      applePickerHint: 'Choose an EPUB or PDF from your Apple Books library to link into this shelf.',
-      appleSearchPlaceholder: 'Search Apple Books title or author',
-      appleLoading: 'Reading Apple Books library…',
-      appleLoadMore: 'Load more',
-      appleImport: 'Import',
-      appleImporting: 'Importing…',
-      appleImported: 'Imported “{title}”',
-      appleAlreadyImported: 'This book is already on the shelf',
-      appleOnShelf: 'On shelf',
-      appleUnsupportedShort: 'Unsupported',
-      appleSourceUnavailableShort: 'Unavailable',
-      appleUnsupported: 'Audiobooks are not supported',
-      appleSourceUnavailable: 'Source unavailable',
-      appleNoBooks: 'No books found',
-      appleNoBooksHint: 'Download an EPUB or PDF in Apple Books first.',
-      appleUnavailableTitle: 'Cannot read the Apple Books library',
-      applePermissionHint: 'If the library is not visible, allow DSH Full Disk Access in System Settings.',
-      appleImportFailed: 'Import failed: {message}',
-      appleTotal: '{count} books',
-      appleProgress: '{percent}% read',
-      appleLastOpened: 'Opened {date}',
       noResults: 'No matching books',
       noResultsHint: 'Try a different title, author, or file name.',
       clearFilters: 'Clear search and sorting',
       import: 'Import books',
-      importFilesMenu: 'Import book files…',
-      importFilesHint: 'Choose one or more EPUB or PDF files to copy into the shelf',
-      importFolderMenu: 'Link a folder…',
-      importFolderHint: 'Soft-link every book in a folder; copies when links are unavailable',
-      importing: 'Importing…',
-      importingFile: 'Importing {name}…',
-      importedCount: 'Imported {count} books.',
-      importFailed: 'Import failed: {message}',
-      unsupportedFile: '{name} is not a PDF or EPUB file.',
-      tooLarge: '{name} is larger than 256 MB.',
       loadFailed: 'Could not load the bookshelf: {message}',
       loadFailedTitle: 'The bookshelf is unavailable',
       loading: 'Loading bookshelf…',
@@ -9200,111 +9167,6 @@ html.bb-paged body table tr{break-inside:avoid}
       untitled: 'Untitled',
       unknownAuthor: 'Unknown author',
       back: 'Back to bookshelf',
-      readAloud: 'Read aloud',
-      audiobookTitle: 'Whole-book audio',
-      audiobookMenu: 'Generate audiobook…',
-      audiobookVoiceLabel: 'Voice',
-      audiobookDefaultVoice: 'Default voice',
-      audiobookProviderLabel: 'Speech service',
-      audiobookSettingsLink: 'Change voice settings…',
-      audiobookSpeedLabel: 'Speed',
-      audiobookCharacters: 'Characters',
-      audiobookSentences: 'Sentences',
-      audiobookDuration: 'Estimated length',
-      audiobookSize: 'Estimated size',
-      audiobookBilled: 'Billed characters',
-      audiobookCost: 'Estimated cost',
-      audiobookPromo: 'list ¥{price} · 50% off',
-      audiobookHint: 'Estimate only; actual duration and size may differ.',
-      audiobookUnpricedHint: 'This service does not publish a per-character price, so no cost estimate is shown.',
-      audiobookStart: 'Generate',
-      audiobookRegenerate: 'Regenerate',
-      audiobookCancel: 'Cancel render',
-      audiobookParsing: 'Extracting the book text…',
-      audiobookProgress: '{done} / {total} sentences · {size}',
-      audiobookDone: 'Ready · {size} · {seconds}',
-      audiobookDownload: 'Download WAV',
-      audiobookBackground: 'Rendering continues on the Host; you can close this window.',
-      audiobookNoText: 'This book has no readable text.',
-      audiobookNoKey: 'DeepSeek API key is not configured. Add it under Read aloud settings and reopen this window.',
-      audiobookFailed: 'Audiobook generation failed.',
-      audiobookUseExisting: 'Play generated audio · {seconds} · {size}',
-      audiobookUseConfirm: 'Play the generated whole-book audio? It is one WAV ({seconds}, {size}); it does not follow pages or cost new speech credit.',
-      audiobookUseConfirmAction: 'Play audio',
-      audiobookFileHint: 'File playback does not follow pages; switch back to live read-aloud above.',
-      audiobookStop: 'Stop audio',
-      settingsTitle: 'Shelf settings',
-      settingsHint: 'Reading, read-aloud and workspace options.',
-      settingsTabReading: 'Reading',
-      settingsTabSpeech: 'Read aloud',
-      settingsTabOther: 'Other',
-      settingsOtherHint: 'Discussion and import options.',
-      settingsSaveSpeech: 'Save read-aloud settings',
-      settingsSaved: 'Saved.',
-      ttsSaveFailed: 'Could not save: {message}',
-      ttsCacheTitle: 'Read-aloud cache',
-      ttsCacheStats: '{count} files · {size}',
-      ttsCacheClear: 'Clear cache',
-      ttsCacheCleared: 'Cache cleared.',
-      ttsPlay: 'Play',
-      ttsPause: 'Pause',
-      ttsPrevious: 'Previous sentence',
-      ttsNext: 'Next sentence',
-      ttsSpeed: 'Speed',
-      ttsVoice: 'Voice',
-      ttsProvider: 'Speech service',
-      ttsBaseUrl: 'Base URL',
-      ttsModel: 'Model',
-      ttsKeyLabel: 'API key',
-      ttsKeySet: 'API key is set',
-      ttsLoading: 'Preparing audio…',
-      ttsIdle: 'Read aloud is off',
-      ttsPlaying: 'Reading…',
-      ttsPaused: 'Paused',
-      ttsStopped: 'Stopped',
-      ttsCaptionNow: 'Reading now',
-      ttsCaptionLast: 'Stopped reading at',
-      ttsHideText: 'Hide reading text',
-      selectionMenuLabel: 'Selection actions',
-      selectionCopy: 'Copy',
-      selectionCopyCite: 'Copy with source',
-      selectionSelectAll: 'Select all',
-      selectionSpeak: 'Read selection',
-      ttsFailed: 'Read aloud failed',
-      ttsNotReady: 'Read-aloud settings are still loading.',
-      ttsChapterTimeout: 'The next chapter did not finish loading.',
-      ttsNotConfigured: 'not configured',
-      ttsUnavailableHere: 'not available on this system',
-      ttsLanguage: 'Language',
-      ttsAllLanguages: 'All languages',
-      ttsVoicesLoading: 'No voices available',
-      ttsMacosVoiceHint: 'Voices whose names contain the language in brackets are locale-specific; pick the one that matches the book.',
-      ttsAutoVoice: 'Pick a voice from the book language',
-      ttsVoiceAuto: 'Automatic (book language)',
-      ttsVoiceAutoHint: 'A voice is chosen from the book language. Pick a specific voice below to pin it.',
-      ttsAutoVoiceHint: 'The reader detects the book language and uses a matching system voice. Turn this off to pin one voice.',
-      ttsEdgeHint: 'Edge voices are chosen automatically from the book language. Turn off automatic voices to pick one.',
-      ttsEdgeNote: 'Uses the public Edge read-aloud service; no key needed. Needs network access.',
-      ttsLocalHint: 'Placeholder for a future on-device engine. These fields are saved but synthesis is not implemented yet.',
-      ttsLocalEndpoint: 'Service address',
-      ttsLocalModel: 'Model',
-      ttsLocalVoice: 'Voice',
-      ttsLocalDevice: 'Device',
-      ttsPreset: 'Quick setup',
-      ttsPresetChoose: 'Choose a service…',
-      ttsTest: 'Test',
-      ttsTestText: 'This is a read-aloud test.',
-      ttsTestOk: 'Test passed: the speech service returned audio.',
-      ttsTestFailed: 'Test failed: {message}',
-      ttsTimeout: 'The speech service did not answer in time; the request was aborted.',
-      ttsPlaybackFailed: 'The audio could not be played.',
-      ttsPlaybackBlocked: 'The browser blocked playback; press play again.',
-      readerLabel: 'Reading {title}',
-      rendering: 'Opening the PDF…',
-      parsing: 'Opening the EPUB…',
-      openFailed: 'Could not open this book: {message}',
-      pageFailed: 'Page failed',
-      chapterTooLarge: 'This chapter is too large to display comfortably.',
       readingProgress: 'Reading progress',
       continueReading: 'Continue reading',
       finishedReading: 'Finished',
@@ -9322,161 +9184,13 @@ html.bb-paged body table tr{break-inside:avoid}
       finishPromptSaveFailed: 'Could not mark the book as finished: {message}',
       categories: 'Categories',
       categoryAll: 'All',
-      bookTags: 'Tags…',
-      manageTags: 'Manage tags',
-      manageTagsHint: 'Create, rename, or delete the tags used to group books.',
-      tagsLabel: 'Tags',
-      tagsEmpty: 'No custom tags yet.',
-      newTagLabel: 'New tag',
-      newTagPlaceholder: 'Tag name',
-      createTag: 'Create',
-      tagNameLabel: 'Tag name',
-      tagBookCount: '{count} books',
-      renameTag: 'Rename',
-      deleteTag: 'Delete tag',
-      confirmDeleteTag: 'Delete anyway',
-      deleteTagHint: 'Deleting this tag also removes it from {count} books.',
       emptyCategoryTitle: 'No books here yet',
       emptyCategoryHint: 'Assign this category to a book, or pick another one.',
       showAllBooks: 'Show all books',
-      done: 'Done',
-      tagsSaved: 'Tags saved.',
-      tagsSaveFailed: 'Could not save tags: {message}',
-      tagRequestFailed: 'The bookshelf service returned an unexpected response.',
-      tocTab: 'Contents',
-      bookmarksTab: 'Bookmarks',
-      asideLabel: 'Reading navigation',
-      bookmark: 'Bookmark',
-      addBookmark: 'Add bookmark',
-      removeBookmark: 'Remove bookmark',
-      deleteBookmark: 'Delete bookmark',
-      noBookmarks: 'No bookmarks yet. Scroll to a spot you want to keep and press the bookmark button.',
-      pageLabel: 'Page {number}',
-      pageOf: '{current} / {total}',
-      pdfPages: '{total} pages',
-      zoomIn: 'Zoom in',
-      zoomOut: 'Zoom out',
-      fitWidth: 'Fit width',
-      fitPage: 'Fit page',
-      pdfSingle: 'Single page',
-      pdfContinuous: 'Continuous',
-      pdfViewMode: 'Page layout',
-      toc: 'Contents',
-      chapterNumber: 'Chapter {number}',
-      chapterOf: '{current} / {total}',
-      previousChapter: 'Previous chapter',
-      nextChapter: 'Next chapter',
-      fontSmaller: 'Smaller text',
-      readingSettings: 'Reading settings',
-      shelfSettings: 'Bookshelf settings',
-      shelfSettingsHint: 'Reading defaults and the workspace used by Discuss this page.',
-      discussionWorkspaceSetting: 'Discuss this page workspace',
-      discussionWorkspaceSettingHint: 'When set, Discuss this page creates the conversation directly in this workspace. Ask every time keeps the workspace picker.',
-      discussionWorkspaceAsk: 'Ask every time',
-      defaultReadingSettings: 'Default reading settings',
-      defaultReadingSettingsHint: 'Used for books that have no individual reading settings.',
-      defaultsSaveFailed: 'Could not save default settings: {message}',
-      fontFamily: 'Typeface',
-      fontSection: 'Font',
-      typographySection: 'Typography',
-      fontDefaultSerif: 'System default · Serif',
-      fontDefaultSans: 'System default · Sans serif',
-      fontDefaultMono: 'System default · Monospace',
-      scanSystemFonts: 'Detect system fonts',
-      fontScanning: 'Detecting…',
-      fontCommonHint: 'Available common fonts are listed. Detect system fonts to include custom fonts; your browser may ask for access.',
-      fontScanComplete: 'System fonts detected. The list stays on this device.',
-      fontScanEmpty: 'No fonts were returned. Common fonts remain available.',
-      fontAccessDenied: 'Font access was not granted. You can keep using common fonts or try again.',
-      fontAccessUnavailable: 'This browser cannot list all fonts. Available common fonts are shown.',
-      fontScanFailed: 'Could not detect system fonts. Common fonts remain available; you can try again.',
-      fontLoadFailed: 'Could not load font options. Close settings and try again.',
-      fontMissingHint: 'The saved font is not available on this device. A fallback is used; your selection is preserved.',
-      fontStylesHint: 'Automatic style is available. Detect system fonts to read supported weights and italics.',
-      fontWeight: 'Weight',
-      fontWeightAuto: 'Automatic',
-      fontStyle: 'Style',
-      fontStyleNormal: 'Upright',
-      fontStyleItalic: 'Italic',
-      fontSerif: 'Serif',
-      fontSans: 'Sans',
-      fontMono: 'Mono',
-      fontSize: 'Text size',
-      lineHeight: 'Line height',
-      lineCompact: 'Tight',
-      lineNormal: 'Normal',
-      lineLoose: 'Loose',
-      pageMargins: 'Page margins',
-      marginStandard: 'Standard',
-      marginCompact: 'Compact',
-      marginFill: 'Fill',
-      readingTheme: 'Page theme',
-      readingMode: 'Reading mode',
-      modeScroll: 'Scroll',
-      modePaged: 'Paged',
-      pageOfChapter: 'Page {current} / {total}',
-      pageRangeOf: '{current}–{end} / {total}',
-      pageRangeOfChapter: 'Pages {current}–{end} / {total}',
-      pageSpread: 'Page layout (experimental)',
-      spreadAuto: 'Auto two-page',
-      spreadSingle: 'Always single',
-      previousPage: 'Previous page',
-      nextPage: 'Next page',
-      themeAuto: 'Auto',
-      themeLight: 'Light',
-      themeDark: 'Dark',
-      immersive: 'Immersive reading',
-      exitImmersive: 'Exit immersive mode',
-      fullscreen: 'Fullscreen',
-      exitFullscreen: 'Exit fullscreen',
-      fontLarger: 'Larger text',
-      discussPage: 'Discuss this page',
-      discussionResume: 'Resume page discussion',
-      discussionHint: 'Create a new conversation and place this page\'s text in its composer as a file reference. Nothing is sent; write your own question and submit it. Continue reading independently; the file copy stays unchanged.',
-      discussionWorkspace: 'Conversation workspace',
-      discussionChooseWorkspace: 'Choose a workspace…',
-      discussionNoWorkspaces: 'Add a workspace in DSH, then return here to choose it.',
-      discussionCreate: 'Prepare conversation',
-      discussionCreating: 'Preparing conversation…',
-      discussionPromptPrefix: 'Read this page, then answer:\n\n',
-      discussionRetry: 'Retry preparing conversation',
-      discussionDiscard: 'Discard pending handoff',
-      discussionPending: 'Retry keeps the original page and the same conversation target. Workspace:',
-      discussionCoverage: 'Visible text only. Images and other non-text content are not included; this is not a complete physical-page copy.',
-      discussionPartial: 'Only part of the visible content was captured. The conversation will retain this limitation; images and other non-text content are not included.',
-      discussionNoText: 'No visible text could be captured. A conversation cannot be created from this page. Choose a page with readable text.',
-      discussionPreview: 'Captured page text',
-      discussionTooLarge: 'This page snapshot exceeds the conversation size limit. Choose a smaller visible text range and try again.',
-      discussionSourceUnavailable: 'The book service did not provide a source revision. Reload the DSH Host after enabling Books support, then reopen this book.',
-      discussionCaptureUnavailable: 'Page capture is unavailable. Reload DSH and reopen the book: {message}',
-      discussionUnavailable: 'Conversation support is unavailable. Reload DSH after enabling Books support.',
-      discussionStale: 'The bookshelf conversation support is out of date. Fully reload the DSH page and try again.',
-      discussionPageNotReady: 'The page is still loading or restoring its position. Wait for the page to settle, then try again.',
-      discussionSaved: 'The conversation is ready but was not opened because navigation changed. Open it from the list and write your question; the page file is already in its composer.',
       crashTitle: 'The bookshelf hit an error',
-      sidebarTitle: 'Books (Shelf)',
-      sidebarEmpty: 'The page snapshot from the bookshelf appears here.',
-      sidebarShelf: 'Open bookshelf',
-      sidebarResume: 'Continue in bookshelf',
-      sidebarChoose: 'Choose a linked EPUB',
-      sidebarLoading: 'Loading bookshelf…',
-      sidebarNoBooks: 'No EPUBs are linked yet. Add a local book in the bookshelf first.',
-      sidebarFailed: 'Could not load the bookshelf.',
-      sidebarFixed: 'This page snapshot is fixed in this conversation.',
-      sidebarPartial: 'Visible text only; images and off-page content are excluded.',
-      sidebarTruncated: 'The page exceeded the snapshot limit; its beginning was retained.',
-      sidebarCaptured: 'Captured',
-      sidebarSelection: 'Selection at capture',
-      sidebarOpen: 'Open Books',
-      sidebarRetry: 'Retry opening Books',
-      sidebarAutoFailed: 'The page snapshot is saved; click to open Books.',
-      sidebarSeedFailed: 'The page file could not be placed in the composer. Reopen the conversation and try the capture again.',
-      sidebarGuidance: 'Open a book in the bookshelf, then choose “Discuss this page”.',
-      appleBooksImportToggle: 'Apple Books import',
-      appleBooksImportToggleHint: 'macOS only. Turn this off to hide the Apple Books button; the shelf and page discussion keep working.',
     }
 
-    const zh = {
+    const bootstrapZh = {
       panel: '书架',
       title: '书架',
       subtitle: '导入 PDF 和 EPUB 书籍，在这里阅读。',
@@ -9495,71 +9209,10 @@ html.bb-paged body table tr{break-inside:avoid}
       appleBooks: 'Apple Books',
       more: '更多',
       addLocalBooks: '添加本地书籍',
-      linkImportHint: '选择包含 EPUB 或 PDF 的文件夹；系统允许时创建软链接，否则保存一份副本。原文件不会被删除。',
-      linkChooseTitle: '从文件夹软链接导入',
-      linkPickHint: '选择书籍所在的文件夹。书架会尽可能创建软链接，在 Windows 无法创建时自动保存副本；删除书架条目不会删除原文件。',
-      linkPickFolder: '选择文件夹…',
-      linkPicking: '请在系统窗口中选择文件夹…',
-      linkPickCancelled: '未选择文件夹',
-      linkPickFailed: '无法打开文件夹选择器：{message}',
-      linkNoFiles: '这个文件夹里没有 EPUB 或 PDF',
-      linkNoFilesHint: '换一个文件夹，或先把书下载到该文件夹。',
-      linkFilterPlaceholder: '筛选这个文件夹里的文件',
-      linkAdd: '添加',
-      linkAdding: '添加中…',
-      linkAdded: '已添加《{title}》',
-      linkAlready: '已在书架',
-      linkChooseAnother: '换一个文件夹',
-      linkDone: '完成',
-      linkFailed: '添加失败：{message}',
-      linkFileCount: '{count} 个文件',
-      linkSoftNote: '支持软链接时只创建软链接，否则保存副本；删除书架条目不会删除原文件。',
-      linkSoftShort: '软链接',
-      linkCopyShort: '副本',
-      linkAddedCopy: '已将《{title}》保存为书架副本；系统不允许创建软链接。',
-      rename: '重命名',
-      bookTitleLabel: '书名',
-      bookAuthorLabel: '作者',
-      save: '保存',
-      saving: '保存中…',
-      renameFailed: '保存失败：{message}',
-      renamed: '已更新书籍信息',
-      importAppleBooks: '从 Apple Books 导入',
-      applePickerHint: '从 Apple Books 书库选择 EPUB 或 PDF，以软链接加入本地书架。',
-      appleSearchPlaceholder: '搜索 Apple Books 书名或作者',
-      appleLoading: '正在读取 Apple Books 书库…',
-      appleLoadMore: '加载更多',
-      appleImport: '导入',
-      appleImporting: '导入中…',
-      appleImported: '已导入《{title}》',
-      appleAlreadyImported: '这本书已在书架中',
-      appleOnShelf: '已在书架',
-      appleUnsupportedShort: '不支持',
-      appleSourceUnavailableShort: '不可用',
-      appleUnsupported: '有声书暂不支持',
-      appleSourceUnavailable: '书源不可用',
-      appleNoBooks: '没有找到书',
-      appleNoBooksHint: '请先在 Apple Books 中下载 EPUB 或 PDF。',
-      appleUnavailableTitle: '无法读取 Apple Books 书库',
-      applePermissionHint: '如果书库不可见，请在系统设置中为 DSH 开启“完全磁盘访问”。',
-      appleImportFailed: '导入失败：{message}',
-      appleTotal: '共 {count} 本',
-      appleProgress: '阅读 {percent}%',
-      appleLastOpened: '最近打开 {date}',
       noResults: '没有找到匹配的书',
       noResultsHint: '换一个书名、作者或文件名试试。',
       clearFilters: '清除搜索和排序',
       import: '导入书籍',
-      importFilesMenu: '导入书籍文件…',
-      importFilesHint: '选择一个或多个 EPUB / PDF 文件并复制到书架',
-      importFolderMenu: '软链接文件夹…',
-      importFolderHint: '为文件夹中的书建立软链接；系统不允许时保存副本',
-      importing: '正在导入…',
-      importingFile: '正在导入 {name}…',
-      importedCount: '已导入 {count} 本书。',
-      importFailed: '导入失败：{message}',
-      unsupportedFile: '{name} 不是 PDF 或 EPUB 文件。',
-      tooLarge: '{name} 超过 256 MB。',
       loadFailed: '无法载入书架：{message}',
       loadFailedTitle: '书架暂时不可用',
       loading: '正在载入书架…',
@@ -9583,111 +9236,6 @@ html.bb-paged body table tr{break-inside:avoid}
       untitled: '无标题',
       unknownAuthor: '未知作者',
       back: '返回书架',
-      readAloud: '朗读',
-      audiobookTitle: '整书语音',
-      audiobookMenu: '生成整书语音…',
-      audiobookVoiceLabel: '音色',
-      audiobookDefaultVoice: '默认音色',
-      audiobookProviderLabel: '语音服务',
-      audiobookSettingsLink: '修改朗读设置…',
-      audiobookSpeedLabel: '语速',
-      audiobookCharacters: '字数',
-      audiobookSentences: '句数',
-      audiobookDuration: '预计时长',
-      audiobookSize: '预计占用',
-      audiobookBilled: '计费字符',
-      audiobookCost: '预计费用',
-      audiobookPromo: '原价 ¥{price} · 限时 5 折',
-      audiobookHint: '仅为估算，实际时长和体积可能略有差异。',
-      audiobookUnpricedHint: '该语音服务没有按字符计价的公开价格，因此不显示费用估算。',
-      audiobookStart: '开始生成',
-      audiobookRegenerate: '重新生成',
-      audiobookCancel: '取消生成',
-      audiobookParsing: '正在提取书籍文本…',
-      audiobookProgress: '{done} / {total} 句 · {size}',
-      audiobookDone: '已生成 · {size} · {seconds}',
-      audiobookDownload: '下载 WAV',
-      audiobookBackground: '生成在 Host 后台继续，可以关闭此窗口。',
-      audiobookNoText: '这本书没有可朗读的文本。',
-      audiobookNoKey: '尚未配置 DeepSeek API Key。请先在朗读设置里填写，再重新打开此窗口。',
-      audiobookFailed: '整书语音生成失败。',
-      audiobookUseExisting: '播放已生成音频 · {seconds} · {size}',
-      audiobookUseConfirm: '播放已生成的整书音频？它是单个 WAV（{seconds}，{size}），不会跟随页码，也不产生新的合成费用。',
-      audiobookUseConfirmAction: '确认播放',
-      audiobookFileHint: '文件播放不会跟随页码；可切回上方的逐句朗读。',
-      audiobookStop: '停止音频',
-      settingsTitle: '书架设置',
-      settingsHint: '阅读、朗读与工作区设置。',
-      settingsTabReading: '阅读',
-      settingsTabSpeech: '朗读',
-      settingsTabOther: '其他',
-      settingsOtherHint: '讨论与导入相关设置。',
-      settingsSaveSpeech: '保存朗读设置',
-      settingsSaved: '已保存。',
-      ttsSaveFailed: '保存失败：{message}',
-      ttsCacheTitle: '朗读缓存',
-      ttsCacheStats: '{count} 个文件 · {size}',
-      ttsCacheClear: '清空缓存',
-      ttsCacheCleared: '缓存已清空。',
-      ttsPlay: '播放',
-      ttsPause: '暂停',
-      ttsPrevious: '上一句',
-      ttsNext: '下一句',
-      ttsSpeed: '语速',
-      ttsVoice: '音色',
-      ttsProvider: '语音服务',
-      ttsBaseUrl: 'Base URL',
-      ttsModel: '模型',
-      ttsKeyLabel: 'API Key',
-      ttsKeySet: 'API Key 已设置',
-      ttsLoading: '正在准备音频…',
-      ttsIdle: '朗读已停止',
-      ttsPlaying: '朗读中',
-      ttsPaused: '已暂停',
-      ttsStopped: '已停止',
-      ttsCaptionNow: '正在朗读',
-      ttsCaptionLast: '朗读停止于',
-      ttsHideText: '隐藏朗读文本',
-      selectionMenuLabel: '选中文字操作',
-      selectionCopy: '复制',
-      selectionCopyCite: '复制并附出处',
-      selectionSelectAll: '全选本章',
-      selectionSpeak: '朗读选中文字',
-      ttsFailed: '朗读失败',
-      ttsNotReady: '朗读设置尚未载入。',
-      ttsChapterTimeout: '下一章没有加载完成。',
-      ttsNotConfigured: '未配置',
-      ttsUnavailableHere: '当前系统不可用',
-      ttsLanguage: '语言',
-      ttsAllLanguages: '全部语言',
-      ttsVoicesLoading: '没有可用音色',
-      ttsMacosVoiceHint: '名字里括号标注语言的音色属于该语言；选同名音色时请确认括号里的语言。',
-      ttsAutoVoice: '按书籍语言自动选择音色',
-      ttsVoiceAuto: '自动（按书籍语言）',
-      ttsVoiceAutoHint: '会根据书籍语言自动选择音色；在下面选择具体音色即可固定。',
-      ttsAutoVoiceHint: '阅读器会识别书籍语言并匹配对应系统音色；关闭后可固定一个音色。',
-      ttsEdgeHint: 'Edge 音色会按书籍语言自动选择；关闭自动音色后可手动指定。',
-      ttsEdgeNote: '使用微软 Edge 公开朗读服务，无需 Key，需要联网。',
-      ttsLocalHint: '本地 TTS 模型的占位配置：会保存这些字段，但合成尚未实现。',
-      ttsLocalEndpoint: '服务地址',
-      ttsLocalModel: '模型',
-      ttsLocalVoice: '音色',
-      ttsLocalDevice: '设备',
-      ttsPreset: '常用配置',
-      ttsPresetChoose: '选择服务…',
-      ttsTest: '测试',
-      ttsTestText: '这是一次朗读测试。',
-      ttsTestOk: '测试通过：语音服务已返回音频。',
-      ttsTestFailed: '测试失败：{message}',
-      ttsTimeout: '语音服务迟迟没有响应，已中断本次请求。',
-      ttsPlaybackFailed: '音频播放失败。',
-      ttsPlaybackBlocked: '浏览器阻止了播放，请再点一次播放。',
-      readerLabel: '正在阅读《{title}》',
-      rendering: '正在打开 PDF…',
-      parsing: '正在打开 EPUB…',
-      openFailed: '无法打开这本书：{message}',
-      pageFailed: '页面渲染失败',
-      chapterTooLarge: '这一章内容过大，无法舒适地显示。',
       readingProgress: '阅读进度',
       continueReading: '继续阅读',
       finishedReading: '已读完',
@@ -9705,164 +9253,65 @@ html.bb-paged body table tr{break-inside:avoid}
       finishPromptSaveFailed: '标记失败：{message}',
       categories: '分类',
       categoryAll: '全部',
-      bookTags: '标签…',
-      manageTags: '管理标签',
-      manageTagsHint: '新建、改名或删除用于分类书籍的标签。',
-      tagsLabel: '标签',
-      tagsEmpty: '还没有自定义标签。',
-      newTagLabel: '新建标签',
-      newTagPlaceholder: '标签名称',
-      createTag: '新建',
-      tagNameLabel: '标签名称',
-      tagBookCount: '{count} 本',
-      renameTag: '改名',
-      deleteTag: '删除标签',
-      confirmDeleteTag: '确认删除',
-      deleteTagHint: '删除后，{count} 本书上的这个标签也会移除。',
       emptyCategoryTitle: '这个分类下还没有书',
       emptyCategoryHint: '给一本书打上这个分类，或者换一个分类看看。',
       showAllBooks: '显示全部书籍',
-      done: '完成',
-      tagsSaved: '标签已保存。',
-      tagsSaveFailed: '保存标签失败：{message}',
-      tagRequestFailed: '书架服务返回了异常响应。',
-      tocTab: '目录',
-      bookmarksTab: '书签',
-      asideLabel: '阅读导航',
-      bookmark: '书签',
-      addBookmark: '添加书签',
-      removeBookmark: '移除书签',
-      deleteBookmark: '删除书签',
-      noBookmarks: '还没有书签。滚动到想记住的位置，点书签按钮即可添加。',
-      pageLabel: '第 {number} 页',
-      pageOf: '{current} / {total}',
-      pdfPages: '共 {total} 页',
-      zoomIn: '放大',
-      zoomOut: '缩小',
-      fitWidth: '适应宽度',
-      fitPage: '适应页面',
-      pdfSingle: '单页',
-      pdfContinuous: '连续',
-      pdfViewMode: '翻页方式',
-      toc: '目录',
-      chapterNumber: '第 {number} 章',
-      chapterOf: '{current} / {total}',
-      previousChapter: '上一章',
-      nextChapter: '下一章',
-      fontSmaller: '减小字号',
-      readingSettings: '阅读设置',
-      shelfSettings: '书架设置',
-      shelfSettingsHint: '阅读默认设置，以及“讨论此页”使用的工作区。',
-      discussionWorkspaceSetting: '“讨论此页”工作区',
-      discussionWorkspaceSettingHint: '设置后，“讨论此页”会直接在该工作区创建对话；选择“每次询问”则保留工作区选择弹窗。',
-      discussionWorkspaceAsk: '每次询问',
-      defaultReadingSettings: '默认阅读设置',
-      defaultReadingSettingsHint: '应用于尚未单独设置阅读样式的书。',
-      defaultsSaveFailed: '保存默认设置失败：{message}',
-      fontFamily: '字体',
-      fontSection: '字体选择',
-      typographySection: '排版样式',
-      fontDefaultSerif: '系统默认 · 衬线',
-      fontDefaultSans: '系统默认 · 无衬线',
-      fontDefaultMono: '系统默认 · 等宽',
-      scanSystemFonts: '检测系统字体',
-      fontScanning: '正在检测…',
-      fontCommonHint: '已列出可用的常见字体。检测系统字体可加入自装字体；浏览器可能请求字体访问授权。',
-      fontScanComplete: '已读取系统字体，列表仅保留在当前设备。',
-      fontScanEmpty: '未返回系统字体，仍可使用常见字体。',
-      fontAccessDenied: '未获得字体访问授权，仍可使用常见字体，也可以重试。',
-      fontAccessUnavailable: '当前浏览器无法列出全部字体，已保留可用的常见字体。',
-      fontScanFailed: '系统字体检测失败，仍可使用常见字体，也可以重试。',
-      fontLoadFailed: '字体选项加载失败，请关闭设置后重试。',
-      fontMissingHint: '当前设备未找到已保存的字体，暂时使用回退字体，并保留原选择。',
-      fontStylesHint: '可使用自动样式；检测系统字体后可选择字体支持的字重与斜体。',
-      fontWeight: '字重',
-      fontWeightAuto: '自动',
-      fontStyle: '字形',
-      fontStyleNormal: '正体',
-      fontStyleItalic: '斜体',
-      fontSerif: '衬线',
-      fontSans: '无衬线',
-      fontMono: '等宽',
-      fontSize: '字号',
-      lineHeight: '行距',
-      lineCompact: '紧凑',
-      lineNormal: '标准',
-      lineLoose: '宽松',
-      pageMargins: '左右页边距',
-      marginStandard: '标准',
-      marginCompact: '紧凑',
-      marginFill: '铺满',
-      readingTheme: '页面主题',
-      readingMode: '阅读方式',
-      modeScroll: '滚动',
-      modePaged: '分页',
-      pageOfChapter: '第 {current} / {total} 页',
-      pageRangeOf: '{current}–{end} / {total}',
-      pageRangeOfChapter: '第 {current}–{end} / {total} 页',
-      pageSpread: '分页布局（实验）',
-      spreadAuto: '自动双页',
-      spreadSingle: '始终单页',
-      previousPage: '上一页',
-      nextPage: '下一页',
-      themeAuto: '跟随',
-      themeLight: '浅色',
-      themeDark: '深色',
-      immersive: '沉浸阅读',
-      exitImmersive: '退出沉浸模式',
-      fullscreen: '全屏',
-      exitFullscreen: '退出全屏',
-      fontLarger: '增大字号',
-      discussPage: '讨论此页',
-      discussionResume: '继续创建页面讨论',
-      discussionHint: '将点击时屏幕上可见的文字保存为工作区文件并放入新对话的输入框，不会自动发送；请自行输入问题后发送。之后继续翻书不会改变这份文件。',
-      discussionWorkspace: '对话工作区',
-      discussionChooseWorkspace: '选择工作区…',
-      discussionNoWorkspaces: '请先在 DSH 中添加工作区，再回到这里选择。',
-      discussionCreate: '准备对话',
-      discussionCreating: '正在准备对话…',
-      discussionPromptPrefix: '请阅读这页书的内容，然后回答：\n\n',
-      discussionRetry: '重试准备对话',
-      discussionDiscard: '放弃待完成的创建',
-      discussionPending: '重试会保留原始页面快照和同一个目标对话。工作区：',
-      discussionCoverage: '仅包含可见文字，不包含图片等非文字内容，也不代表完整实体页面。',
-      discussionPartial: '只捕获了部分可见内容，对话中会保留此覆盖限制；不包含图片等非文字内容。',
-      discussionNoText: '未能捕获可见文字，无法从此页创建对话。请翻到含有可读文字的页面。',
-      discussionPreview: '已捕获的页面文字',
-      discussionTooLarge: '页面快照超出了对话大小限制。请缩小可见文字范围后重试。',
-      discussionSourceUnavailable: '书籍服务未提供来源版本。请在启用 Books 支持后重新加载 DSH Host，再重新打开这本书。',
-      discussionCaptureUnavailable: '页面捕获暂不可用，请重新加载 DSH 并打开书籍：{message}',
-      discussionUnavailable: '对话功能暂不可用，请在启用 Books 支持后重新加载 DSH。',
-      discussionStale: '书架对话支持仍是旧版本。请完整重新加载 DSH 页面后再试。',
-      discussionPageNotReady: '页面仍在载入或恢复阅读位置。请等待页面稳定后重试。',
-      discussionSaved: '对话已准备好，但准备期间页面导航发生了变化，未自动打开。请从对话列表打开并输入问题；页面文件已在输入框中。',
       crashTitle: '书架出现了一个错误',
-      sidebarTitle: '书架 Books',
-      sidebarEmpty: '从书架带入的页面快照会显示在这里。',
-      sidebarShelf: '打开书架',
-      sidebarResume: '回书架阅读',
-      sidebarChoose: '选择已接入的 EPUB',
-      sidebarLoading: '正在读取书架…',
-      sidebarNoBooks: '书架中还没有 EPUB。请先在书架接入本地书籍。',
-      sidebarFailed: '无法读取书架。',
-      sidebarFixed: '这份页面快照固定保存在当前会话中。',
-      sidebarPartial: '仅包含可见文字；图片与页面外内容未加入。',
-      sidebarTruncated: '本页文字超出快照上限，已保留前部内容。',
-      sidebarCaptured: '捕获时间',
-      sidebarSelection: '捕获时的选区',
-      sidebarOpen: '打开 Books',
-      sidebarRetry: '重试打开 Books',
-      sidebarAutoFailed: '页面快照已保存；点击此处打开 Books。',
-      sidebarSeedFailed: '页面文件未能放入输入框。请重新打开会话后再试。',
-      sidebarGuidance: '在书架打开书籍，然后点击“讨论此页”。',
-      appleBooksImportToggle: 'Apple Books 导入',
-      appleBooksImportToggleHint: '仅 macOS 可用。关闭后隐藏 Apple Books 按钮，书架和页面讨论仍可使用。',
     }
+
+    let localeDictionariesPromise = null
+
+    function loadLocaleDictionaries(base) {
+      if (localeDictionariesPromise === null) {
+        localeDictionariesPromise = Promise.all(
+          LOCALE_DOMAINS.map((domain) => import(absoluteServiceUrl(base, `${ASSET_ROOT}/locales/${domain}.mjs?v=${ASSET_VERSION}`))),
+        )
+          .then((modules) => {
+            const en = { ...bootstrapEn }
+            const zh = { ...bootstrapZh }
+            for (const module of modules) {
+              Object.assign(en, module.en)
+              Object.assign(zh, module.zh)
+            }
+            return { en, zh }
+          })
+          .catch((error) => {
+            localeDictionariesPromise = null
+            throw error
+          })
+      }
+      return localeDictionariesPromise
+    }
+
+    // ===== [apply] =====
+    // Plugin definition: register dictionaries, then mount the shelf panel and
+    // the right-sidebar surface.
 
     return {
       inject: ['slots', 'locale', 'remote', 'remote.commands', 'remote.session', 'uiWorkspace', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiConversation'],
       apply(ctx) {
-        ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'bookshelf: dictionaries')
+        // Register the inline shelf dictionary synchronously for the first paint;
+        // register() rejects a second dictionary for the same namespace+locale, so
+        // the swap below releases the bootstrap registration before installing the
+        // merged set from assets/locales. A failed module load keeps the bootstrap
+        // dictionary: the shelf still works and the next apply retries.
+        ctx.effect(() => {
+          let release = ctx.locale.register(NS, { en: bootstrapEn, zh: bootstrapZh })
+          let disposed = false
+          void loadLocaleDictionaries(transportBase())
+            .then((dictionaries) => {
+              if (disposed) return
+              release()
+              release = ctx.locale.register(NS, dictionaries)
+            })
+            .catch((failure) => {
+              console.error('bookshelf: locale dictionaries failed', failure)
+            })
+          return () => {
+            disposed = true
+            release()
+          }
+        }, 'bookshelf: dictionaries')
         const t = ctx.locale.bind(NS)
         const viewState = { openBookId: null, query: '', sortMode: 'added', category: 'all', layout: readStoredLayout(), scrollTop: 0 }
         let bridge = null, bridgePromise = null, operationPromise = null, disposed = false
