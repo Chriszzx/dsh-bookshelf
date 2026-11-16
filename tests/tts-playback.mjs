@@ -90,10 +90,11 @@ window.wait=ms=>new Promise(r=>setTimeout(r,ms));
 window.until=async(fn)=>{const start=Date.now();while(Date.now()-start<15000){if(fn())return;await wait(40)}throw Error('Timed out: '+fn)};
 window.check=(condition,message)=>{if(!condition)throw Error(message)};
 window.caption=()=>document.querySelector('.bs-tts-caption')?.textContent||'';
-window.barButton=(label)=>document.querySelector('.bs-tts-bar [aria-label="'+label+'"]');
-window.barClick=(label)=>{const node=barButton(label);if(!node)throw Error('missing bar button '+label+' bar='+Boolean(document.querySelector('.bs-tts-bar'))+' caption='+caption());node.click()};
+window.barButton=(label)=>document.querySelector('.bs-tts-menu [aria-label="'+label+'"]');
+window.barClick=(label)=>{const node=barButton(label);if(!node)throw Error('missing menu button '+label+' menu='+Boolean(document.querySelector('.bs-tts-menu'))+' caption='+caption());node.click()};
 window.openBook=async(title)=>{const card=[...document.querySelectorAll('.bs-card')].find(node=>node.querySelector('.bs-book-title')?.textContent===title);check(!!card,'book card '+title);card.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-reader'))};
-window.startReading=async()=>{document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();await until(()=>document.querySelector('.bs-tts-bar'))};
+window.openTts=async()=>{if(!document.querySelector('.bs-tts-menu')){document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click()}await until(()=>document.querySelector('.bs-tts-menu'))};
+window.startReading=async()=>{await openTts();await until(()=>barButton('ttsPlay')||barButton('ttsPause'));if(barButton('ttsPlay'))barClick('ttsPlay')};
 window.audioEvents=(type)=>window.__audio.filter(item=>!type||item.type===type);
 mount();
 </script></body></html>`
@@ -135,7 +136,7 @@ try {
   assert.equal(englishResponse.status, 201)
   const longResponse = await fetch(`${api}/books?name=long.epub&title=Long&format=epub`, {
     method: 'POST',
-    body: epubBytes('Long', [Array.from({ length: 26 }, (_, index) => `Paragraph ${index} keeps the paged layout stable and gives read-aloud enough sentences to cross pages.`) ]),
+    body: epubBytes('Long', [Array.from({ length: 120 }, (_, index) => `Paragraph ${index} keeps the paged layout stable and gives read-aloud enough sentences to cross pages.`) ]),
   })
   assert.equal(longResponse.status, 201)
   const pdfResponse = await fetch(`${api}/books?name=mixed.pdf&title=Mixed&format=pdf`, {
@@ -229,9 +230,9 @@ try {
   // The in-reader panel used to reset its draft on every render, so every
   // change snapped back to the saved settings.
   assert.equal(await evaluate(`(async()=>{
-    if(!document.querySelector('.bs-tts-bar')){
+    if(!document.querySelector('.bs-tts-menu')){
       document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
-      await until(()=>document.querySelector('.bs-tts-bar'));
+      await until(()=>document.querySelector('.bs-tts-menu'));
     }
     await until(()=>document.querySelector('.bs-tts-voice'));
     const voiceButton=document.querySelector('.bs-tts-voice');
@@ -260,12 +261,12 @@ try {
     // Slow the fake player and restart the queue so this block cannot race the
     // end of the previous one.
     window.__audioMs=2000;
-    if(document.querySelector('.bs-tts-bar')){
+    if(document.querySelector('.bs-tts-menu')){
       barClick('dismiss');
-      await until(()=>!document.querySelector('.bs-tts-bar'));
+      await until(()=>!document.querySelector('.bs-tts-menu'));
     }
     document.querySelector('.bs-reader-bar [aria-label="readAloud"]').click();
-    await until(()=>document.querySelector('.bs-tts-bar'));
+    await until(()=>document.querySelector('.bs-tts-menu'));
     if(!barButton('ttsPause')&&barButton('ttsPlay'))barClick('ttsPlay');
     await until(()=>barButton('ttsPause'));
     barClick('ttsPause');
@@ -284,7 +285,7 @@ try {
   // Closing the bar stops playback and hides the controls.
   assert.equal(await evaluate(`(async()=>{
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-bar'));
+    await until(()=>!document.querySelector('.bs-tts-menu'));
     const before=window.audioEvents('play').length;
     await wait(200);
     check(window.audioEvents('play').length===before,'closing must stop the queue');
@@ -302,7 +303,7 @@ try {
     await until(()=>document.querySelector('.bs-tts-settings'));
     [...document.querySelectorAll('.bs-tts-settings .bs-button')].find(node=>node.textContent==='cancel').click();
     await until(()=>!document.querySelector('.bs-tts-settings'));
-    const select=document.querySelector('.bs-tts-bar .bs-tts-speed select');
+    const select=document.querySelector('.bs-tts-menu .bs-tts-speed select');
     const setter=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value').set;
     setter.call(select,'1.5');select.dispatchEvent(new Event('change',{bubbles:true}));
     await wait(400);
@@ -315,7 +316,7 @@ try {
   // PDF: reading advances page by page automatically.
   assert.equal(await evaluate(`(async()=>{
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-bar'));
+    await until(()=>!document.querySelector('.bs-tts-menu'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('Mixed');
@@ -329,9 +330,9 @@ try {
   // An English book switches to an English voice automatically.
   spoken.length = 0
   assert.equal(await evaluate(`(async()=>{
-    const dismiss=document.querySelector('.bs-tts-bar [aria-label="dismiss"]');
+    const dismiss=document.querySelector('.bs-tts-menu [aria-label="dismiss"]');
     if(dismiss)dismiss.click();
-    await until(()=>!document.querySelector('.bs-tts-bar'));
+    await until(()=>!document.querySelector('.bs-tts-menu'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('English');
@@ -351,8 +352,8 @@ try {
   })
   spoken.length = 0
   assert.equal(await evaluate(`(async()=>{
-    document.querySelector('.bs-tts-bar [aria-label="dismiss"]')?.click();
-    await until(()=>!document.querySelector('.bs-tts-bar'));
+    document.querySelector('.bs-tts-menu [aria-label="dismiss"]')?.click();
+    await until(()=>!document.querySelector('.bs-tts-menu'));
     document.querySelector('.bs-reader-bar [aria-label="back"]').click();
     await until(()=>document.querySelector('.bs-shelf'));
     await openBook('English');
@@ -391,6 +392,33 @@ try {
       return match?Number(match[1]):null;
     };
     await until(()=>pageNumber()!==null);
+    await wait(800);
+    // Starting read-aloud used to insert a player bar above the page content.
+    // That shrank the paged reading area, re-flowed the columns, and moved the
+    // reader forward by a spread. The controls are now a floating menu, so the
+    // reading area and the page must stay exactly where they were.
+    for(let turn=0;turn<6;turn+=1){
+      const next=document.querySelector('button[title="nextPage"]');
+      check(!next.disabled,'next page available');
+      next.click();
+      await wait(120);
+    }
+    await wait(400);
+    const frameHeight=()=>Math.round(document.querySelector('.bs-epub-frame').getBoundingClientRect().height);
+    const beforeHeight=frameHeight();
+    const beforePage=pageNumber();
+    window.__audioMs=6000;
+    await startReading();
+    await wait(900);
+    check(document.querySelector('.bs-tts-menu'),'read-aloud menu is open');
+    check(frameHeight()===beforeHeight,'read-aloud menu resized the reading area: '+beforeHeight+' -> '+frameHeight());
+    check(pageNumber()===beforePage,'starting read-aloud moved the page: '+beforePage+' -> '+pageNumber());
+    barClick('dismiss');
+    await until(()=>!document.querySelector('.bs-tts-menu'));
+    await wait(500);
+    check(frameHeight()===beforeHeight,'closing read-aloud resized the reading area');
+    check(pageNumber()===beforePage,'closing read-aloud moved the page: '+beforePage+' -> '+pageNumber());
+    window.__audioMs=60;
     window.__pages=[];
     const poll=setInterval(()=>{
       const page=pageNumber();
@@ -407,7 +435,7 @@ try {
     }
     const beforeClose=pageNumber();
     barClick('dismiss');
-    await until(()=>!document.querySelector('.bs-tts-bar'));
+    await until(()=>!document.querySelector('.bs-tts-menu'));
     await wait(700);
     check(pageNumber()===beforeClose,'closing read-aloud moved the page: '+beforeClose+' -> '+pageNumber());
     return true;

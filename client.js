@@ -174,10 +174,10 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-settings-notice{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-success-primary)}
 .bs-settings-foot{justify-content:flex-end}
 .bs-settings-actions{display:flex;gap:8px}
-.bs-tts-bar{flex:none;display:flex;flex-direction:column;gap:6px;padding:6px 12px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
-.bs-tts-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.bs-tts-menu{position:absolute;top:var(--bs-popover-top);right:14px;z-index:9;display:flex;flex-direction:column;gap:8px;width:min(370px,calc(100vw - 28px));padding:10px 12px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-overlay);box-shadow:0 22px 60px -24px rgba(0,0,0,.6)}
+.bs-tts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
 .bs-tts-voice-readout{flex:none;max-width:190px;font-size:11px;line-height:1.4;padding:2px 6px;border-radius:6px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-tts-caption{flex:1;min-width:0;font-size:12px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bs-tts-caption{min-width:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .bs-tts-error{color:var(--dsw-alias-state-error-primary)}
 .bs-tts-speed{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--dsw-alias-label-secondary);flex:none}
 .bs-tts-select{font:inherit;font-size:11.5px;line-height:1.4;padding:3px 5px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
@@ -325,7 +325,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
-  .bs-tts-bar{padding:4px 8px}
+  .bs-tts-menu{right:8px;left:8px;width:auto;padding:8px}
   .bs-settings-dialog{width:calc(100vw - 16px);max-height:88vh}
   .bs-settings-tabs{padding:0 12px 8px}
   .bs-settings-body{padding:10px 12px}
@@ -2445,7 +2445,7 @@ html.bb-paged body table tr{break-inside:avoid}
       return secrets
     }
 
-    function ReadAloudBar({ t, readAloud, onClose }) {
+    function ReadAloudBar({ t, readAloud, onClose, onStart }) {
       const [voiceOpen, setVoiceOpen] = useState(false)
       const settings = readAloud.settings
       const provider = readAloud.providers.find((item) => item.id === (settings ? settings.provider : ''))
@@ -2473,9 +2473,15 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [voiceOpen])
 
       if (settings === null) {
-        return h('div', { className: 'bs-tts-bar', role: 'region', 'aria-label': t('readAloud') },
-          h('span', { className: 'bs-tts-caption' }, t('ttsLoading')),
-          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)))
+        return h('div', { className: 'bs-tts-menu', role: 'dialog', 'aria-label': t('readAloud') },
+          h(
+            'div',
+            { className: 'bs-settings-head' },
+            h('span', { className: 'bs-settings-title' }, t('readAloud')),
+            h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
+          ),
+          h('div', { className: 'bs-tts-caption' }, t('ttsLoading')),
+        )
       }
 
       const save = async () => {
@@ -2496,12 +2502,27 @@ html.bb-paged body table tr{break-inside:avoid}
       const label = provider ? provider.label : (settings.provider || '')
       return h(
         'div',
-        { className: 'bs-tts-bar', role: 'region', 'aria-label': t('readAloud') },
+        { className: 'bs-tts-menu', role: 'dialog', 'aria-label': t('readAloud') },
+        h(
+          'div',
+          { className: 'bs-settings-head' },
+          h('span', { className: 'bs-settings-title' }, t('readAloud')),
+          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
+        ),
         h(
           'div',
           { className: 'bs-tts-controls' },
           h('button', {
-            type: 'button', className: 'bs-icon-button', onClick: readAloud.toggle,
+            type: 'button', className: 'bs-icon-button',
+            onClick: () => {
+              if (status === 'idle') {
+                // This click is the gesture that permits later programmatic playback.
+                readAloud.unlock()
+                if (typeof onStart === 'function') onStart()
+                return
+              }
+              readAloud.toggle()
+            },
             title: status === 'playing' ? t('ttsPause') : t('ttsPlay'),
             'aria-label': status === 'playing' ? t('ttsPause') : t('ttsPlay'),
           }, status === 'playing' ? h(PauseIcon) : h(PlayIcon)),
@@ -2516,9 +2537,13 @@ html.bb-paged body table tr{break-inside:avoid}
           readAloud.activeVoiceLabel !== ''
             ? h('span', { className: 'bs-tts-voice-readout', title: readAloud.activeVoiceLabel }, readAloud.activeVoiceLabel)
             : null,
-          h('span', { className: 'bs-tts-caption', title: readAloud.caption }, status === 'error'
-            ? h('span', { className: 'bs-tts-error' }, `${t('ttsFailed')}: ${readAloud.error}`)
-            : status === 'loading' ? t('ttsLoading') : readAloud.caption || t('ttsIdle')),
+        ),
+        h('div', { className: 'bs-tts-caption', title: readAloud.caption }, status === 'error'
+          ? h('span', { className: 'bs-tts-error' }, `${t('ttsFailed')}: ${readAloud.error}`)
+          : status === 'loading' ? t('ttsLoading') : readAloud.caption || t('ttsIdle')),
+        h(
+          'div',
+          { className: 'bs-tts-controls' },
           h(
             'label',
             { className: 'bs-tts-speed' },
@@ -2534,7 +2559,6 @@ html.bb-paged body table tr{break-inside:avoid}
             type: 'button', className: 'bs-button bs-tts-voice', onClick: () => setVoiceOpen((value) => !value),
             title: t('ttsVoice'), 'aria-label': t('ttsVoice'), 'aria-expanded': voiceOpen,
           }, label),
-          h('button', { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') }, h(CloseIcon)),
         ),
         voiceOpen && draft !== null
           ? h(
@@ -2801,6 +2825,22 @@ html.bb-paged body table tr{break-inside:avoid}
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
       const [isFullscreen, setIsFullscreen] = useState(false)
+      const [ttsOpen, setTtsOpen] = useState(false)
+
+      useEffect(() => {
+        if (focusMode) setTtsOpen(false)
+      }, [focusMode])
+
+      useEffect(() => {
+        if (!ttsOpen) return undefined
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          event.preventDefault()
+          setTtsOpen(false)
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [ttsOpen])
 
       useEffect(() => {
         const onChange = () => setIsFullscreen(document.fullscreenElement === shellRef.current)
@@ -2886,16 +2926,9 @@ html.bb-paged body table tr{break-inside:avoid}
                         key: 'read-aloud',
                         type: 'button',
                         className: 'bs-icon-button',
-                        onClick: () => {
-                          if (speech.readAloud.running) {
-                            speech.readAloud.stop()
-                            return
-                          }
-                          // Unlock audio inside the gesture, then start.
-                          speech.readAloud.unlock()
-                          speech.start()
-                        },
+                        onClick: () => setTtsOpen((value) => !value),
                         'aria-pressed': speech.readAloud.running,
+                        'aria-expanded': ttsOpen,
                         title: t('readAloud'),
                         'aria-label': t('readAloud'),
                       },
@@ -2930,9 +2963,22 @@ html.bb-paged body table tr{break-inside:avoid}
               ),
             ),
         children,
-        focusMode || !speech || speech.readAloud.status === 'idle'
+        focusMode || !speech || !ttsOpen
           ? null
-          : h(ReadAloudBar, { t, readAloud: speech.readAloud, onClose: () => speech.readAloud.stop() }),
+          : h(
+              React.Fragment,
+              null,
+              h('div', { className: 'bs-popover-backdrop', onClick: () => setTtsOpen(false) }),
+              h(ReadAloudBar, {
+                t,
+                readAloud: speech.readAloud,
+                onStart: speech.start,
+                onClose: () => {
+                  speech.readAloud.stop()
+                  setTtsOpen(false)
+                },
+              }),
+            ),
         focusMode ? null : progress ? h(ReadingProgress, { t, percent: progress.percent, onSeek: progress.onSeek }) : null,
         focusMode
           ? h(
