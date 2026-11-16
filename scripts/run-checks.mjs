@@ -8,7 +8,7 @@ const tasks = {
   unit: ['--test',
     'tests/manifest.mjs', 'tests/sidebar-snapshot.mjs', 'tests/discussion-bridge.mjs',
     'tests/platform-compatibility.mjs', 'tests/link-fallback.mjs', 'tests/link-import-mode.mjs',
-    'tests/reading-fonts.mjs', 'tests/atomic-file.mjs',
+    'tests/reading-fonts.mjs', 'tests/atomic-file.mjs', 'tests/tags.mjs', 'tests/tags-api.mjs',
   ],
   browser: ['tests/run-browser.mjs'],
 }

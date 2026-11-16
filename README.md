@@ -13,6 +13,10 @@ panel. Library, covers, progress, bookmarks and settings live under
 - **Apple Books import** (macOS): search the local library and link a downloaded
   EPUB/PDF; EPUB source folders are packed on demand.
 - **Shelf**: left-aligned, stable-size cover grid that adapts to the panel width; search, sort, rename, delete.
+- **Tags and reading status**: every book has one built-in status (**Unread**,
+  **Reading**, **Finished** — derived from progress unless overridden) plus any
+  number of custom tags. The shelf switches categories with tabs; tags can be
+  created, renamed and deleted, and renaming keeps the books that carry them.
 - **PDF.js reader**: fit page/width/custom zoom, single/continuous pages, page
   bookmarks, progress restore.
 - **EPUB reader**: paged/scroll, TOC, typography, light/dark themes, automatic
@@ -55,9 +59,17 @@ Open **Bookshelf** in the sidebar, then **Import books**:
 
 EPUB settings separate **Font** from **Typography**. Choose an available common font, or use **Detect system fonts** to include installed custom fonts. Full detection requires browser support and a user-granted font-access permission; denial or unsupported browsers retain the common list. Native font metadata supplies weights and italics, including variable weights. The font inventory stays in browser memory; only the selected family and style are saved. Missing fonts use a fallback without discarding the saved selection. PDF pages keep their document fonts.
 
-Progress and bookmarks are stored on the Host. Switching panels preserves the
-open book, search/sort and scroll; a page reload returns to the shelf with
-progress intact.
+The shelf header lists one tab per category: **All**, the three reading statuses,
+and your own tags. Open a book's **More** menu → **Tags…** to pick a status and
+attach tags; **Manage tags** in the header creates, renames, or deletes tag
+definitions. A book may carry several tags, and deleting a tag removes it from
+every book. Tabs show how many books they hold; the search box narrows the
+selected category.
+
+Progress, bookmarks, tags and status overrides are stored on the Host under
+`$DSH_HOME/bookshelf`. Switching panels preserves the open book, search/sort,
+selected category and scroll; a page reload returns to the shelf with progress
+intact.
 
 ## Platform
 

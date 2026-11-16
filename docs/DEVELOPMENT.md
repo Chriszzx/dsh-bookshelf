@@ -1,6 +1,7 @@
 # 本地开发与测试
 
-下一版从本仓库的 `next` 分支继续开发。插件正式名称保持 `dsh-bookshelf`；当前发布版本为 `0.4.0`，功能变更在发布时递增版本号。
+下一版从本仓库的 `next` 分支继续开发。插件正式名称保持 `dsh-bookshelf`；0.5.0 在
+0.4.0 的基础上加入标签与阅读状态，功能变更在发布时递增版本号。
 
 ## 开发安装
 
@@ -19,6 +20,21 @@ DSH 会将插件链接到工作目录。GitHub 安装是独立的安装副本，
 修改 Host 代码后重启 DSH，确保加载新的模块；修改 Client 或浏览器资源后刷新现有 DSH 页面。当前仓库没有 DSH 源码开发 watcher，不能假定编辑后自动热更新。插件本身是直接加载的 JavaScript，无须构建单独的网页服务器。
 
 本地开发安装继续使用当前 DSH 的现有书库。以下自动化测试则使用独立临时书库；它们不会安装插件、调用个人 Apple Books 书库、修改当前 profile 或使用个人浏览器配置。
+
+## 书库数据格式
+
+书库元数据继续保存在 `$DSH_HOME/bookshelf`：
+
+- `library.json`：书籍记录。每本书可带 `status`（`unread` / `reading` / `finished`，
+  仅表示用户的手动覆盖）和 `tags`（自定义标签 id 数组）。
+- `tags.json`（0.5.0 新增）：自定义标签定义 `{ version, tags: [{ id, name, createdAt }] }`。
+  标签名在写入前统一做 NFKC 归一化查重，并与内置三态的中英文名冲突检查。
+- `state.json`：进度、书签、阅读设置。
+
+有效阅读状态由 Host 计算：`status` 存在时以手动值优先，否则按进度推导（无进度为未读，
+`percent >= 0.995` 为已读完，其余为正在阅读）。标签定义放在独立文件，是因为 0.4.0 的
+Host 重写 `library.json` 时会丢顶层字段；回退旧版本不会破坏分类表，书籍上的 `status` /
+`tags` 也会随记录保留。
 
 ## 安装测试依赖
 
@@ -41,7 +57,7 @@ pnpm run test:all
 
 - `test:syntax`：检查自有运行代码、测试辅助代码和测试脚本的语法。
 - `test`：运行 manifest、Host、会话交接和平台／导入测试，无需浏览器。
-- `test:browser`：依次运行可见文本捕获、文件导入、讨论交接、阅读状态恢复、分页几何，以及书架布局／字体设置测试。
+- `test:browser`：依次运行可见文本捕获、文件导入、讨论交接、阅读状态恢复、分页几何、书架布局／字体设置，以及标签与阅读状态测试。
 - `test:all`：依次执行以上三类检查。
 
 单独运行一组浏览器回归：
@@ -50,6 +66,7 @@ pnpm run test:all
 pnpm run test:browser file-import
 pnpm run test:browser tab-persistence pagination-geometry
 pnpm run test:browser layout-fonts
+pnpm run test:browser shelf-tags
 ```
 
 ## 浏览器与测试数据
@@ -66,6 +83,12 @@ pnpm run test:browser
 默认不需要提供任何电子书或 `/tmp/batch1-test` 目录。`BOOKSHELF_TEST_FIXTURES` 可选：指定它时，目录应有 `node_modules/react/umd/react.development.js`、`node_modules/react-dom/umd/react-dom.development.js`；状态恢复测试还需要 `paged-long.epub` 和至少三页的 `mixed.pdf`。外部 fixture 目录只读，测试不会删除它。
 
 Windows 进程没有符号链接权限时，仅真实符号链接成功的用例会明确 skip。复制回退、失败处理和注册来源校验仍然执行。macOS CI 覆盖真实符号链接成功路径。
+
+## 标签与阅读状态回归
+
+`shelf-tags` 浏览器回归使用独立临时书库，覆盖：分类页签的数量与计数、内置三态推导、手动状态覆盖、
+自定义标签的新建／改名／删除、标签删除后书籍归属被清除，以及刷新页面后状态与标签仍然存在。
+Host 侧的标签规则与 HTTP 契约由 `tests/tags.mjs`、`tests/tags-api.mjs` 覆盖，不依赖浏览器。
 
 ## 字体与布局回归
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const files = [
-  'index.js', 'client.js', 'sidebar.js', 'apple-books.js', 'link-source.js',
+  'index.js', 'client.js', 'sidebar.js', 'apple-books.js', 'link-source.js', 'tags.js',
   'source-revision.js', 'assets/reading-fonts.mjs', 'assets/epub.mjs', 'assets/discussion.mjs', 'assets/reading-snapshot.mjs',
 ]
 async function collect(directory) {

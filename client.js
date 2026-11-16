@@ -21,6 +21,14 @@ window.__ModuleLoader__.load({
     const SIDEBAR_PROJECTION_KEY = 'shelfPageSnapshot'
     const DISCUSSION_BRIDGE_VERSION = 5
     const MAX_IMPORT_BYTES = 256 * 1024 * 1024
+    // Built-in categories the shelf can filter by. The Host derives or stores
+    // one of these per book; custom tags are referenced by id as `tag:<id>`.
+    const STATUS_CATEGORIES = ['unread', 'reading', 'finished']
+    const STATUS_LABEL_KEYS = Object.freeze({
+      unread: 'statusUnread',
+      reading: 'statusReading',
+      finished: 'statusFinished',
+    })
 
     const CSS = `
 .bs-root{--bs-top-clearance:0px;--bs-popover-top:calc(var(--bs-top-clearance) + 56px);box-sizing:border-box;position:relative;display:flex;flex-direction:column;container:bookshelf / inline-size;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
@@ -124,6 +132,30 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-sort-select{font:inherit;font-size:11.5px;line-height:1.4;padding:5px 7px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer}
 .bs-sort-select:hover{background:var(--dsw-alias-bg-layer-2)}
 .bs-sort-select:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-tabs{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 24px 8px}
+.bs-tab{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11.5px;line-height:1.4;cursor:pointer;white-space:nowrap}
+.bs-tab:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.bs-tab:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-tab[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}
+.bs-tab-count{font-variant-numeric:tabular-nums;opacity:.75}
+.bs-tag-dialog{width:min(460px,calc(100vw - 28px));max-height:calc(100vh - 40px)}
+.bs-tag-section{display:flex;flex-direction:column;gap:8px;padding:0 18px 12px}
+.bs-tag-section-title{margin:0;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary)}
+.bs-tag-choices{display:flex;flex-wrap:wrap;gap:6px}
+.bs-tag-choice{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;line-height:1.4;cursor:pointer}
+.bs-tag-choice:hover{background:var(--dsw-alias-bg-layer-2)}
+.bs-tag-choice:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
+.bs-tag-choice[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-brand-primary)}
+.bs-tag-empty{margin:0;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.bs-tag-new{display:flex;gap:6px}
+.bs-tag-new .bs-rename-input{flex:1;min-width:0}
+.bs-tag-manage-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow:auto;padding:0 18px 12px}
+.bs-tag-manage-row{display:flex;align-items:center;gap:6px}
+.bs-tag-manage-row .bs-rename-input{flex:1;min-width:0}
+.bs-tag-manage-count{flex:none;font-size:11px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
+.bs-tag-danger{color:var(--dsw-alias-state-error-primary)}
+.bs-tag-body{flex:1;min-height:0;overflow:auto}
+.bs-tag-foot{justify-content:flex-end}
 .bs-meta{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0 2px}
 .bs-book-title{font-size:13px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-book-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -262,6 +294,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-focus-controls{right:8px}
   .bs-shelf-tools{padding:8px 12px;gap:6px}
+  .bs-tabs{padding:0 12px 6px;gap:5px}
   .bs-sort-label{display:none}
   .bs-apple-button-label{display:none}
   .bs-apple-dialog{width:calc(100vw - 20px);max-height:88vh}
@@ -826,6 +859,13 @@ html.bb-paged body table tr{break-inside:avoid}
       return svgIcon(size, [
         h('path', { key: 'a', d: 'M4 7h16M10 4h4M6.5 7l.8 13h9.4l.8-13' }),
         h('path', { key: 'b', d: 'M10 11v5M14 11v5' }),
+      ])
+    }
+
+    function TagIcon({ size = 15 }) {
+      return svgIcon(size, [
+        h('path', { key: 'a', d: 'M4 4h7l9 9-7 7-9-9Z' }),
+        h('circle', { key: 'b', cx: 8, cy: 8, r: 1.4 }),
       ])
     }
 
@@ -4373,16 +4413,23 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
-    function BookCard({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename }) {
+    function BookCard({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags }) {
       const progress = book.progress && typeof book.progress === 'object' ? book.progress : null
       const percent = progress ? Math.min(1, Math.max(0, Number(progress.percent) || 0)) : 0
-      const finished = percent >= 0.995
-      const subParts = percent > 0
-        ? [
-            finished ? t('finishedReading') : `${t('continueReading')} ${Math.round(percent * 100)}%`,
-            book.author || t('unknownAuthor'),
-          ]
-        : [book.author || t('unknownAuthor'), formatBytes(book.bytes), formatDate(book.addedAt)]
+      // The Host sends the effective status (manual override or progress). The
+      // card label must follow it, or a manual "finished" would still print the
+      // percent-derived "continue reading".
+      const status = STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
+      const statusLabel = t(STATUS_LABEL_KEYS[status])
+      const finished = status === 'finished'
+      const subParts = book.statusManual
+        ? [statusLabel, book.author || t('unknownAuthor')]
+        : percent > 0
+          ? [
+              finished ? t('finishedReading') : `${t('continueReading')} ${Math.round(percent * 100)}%`,
+              book.author || t('unknownAuthor'),
+            ]
+          : [book.author || t('unknownAuthor'), formatBytes(book.bytes), formatDate(book.addedAt)]
       const coverSrc =
         book.cover && book.cover.updatedAt && book.id
           ? resourceUrl(base, `${API_ROOT}/books/${book.id}/cover?v=${book.cover.updatedAt}`)
@@ -4525,6 +4572,18 @@ html.bb-paged body table tr{break-inside:avoid}
                   },
                   t('rename'),
                 ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    role: 'menuitem',
+                    onClick: () => {
+                      setMenuOpen(false)
+                      onEditTags(book)
+                    },
+                  },
+                  t('bookTags'),
+                ),
               ),
         ),
         h(
@@ -4579,6 +4638,440 @@ html.bb-paged body table tr{break-inside:avoid}
       })
     }
 
+    // ------------------------------------------------------------ shelf tags
+    function BookTagsDialog({ t, book, tags, saving, error, onClose, onSave, onCreateTag }) {
+      const [status, setStatus] = useState(book.statusManual ? book.status : 'auto')
+      const [selected, setSelected] = useState(() => new Set(Array.isArray(book.tags) ? book.tags : []))
+      const [available, setAvailable] = useState(tags)
+      const [newName, setNewName] = useState('')
+      const [creating, setCreating] = useState(false)
+      const [createError, setCreateError] = useState('')
+
+      useEffect(() => {
+        setAvailable((current) => {
+          const known = new Set(current.map((tag) => tag.id))
+          const added = tags.filter((tag) => !known.has(tag.id))
+          return added.length === 0 ? current : [...current, ...added]
+        })
+      }, [tags])
+
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented) return
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [onClose])
+
+      const toggle = (id) => {
+        setSelected((current) => {
+          const next = new Set(current)
+          if (next.has(id)) next.delete(id)
+          else next.add(id)
+          return next
+        })
+      }
+
+      const create = async () => {
+        const name = newName.trim()
+        if (name === '' || creating) return
+        setCreating(true)
+        setCreateError('')
+        try {
+          const tag = await onCreateTag(name)
+          setAvailable((current) => [...current, tag])
+          setSelected((current) => new Set([...current, tag.id]))
+          setNewName('')
+        } catch (failure) {
+          setCreateError(failure instanceof Error ? failure.message : String(failure))
+        } finally {
+          setCreating(false)
+        }
+      }
+
+      const statusChoices = [
+        ['auto', t('statusAuto')],
+        ...STATUS_CATEGORIES.map((value) => [value, t(STATUS_LABEL_KEYS[value])]),
+      ]
+
+      const submit = (event) => {
+        event.preventDefault()
+        if (saving) return
+        onSave({ status: status === 'auto' ? null : status, tags: Array.from(selected) })
+      }
+
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-apple-backdrop', onClick: saving ? undefined : onClose }),
+        h(
+          'div',
+          {
+            className: 'bs-apple-dialog bs-tag-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('bookTags'),
+            onClick: (event) => event.stopPropagation(),
+          },
+          h(
+            'header',
+            { className: 'bs-apple-head' },
+            h(
+              'div',
+              { className: 'bs-apple-heading' },
+              h('h2', { className: 'bs-apple-title' }, t('bookTags')),
+              h('p', { className: 'bs-apple-hint' }, book.title || t('untitled')),
+            ),
+            h(
+              'button',
+              { type: 'button', className: 'bs-icon-button', onClick: onClose, title: t('dismiss'), 'aria-label': t('dismiss') },
+              h(CloseIcon),
+            ),
+          ),
+          h(
+            'form',
+            { className: 'bs-rename-form', onSubmit: submit },
+            h(
+              'div',
+              { className: 'bs-tag-body' },
+              h(
+                'div',
+                { className: 'bs-tag-section' },
+                h('p', { className: 'bs-tag-section-title' }, t('statusLabel')),
+                h(
+                  'div',
+                  { className: 'bs-tag-choices' },
+                  statusChoices.map(([value, label]) =>
+                    h(
+                      'button',
+                      {
+                        key: value,
+                        type: 'button',
+                        className: 'bs-tag-choice',
+                        'aria-pressed': status === value,
+                        onClick: () => setStatus(value),
+                      },
+                      label,
+                    ),
+                  ),
+                ),
+              ),
+              h(
+                'div',
+                { className: 'bs-tag-section' },
+                h('p', { className: 'bs-tag-section-title' }, t('tagsLabel')),
+                available.length === 0
+                  ? h('p', { className: 'bs-tag-empty' }, t('tagsEmpty'))
+                  : h(
+                      'div',
+                      { className: 'bs-tag-choices' },
+                      available.map((tag) =>
+                        h(
+                          'button',
+                          {
+                            key: tag.id,
+                            type: 'button',
+                            className: 'bs-tag-choice',
+                            'aria-pressed': selected.has(tag.id),
+                            onClick: () => toggle(tag.id),
+                          },
+                          tag.name,
+                        ),
+                      ),
+                    ),
+              ),
+              h(
+                'div',
+                { className: 'bs-tag-section' },
+                h('p', { className: 'bs-tag-section-title' }, t('newTagLabel')),
+                h(
+                  'div',
+                  { className: 'bs-tag-new' },
+                  h('input', {
+                    type: 'text',
+                    className: 'bs-rename-input',
+                    value: newName,
+                    maxLength: 32,
+                    placeholder: t('newTagPlaceholder'),
+                    'aria-label': t('newTagPlaceholder'),
+                    onChange: (event) => setNewName(event.target.value),
+                    onKeyDown: (event) => {
+                      if (event.key !== 'Enter') return
+                      event.preventDefault()
+                      void create()
+                    },
+                  }),
+                  h(
+                    'button',
+                    { type: 'button', className: 'bs-button', disabled: creating || newName.trim() === '', onClick: create },
+                    creating ? t('saving') : t('createTag'),
+                  ),
+                ),
+              ),
+              createError !== ''
+                ? h('p', { className: 'bs-rename-error', role: 'alert', style: { margin: '0 18px 10px' } }, createError)
+                : null,
+              error !== ''
+                ? h('p', { className: 'bs-rename-error', role: 'alert', style: { margin: '0 18px 10px' } }, error)
+                : null,
+            ),
+            h(
+              'div',
+              { className: 'bs-apple-foot bs-tag-foot' },
+              h('button', { type: 'button', className: 'bs-button', onClick: onClose, disabled: saving }, t('cancel')),
+              h(
+                'button',
+                { type: 'submit', className: 'bs-button bs-button-primary', disabled: saving },
+                saving ? t('saving') : t('save'),
+              ),
+            ),
+          ),
+        ),
+      )
+    }
+
+    function TagManagerDialog({ t, tags, books, onClose, onCreate, onRename, onDelete, onChanged }) {
+      const [newName, setNewName] = useState('')
+      const [drafts, setDrafts] = useState(() => Object.fromEntries(tags.map((tag) => [tag.id, tag.name])))
+      const [busy, setBusy] = useState(false)
+      const [error, setError] = useState('')
+      const [confirm, setConfirm] = useState(null)
+
+      useEffect(() => {
+        setDrafts((current) => {
+          const next = { ...current }
+          for (const tag of tags) if (!(tag.id in next)) next[tag.id] = tag.name
+          return next
+        })
+      }, [tags])
+
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented || busy) return
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [onClose, busy])
+
+      const counts = (() => {
+        const values = new Map()
+        for (const book of books) {
+          for (const id of Array.isArray(book.tags) ? book.tags : []) values.set(id, (values.get(id) || 0) + 1)
+        }
+        return values
+      })()
+
+      const report = (failure) => {
+        setError(failure instanceof Error ? failure.message : String(failure))
+      }
+
+      const create = async () => {
+        const name = newName.trim()
+        if (name === '' || busy) return
+        setBusy(true)
+        setError('')
+        try {
+          const tag = await onCreate(name)
+          setDrafts((current) => ({ ...current, [tag.id]: tag.name }))
+          setNewName('')
+          onChanged()
+        } catch (failure) {
+          report(failure)
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const rename = async (tag) => {
+        const name = (drafts[tag.id] || '').trim()
+        if (name === '' || name === tag.name || busy) return
+        setBusy(true)
+        setError('')
+        try {
+          const updated = await onRename(tag.id, name)
+          setDrafts((current) => ({ ...current, [updated.id]: updated.name }))
+          onChanged()
+        } catch (failure) {
+          report(failure)
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      const remove = async (tag) => {
+        if (busy) return
+        setBusy(true)
+        setError('')
+        try {
+          await onDelete(tag.id)
+          setConfirm(null)
+          setDrafts((current) => {
+            const next = { ...current }
+            delete next[tag.id]
+            return next
+          })
+          onChanged()
+        } catch (failure) {
+          report(failure)
+        } finally {
+          setBusy(false)
+        }
+      }
+
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-apple-backdrop', onClick: busy ? undefined : onClose }),
+        h(
+          'div',
+          {
+            className: 'bs-apple-dialog bs-tag-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('manageTags'),
+            onClick: (event) => event.stopPropagation(),
+          },
+          h(
+            'header',
+            { className: 'bs-apple-head' },
+            h(
+              'div',
+              { className: 'bs-apple-heading' },
+              h('h2', { className: 'bs-apple-title' }, t('manageTags')),
+              h('p', { className: 'bs-apple-hint' }, t('manageTagsHint')),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'bs-icon-button',
+                onClick: onClose,
+                title: t('dismiss'),
+                'aria-label': t('dismiss'),
+                disabled: busy,
+              },
+              h(CloseIcon),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'bs-tag-section' },
+            h(
+              'div',
+              { className: 'bs-tag-new' },
+              h('input', {
+                type: 'text',
+                className: 'bs-rename-input',
+                value: newName,
+                maxLength: 32,
+                placeholder: t('newTagPlaceholder'),
+                'aria-label': t('newTagPlaceholder'),
+                onChange: (event) => setNewName(event.target.value),
+                onKeyDown: (event) => {
+                  if (event.key !== 'Enter') return
+                  event.preventDefault()
+                  void create()
+                },
+              }),
+              h(
+                'button',
+                { type: 'button', className: 'bs-button', disabled: busy || newName.trim() === '', onClick: create },
+                t('createTag'),
+              ),
+            ),
+          ),
+          h(
+            'div',
+            { className: 'bs-tag-manage-list' },
+            tags.length === 0
+              ? h('p', { className: 'bs-tag-empty' }, t('tagsEmpty'))
+              : tags.map((tag) =>
+                  h(
+                    'div',
+                    { key: tag.id, className: 'bs-tag-manage-row' },
+                    h('input', {
+                      type: 'text',
+                      className: 'bs-rename-input',
+                      value: drafts[tag.id] ?? tag.name,
+                      maxLength: 32,
+                      'aria-label': t('tagNameLabel'),
+                      onChange: (event) => setDrafts((current) => ({ ...current, [tag.id]: event.target.value })),
+                      onKeyDown: (event) => {
+                        if (event.key !== 'Enter') return
+                        event.preventDefault()
+                        void rename(tag)
+                      },
+                    }),
+                    h('span', { className: 'bs-tag-manage-count' }, t('tagBookCount', { count: counts.get(tag.id) || 0 })),
+                    confirm !== null && confirm.id === tag.id
+                      ? h(
+                          React.Fragment,
+                          null,
+                          h(
+                            'button',
+                            { type: 'button', className: 'bs-button bs-tag-danger', disabled: busy, onClick: () => remove(tag) },
+                            t('confirmDeleteTag'),
+                          ),
+                          h(
+                            'button',
+                            { type: 'button', className: 'bs-button', disabled: busy, onClick: () => setConfirm(null) },
+                            t('cancel'),
+                          ),
+                        )
+                      : h(
+                          React.Fragment,
+                          null,
+                          h(
+                            'button',
+                            {
+                              type: 'button',
+                              className: 'bs-button',
+                              disabled: busy || (drafts[tag.id] ?? tag.name).trim() === tag.name,
+                              onClick: () => rename(tag),
+                            },
+                            t('renameTag'),
+                          ),
+                          h(
+                            'button',
+                            {
+                              type: 'button',
+                              className: 'bs-icon-button bs-tag-danger',
+                              disabled: busy,
+                              onClick: () => setConfirm({ id: tag.id }),
+                              title: t('deleteTag'),
+                              'aria-label': t('deleteTag'),
+                            },
+                            h(TrashIcon),
+                          ),
+                        ),
+                  ),
+                ),
+          ),
+          confirm !== null
+            ? h(
+                'p',
+                { className: 'bs-tag-section bs-tag-empty' },
+                t('deleteTagHint', { count: counts.get(confirm.id) || 0 }),
+              )
+            : null,
+          error !== ''
+            ? h('p', { className: 'bs-rename-error', role: 'alert', style: { margin: '0 18px 10px' } }, error)
+            : null,
+          h(
+            'div',
+            { className: 'bs-apple-foot bs-tag-foot' },
+            h('button', { type: 'button', className: 'bs-button', onClick: onClose, disabled: busy }, t('done')),
+          ),
+        ),
+      )
+    }
+
     function ErrorPanel({ t, message, onRetry }) {
       return h(
         'div',
@@ -4631,6 +5124,12 @@ html.bb-paged body table tr{break-inside:avoid}
       const fileInputRef = useRef(null)
       const [query, setStoredQuery] = useShelfView(viewState, 'query')
       const [sortMode, setStoredSort] = useShelfView(viewState, 'sortMode')
+      const [category, setStoredCategory] = useShelfView(viewState, 'category')
+      const [tagDefinitions, setTagDefinitions] = useState([])
+      const [tagTarget, setTagTarget] = useState(null)
+      const [tagSaving, setTagSaving] = useState(false)
+      const [tagError, setTagError] = useState('')
+      const [tagsOpen, setTagsOpen] = useState(false)
       const shelfScrollRef = useRef(null)
       const setQuery = useCallback((value) => {
         viewState.scrollTop = 0
@@ -4642,6 +5141,11 @@ html.bb-paged body table tr{break-inside:avoid}
         if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = 0
         setStoredSort(value)
       }, [viewState, setStoredSort])
+      const setCategory = useCallback((value) => {
+        viewState.scrollTop = 0
+        if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = 0
+        setStoredCategory(value)
+      }, [viewState, setStoredCategory])
       const [appleOpen, setAppleOpen] = useState(false)
       const [capabilities, setCapabilities] = useState(null)
       const [appleBooksEnabled, setAppleBooksEnabled] = useState(() => {
@@ -4719,6 +5223,93 @@ html.bb-paged body table tr{break-inside:avoid}
         [base, renameState, t],
       )
 
+      // ---------------------------------------------------------- tag edits
+      const openBookTags = useCallback((book) => {
+        setTagError('')
+        setTagTarget(book)
+      }, [])
+
+      const closeBookTags = useCallback(() => {
+        if (tagSaving) return
+        setTagTarget(null)
+        setTagError('')
+      }, [tagSaving])
+
+      const createTag = useCallback(
+        async (name) => {
+          const payload = await requestJson(base, '/tags', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name }),
+          })
+          const tag = payload && payload.tag
+          if (!tag || typeof tag.id !== 'string') throw new Error(t('tagRequestFailed'))
+          setTagDefinitions((current) => (current.some((entry) => entry.id === tag.id) ? current : [...current, tag]))
+          return tag
+        },
+        [base, t],
+      )
+
+      const renameTag = useCallback(
+        async (id, name) => {
+          const payload = await requestJson(base, `/tags/${id}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ name }),
+          })
+          const tag = payload && payload.tag
+          if (!tag || typeof tag.id !== 'string') throw new Error(t('tagRequestFailed'))
+          setTagDefinitions((current) => current.map((entry) => (entry.id === tag.id ? tag : entry)))
+          return tag
+        },
+        [base, t],
+      )
+
+      const deleteTag = useCallback(
+        async (id) => {
+          const payload = await requestJson(base, `/tags/${id}`, { method: 'DELETE' })
+          setTagDefinitions((current) => current.filter((entry) => entry.id !== id))
+          if (category === `tag:${id}`) setCategory('all')
+          return payload
+        },
+        [base, category, setCategory],
+      )
+
+      const saveBookTags = useCallback(
+        async (values) => {
+          if (tagTarget === null) return
+          setTagSaving(true)
+          setTagError('')
+          try {
+            await requestJson(base, `/books/${tagTarget.id}`, {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify(values),
+            })
+            setTagTarget(null)
+            setNotice({ kind: 'ok', text: t('tagsSaved') })
+            setReload((value) => value + 1)
+          } catch (failure) {
+            setTagError(t('tagsSaveFailed', { message: failure instanceof Error ? failure.message : String(failure) }))
+          } finally {
+            setTagSaving(false)
+          }
+        },
+        [base, tagTarget, t],
+      )
+
+      // ------------------------------------------------------- finish prompt
+      useEffect(() => {
+        if (books === null) return
+        if (typeof category !== 'string' || category === 'all') return
+        if (category.startsWith('tag:')) {
+          const id = category.slice('tag:'.length)
+          if (!tagDefinitions.some((tag) => tag.id === id)) setCategory('all')
+          return
+        }
+        if (!STATUS_CATEGORIES.includes(category)) setCategory('all')
+      }, [books, category, tagDefinitions, setCategory])
+
       useEffect(() => {
         let cancelled = false
         setLoading(true)
@@ -4727,6 +5318,7 @@ html.bb-paged body table tr{break-inside:avoid}
           .then((payload) => {
             if (cancelled) return
             setBooks(Array.isArray(payload && payload.books) ? payload.books : [])
+            setTagDefinitions(Array.isArray(payload && payload.tags) ? payload.tags : [])
           })
           .catch((failure) => {
             if (cancelled) return
@@ -5001,20 +5593,54 @@ html.bb-paged body table tr{break-inside:avoid}
       const count = Array.isArray(books) ? books.length : 0
       const isBusy = busy !== null
       const normalizedQuery = query.trim().toLocaleLowerCase()
+      // Category counts ignore the search box: a tab always reports how many
+      // books it holds, while the grid below narrows with the query.
+      const statusCounts = { unread: 0, reading: 0, finished: 0 }
+      const tagCounts = new Map()
+      if (Array.isArray(books)) {
+        for (const book of books) {
+          if (STATUS_CATEGORIES.includes(book.status)) statusCounts[book.status] += 1
+          for (const id of Array.isArray(book.tags) ? book.tags : []) tagCounts.set(id, (tagCounts.get(id) || 0) + 1)
+        }
+      }
+      const categoryTabs = [
+        { key: 'all', label: t('categoryAll'), count },
+        ...STATUS_CATEGORIES.map((status) => ({
+          key: status,
+          label: t(STATUS_LABEL_KEYS[status]),
+          count: statusCounts[status],
+        })),
+        ...tagDefinitions.map((tag) => ({
+          key: `tag:${tag.id}`,
+          label: tag.name,
+          count: tagCounts.get(tag.id) || 0,
+        })),
+      ]
+      const activeCategory = typeof category === 'string' && category !== '' ? category : 'all'
+      const matchesCategory = (book) => {
+        if (activeCategory === 'all') return true
+        if (activeCategory.startsWith('tag:')) {
+          return Array.isArray(book.tags) && book.tags.includes(activeCategory.slice('tag:'.length))
+        }
+        return book.status === activeCategory
+      }
       const visibleBooks = (() => {
         const source = Array.isArray(books) ? books : []
+        const inCategory = source.filter(matchesCategory)
         const filtered =
           normalizedQuery === ''
-            ? source.slice()
-            : source.filter((book) =>
+            ? inCategory
+            : inCategory.filter((book) =>
                 `${book.title || ''} ${book.author || ''} ${book.name || ''}`.toLocaleLowerCase().includes(normalizedQuery),
               )
         return sortBookList(filtered, sortMode)
       })()
       const showLoading = loading && books === null
       const showEmpty = !loading && error === '' && books !== null && books.length === 0
-      const showNoResults = !loading && error === '' && books !== null && books.length > 0 && visibleBooks.length === 0
-
+      const showCategoryEmpty =
+        !loading && error === '' && books !== null && books.length > 0 && visibleBooks.length === 0 && normalizedQuery === ''
+      const showNoResults =
+        !loading && error === '' && books !== null && books.length > 0 && visibleBooks.length === 0 && normalizedQuery !== ''
       return h(
         'div',
         {
@@ -5093,6 +5719,18 @@ html.bb-paged body table tr{break-inside:avoid}
               {
                 type: 'button',
                 className: 'bs-icon-button',
+                onClick: () => setTagsOpen(true),
+                disabled: isBusy,
+                title: t('manageTags'),
+                'aria-label': t('manageTags'),
+              },
+              h(TagIcon),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'bs-icon-button',
                 onClick: () => setDefaultsOpen((value) => !value),
                 'aria-expanded': defaultsOpen,
                 'aria-pressed': defaultsOpen,
@@ -5103,6 +5741,26 @@ html.bb-paged body table tr{break-inside:avoid}
             ),
           ),
         ),
+        count > 0
+          ? h(
+              'div',
+              { className: 'bs-tabs', role: 'group', 'aria-label': t('categories') },
+              categoryTabs.map((tab) =>
+                h(
+                  'button',
+                  {
+                    key: tab.key,
+                    type: 'button',
+                    className: 'bs-tab',
+                    'aria-pressed': activeCategory === tab.key,
+                    onClick: () => setCategory(tab.key),
+                  },
+                  h('span', null, tab.label),
+                  h('span', { className: 'bs-tab-count' }, String(tab.count)),
+                ),
+              ),
+            )
+          : null,
         count > 0
           ? h(
               'div',
@@ -5202,7 +5860,27 @@ html.bb-paged body table tr{break-inside:avoid}
                       }),
                     ),
                   )
-                : showNoResults
+                : showCategoryEmpty
+                  ? h(
+                      'div',
+                      { className: 'bs-center' },
+                      h('div', { className: 'bs-empty-icon' }, h(BookIcon, { size: 28 })),
+                      h('h2', { className: 'bs-empty-title' }, t('emptyCategoryTitle')),
+                      h('p', { className: 'bs-empty-text' }, t('emptyCategoryHint')),
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          className: 'bs-button',
+                          onClick: () => {
+                            setCategory('all')
+                            setQuery('')
+                          },
+                        },
+                        t('showAllBooks'),
+                      ),
+                    )
+                  : showNoResults
                   ? h(
                       'div',
                       { className: 'bs-center' },
@@ -5236,6 +5914,7 @@ html.bb-paged body table tr{break-inside:avoid}
                           onAskDelete: (value) => setDeleteTarget(value),
                           onCancelDelete: () => setDeleteTarget(null),
                           onRename: openRename,
+                          onEditTags: openBookTags,
                           confirming: deleteTarget !== null && deleteTarget.id === book.id,
                           deleting: deleting && deleteTarget !== null && deleteTarget.id === book.id,
                         }),
@@ -5289,6 +5968,30 @@ html.bb-paged body table tr{break-inside:avoid}
               t,
               base,
               onClose: () => setLinkOpen(false),
+              onChanged: () => setReload((value) => value + 1),
+            })
+          : null,
+        tagTarget !== null
+          ? h(BookTagsDialog, {
+              t,
+              book: tagTarget,
+              tags: tagDefinitions,
+              saving: tagSaving,
+              error: tagError,
+              onClose: closeBookTags,
+              onSave: saveBookTags,
+              onCreateTag: createTag,
+            })
+          : null,
+        tagsOpen
+          ? h(TagManagerDialog, {
+              t,
+              tags: tagDefinitions,
+              books: Array.isArray(books) ? books : [],
+              onClose: () => setTagsOpen(false),
+              onCreate: createTag,
+              onRename: renameTag,
+              onDelete: deleteTag,
               onChanged: () => setReload((value) => value + 1),
             })
           : null,
@@ -5446,6 +6149,34 @@ html.bb-paged body table tr{break-inside:avoid}
       readingProgress: 'Reading progress',
       continueReading: 'Continue reading',
       finishedReading: 'Finished',
+      statusLabel: 'Status',
+      statusAuto: 'Follow progress',
+      statusUnread: 'Unread',
+      statusReading: 'Reading',
+      statusFinished: 'Finished',
+      categories: 'Categories',
+      categoryAll: 'All',
+      bookTags: 'Tags…',
+      manageTags: 'Manage tags',
+      manageTagsHint: 'Create, rename, or delete the tags used to group books.',
+      tagsLabel: 'Tags',
+      tagsEmpty: 'No custom tags yet.',
+      newTagLabel: 'New tag',
+      newTagPlaceholder: 'Tag name',
+      createTag: 'Create',
+      tagNameLabel: 'Tag name',
+      tagBookCount: '{count} books',
+      renameTag: 'Rename',
+      deleteTag: 'Delete tag',
+      confirmDeleteTag: 'Delete anyway',
+      deleteTagHint: 'Deleting this tag also removes it from {count} books.',
+      emptyCategoryTitle: 'No books here yet',
+      emptyCategoryHint: 'Assign this category to a book, or pick another one.',
+      showAllBooks: 'Show all books',
+      done: 'Done',
+      tagsSaved: 'Tags saved.',
+      tagsSaveFailed: 'Could not save tags: {message}',
+      tagRequestFailed: 'The bookshelf service returned an unexpected response.',
       tocTab: 'Contents',
       bookmarksTab: 'Bookmarks',
       asideLabel: 'Reading navigation',
@@ -5692,6 +6423,34 @@ html.bb-paged body table tr{break-inside:avoid}
       readingProgress: '阅读进度',
       continueReading: '继续阅读',
       finishedReading: '已读完',
+      statusLabel: '状态',
+      statusAuto: '跟随阅读进度',
+      statusUnread: '未读',
+      statusReading: '正在阅读',
+      statusFinished: '已读完',
+      categories: '分类',
+      categoryAll: '全部',
+      bookTags: '标签…',
+      manageTags: '管理标签',
+      manageTagsHint: '新建、改名或删除用于分类书籍的标签。',
+      tagsLabel: '标签',
+      tagsEmpty: '还没有自定义标签。',
+      newTagLabel: '新建标签',
+      newTagPlaceholder: '标签名称',
+      createTag: '新建',
+      tagNameLabel: '标签名称',
+      tagBookCount: '{count} 本',
+      renameTag: '改名',
+      deleteTag: '删除标签',
+      confirmDeleteTag: '确认删除',
+      deleteTagHint: '删除后，{count} 本书上的这个标签也会移除。',
+      emptyCategoryTitle: '这个分类下还没有书',
+      emptyCategoryHint: '给一本书打上这个分类，或者换一个分类看看。',
+      showAllBooks: '显示全部书籍',
+      done: '完成',
+      tagsSaved: '标签已保存。',
+      tagsSaveFailed: '保存标签失败：{message}',
+      tagRequestFailed: '书架服务返回了异常响应。',
       tocTab: '目录',
       bookmarksTab: '书签',
       asideLabel: '阅读导航',
@@ -5830,7 +6589,7 @@ html.bb-paged body table tr{break-inside:avoid}
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'bookshelf: dictionaries')
         const t = ctx.locale.bind(NS)
-        const viewState = { openBookId: null, query: '', sortMode: 'added', scrollTop: 0 }
+        const viewState = { openBookId: null, query: '', sortMode: 'added', category: 'all', scrollTop: 0 }
         let bridge = null, bridgePromise = null, operationPromise = null, disposed = false
         const listeners = new Set()
         const notify = () => { for (const listener of listeners) listener() }

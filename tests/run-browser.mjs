@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findBrowser } from './helpers/browser-env.mjs'
 
-const suites = ['reading-snapshot', 'file-import', 'discussion-handoff', 'tab-persistence', 'pagination-geometry', 'layout-fonts']
+const suites = ['reading-snapshot', 'file-import', 'discussion-handoff', 'tab-persistence', 'pagination-geometry', 'layout-fonts', 'shelf-tags']
 const selected = process.argv.slice(2)
 for (const name of selected) {
   if (!suites.includes(name)) throw new Error(`Unknown browser suite: ${name}. Choose ${suites.join(', ')}.`)

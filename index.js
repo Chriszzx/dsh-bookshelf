@@ -10,6 +10,14 @@ import { createSourceLink } from './link-source.js'
 import { sanitizeFontSettings } from './assets/reading-fonts.mjs'
 import { replaceFile } from './assets/atomic-file.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
+import {
+  createTagStore,
+  isTagId,
+  readingStatusOf,
+  READING_STATUSES,
+  TAG_LIMITS,
+  TagStoreError,
+} from './tags.js'
 
 /**
  * Local bookshelf library for the DSH Web GUI.
@@ -76,6 +84,7 @@ export function apply(ctx) {
   const statesPath = join(rootDir, 'state.json')
   const defaultsPath = join(rootDir, 'defaults.json')
   const assetsDir = fileURLToPath(new URL('./assets', import.meta.url))
+  const tagStore = createTagStore({ rootDir })
 
   let pendingWrite = Promise.resolve()
   let pendingStateWrite = Promise.resolve()
@@ -250,6 +259,41 @@ export function apply(ctx) {
   function publicBook(record) {
     const { link, ...visible } = record
     return visible
+  }
+
+  // A damaged tags.json must not take the whole shelf down: it degrades to "no
+  // custom tags" and leaves a warning. Mutations still report the real error.
+  async function readTagDefinitions() {
+    try {
+      return await tagStore.list()
+    } catch (error) {
+      ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
+      return []
+    }
+  }
+
+  function selectedTagIds(record, knownTagIds) {
+    if (!Array.isArray(record.tags)) return []
+    const ids = []
+    for (const value of record.tags) {
+      if (typeof value !== 'string' || !knownTagIds.has(value) || ids.includes(value)) continue
+      ids.push(value)
+    }
+    return ids
+  }
+
+  function publicBookView(record, state, knownTagIds) {
+    const progress = state && state.progress && typeof state.progress === 'object' ? state.progress : null
+    const bookmarkCount = state && Array.isArray(state.bookmarks) ? state.bookmarks.length : 0
+    const { status, manual } = readingStatusOf(record, progress)
+    return {
+      ...publicBook(record),
+      status,
+      statusManual: manual,
+      tags: selectedTagIds(record, knownTagIds),
+      progress,
+      bookmarkCount,
+    }
   }
 
   function titleFromName(name) {
@@ -513,16 +557,13 @@ export function apply(ctx) {
     } catch (error) {
       ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
     }
+    const tags = await readTagDefinitions()
+    const knownTagIds = new Set(tags.map((tag) => tag.id))
     const books = library.books
       .slice()
       .sort((left, right) => (Number(right.addedAt) || 0) - (Number(left.addedAt) || 0))
-      .map((book) => {
-        const state = states.books[book.id]
-        const progress = state && state.progress && typeof state.progress === 'object' ? state.progress : null
-        const bookmarkCount = state && Array.isArray(state.bookmarks) ? state.bookmarks.length : 0
-        return { ...publicBook(book), progress, bookmarkCount }
-      })
-    sendJson(request, response, 200, { books })
+      .map((book) => publicBookView(book, states.books[book.id], knownTagIds))
+    sendJson(request, response, 200, { books, tags })
   }
 
   const linkSessions = new Map()
@@ -801,16 +842,47 @@ export function apply(ctx) {
       if (typeof body.author !== 'string') throw new HttpError(400, 'author must be a string')
       patch.author = cleanText(body.author, '', 500)
     }
+    if ('status' in body) {
+      if (body.status === null) patch.status = null
+      else if (READING_STATUSES.includes(body.status)) patch.status = body.status
+      else throw new HttpError(400, `status must be null or one of ${READING_STATUSES.join(', ')}`)
+    }
+    if ('tags' in body) {
+      if (!Array.isArray(body.tags)) throw new HttpError(400, 'tags must be an array of tag ids')
+      if (body.tags.length > TAG_LIMITS.maxPerBook) {
+        throw new HttpError(400, `at most ${TAG_LIMITS.maxPerBook} tags can be attached to one book`)
+      }
+      const ids = []
+      for (const value of body.tags) {
+        if (!isTagId(value)) throw new HttpError(400, 'tags must contain tag ids')
+        if (!ids.includes(value)) ids.push(value)
+      }
+      if (ids.length > 0) {
+        // A typo must fail instead of silently dropping the assignment.
+        const knownTagIds = new Set((await tagStore.list()).map((tag) => tag.id))
+        const unknown = ids.find((value) => !knownTagIds.has(value))
+        if (unknown !== undefined) throw new HttpError(400, `unknown tag id: ${unknown}`)
+      }
+      patch.tags = ids
+    }
     if (Object.keys(patch).length === 0) throw new HttpError(400, 'nothing to update')
     let updated
     await updateLibrary((books) =>
       books.map((book) => {
         if (book.id !== id) return book
-        updated = { ...book, ...patch }
-        return updated
+        const next = { ...book, ...patch }
+        // `status: null` means "follow progress again", which is stored by
+        // dropping the override rather than by keeping a null value.
+        if (patch.status === null) delete next.status
+        updated = next
+        return next
       }),
     )
-    sendJson(request, response, 200, { book: publicBook(updated) })
+    const state = (await readStates()).books[id]
+    const tagDefinitions = await readTagDefinitions()
+    sendJson(request, response, 200, {
+      book: publicBookView(updated, state, new Set(tagDefinitions.map((tag) => tag.id))),
+    })
   }
 
   async function deleteBook(request, response, id) {
@@ -1057,6 +1129,54 @@ export function apply(ctx) {
         }
         throw new HttpError(405, 'method not allowed')
       }
+      if (pathname === `${API_PREFIX}/tags` || pathname === `${API_PREFIX}/tags/`) {
+        if (request.method === 'GET') {
+          sendJson(request, response, 200, { tags: await tagStore.list() })
+          return
+        }
+        if (request.method === 'POST') {
+          const body = await readJsonBody(request, 16 * 1024)
+          if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'tag must be an object')
+          const tag = await tagStore.create(body.name)
+          sendJson(request, response, 201, { tag })
+          return
+        }
+        throw new HttpError(405, 'method not allowed')
+      }
+      const tagMatch = new RegExp(`^${API_PREFIX}/tags/([0-9a-f-]{36})$`).exec(pathname)
+      if (tagMatch !== null) {
+        const tagId = tagMatch[1]
+        if (request.method === 'PATCH') {
+          const body = await readJsonBody(request, 16 * 1024)
+          if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'tag must be an object')
+          const tag = await tagStore.rename(tagId, body.name)
+          sendJson(request, response, 200, { tag })
+          return
+        }
+        if (request.method === 'DELETE') {
+          // Remove the definition last: books are stripped first, so a crash in
+          // between leaves no dangling reference behind.
+          const existing = (await tagStore.list()).find((tag) => tag.id === tagId)
+          if (existing === undefined) throw new HttpError(404, 'tag not found')
+          const library = await readLibrary()
+          const affected = library.books.filter(
+            (book) => Array.isArray(book.tags) && book.tags.includes(tagId),
+          ).length
+          if (affected > 0) {
+            await updateLibrary((books) =>
+              books.map((book) =>
+                Array.isArray(book.tags) && book.tags.includes(tagId)
+                  ? { ...book, tags: book.tags.filter((value) => value !== tagId) }
+                  : book,
+              ),
+            )
+          }
+          await tagStore.remove(tagId)
+          sendJson(request, response, 200, { ok: true, affected, tag: existing })
+          return
+        }
+        throw new HttpError(405, 'method not allowed')
+      }
       if (pathname === `${API_PREFIX}/books` || pathname === `${API_PREFIX}/books/`) {
         if (request.method === 'GET') {
           await listBooks(request, response)
@@ -1116,7 +1236,13 @@ export function apply(ctx) {
       throw new HttpError(404, 'not found')
     } catch (error) {
       const status =
-        error instanceof HttpError ? error.status : error instanceof AppleBooksImportError ? error.status : 500
+        error instanceof HttpError
+          ? error.status
+          : error instanceof TagStoreError
+            ? error.status
+            : error instanceof AppleBooksImportError
+              ? error.status
+              : 500
       if (status >= 500) ctx.logger.warn(error instanceof Error ? error : new Error(String(error)))
       if (response.headersSent) {
         response.destroy()

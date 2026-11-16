@@ -1,6 +1,6 @@
 {
   "name": "dsh-bookshelf",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A local PDF and EPUB bookshelf for the DSH Web GUI with built-in readers and a shelf-owned Books sidebar.",
   "type": "module",
   "icon": "icon.svg",
@@ -51,6 +51,7 @@
     "apple-books.js",
     "link-source.js",
     "source-revision.js",
+    "tags.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
