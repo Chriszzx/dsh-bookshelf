@@ -68,9 +68,9 @@ The gear icon opens **Shelf settings** with three tabs: Reading (fonts, size, ma
 
 齿轮打开**书架设置**窗口，三个标签页：阅读（字体、字号、边距、模式、主题）、朗读（后端、按语言选音色、语速、API 字段、缓存）、其他（讨论工作区、Apple Books 导入）。
 
-In the reader, the speaker button opens a translucent rounded control dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. A floating caption card above it shows the sentence being read; when read-aloud stops, the card keeps the last sentence and labels it as the stopping point, so the reading position stays visible. Both float above the page and never reflow it, and the caption can be dismissed on its own.
+In the reader, the speaker button opens a translucent rounded control dock at the bottom of the page with start/pause, previous/next sentence, speed, voice and close. In EPUB the sentence being read is covered by a frosted-glass band drawn over the original text; after read-aloud stops the band stays where it stopped, which keeps the reading position visible. Moving to the previous/next sentence only moves that highlight and never starts playback — press play to continue from the selected sentence. PDF files have no text layer, so they show the sentence in a floating card instead. Both the dock and the highlight float above the page and never reflow it.
 
-阅读器里点朗读按钮会在页面底部打开半透明圆角控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。上方浮层显示正在朗读的句子；停止朗读后仍保留最后一句并标注为停止位置，方便定位阅读进度。两者都浮在页面上方、不会引起重排，朗读文本浮层可单独关闭。
+阅读器里点朗读按钮会在页面底部打开半透明圆角控制浮条，内含开始/暂停、上/下句、语速、音色与关闭。EPUB 中正在朗读的句子会被一层磨砂玻璃覆盖在原句上；停止朗读后玻璃仍留在停止位置，方便定位阅读进度。切换上/下一句只移动这层高亮，不会自动播放；按播放才从选中句继续。PDF 没有文本层，改用浮动卡片显示当前句子。浮条与高亮都浮在页面上方，不会引起重排。
 
 ## Data / 数据
 

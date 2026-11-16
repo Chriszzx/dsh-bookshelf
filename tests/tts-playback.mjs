@@ -276,8 +276,14 @@ try {
     barClick('ttsPlay');
     await wait(80);
     check(window.audioEvents('play').length>1,'resume must call play again');
+    const plays=window.audioEvents('play').length;
     barClick('ttsNext');
     await until(()=>caption()!==captionAtPause);
+    await wait(150);
+    check(window.audioEvents('play').length===plays,'switching sentences must not auto-play');
+    check(!!barButton('ttsPlay'),'switching leaves the queue paused');
+    barClick('ttsPlay');
+    await until(()=>window.audioEvents('play').length>plays,'play must resume the selected sentence');
     window.__audioMs=260;
     return true;
   })()`), true)
@@ -426,10 +432,16 @@ try {
     const dockStyle=getComputedStyle(document.querySelector('.bs-tts-dock'));
     check(parseFloat(dockStyle.borderTopLeftRadius)>=20,'dock must be a rounded bar');
     check(dockStyle.backdropFilter.includes('blur'),'dock must be translucent');
-    const overlay=document.querySelector('.bs-tts-caption');
-    check(!!overlay,'caption overlay shows the selected sentence');
-    check(overlay.getBoundingClientRect().width>0,'caption overlay is visible');
-    check(document.querySelector('.bs-tts-caption-label').textContent==='ttsCaptionNow','live label');
+    const frame=document.querySelector('.bs-epub-frame');
+    const glass=frame.contentDocument.getElementById('bb-speech-glass');
+    check(!!glass,'inline glass highlight exists');
+    const bands=[...glass.querySelectorAll('span')];
+    check(bands.length>0,'glass bands cover the sentence');
+    check(getComputedStyle(glass).position==='fixed','highlight floats without joining the paged columns');
+    const bandStyle=getComputedStyle(bands[0]);
+    check(bandStyle.backdropFilter.includes('blur'),'sentence highlight is frosted glass');
+    check(parseFloat(bandStyle.borderTopLeftRadius)>0,'sentence highlight is rounded');
+    check(document.querySelector('.bs-tts-caption-sr'),'caption stays available to assistive tech');
     check(frameHeight()===beforeHeight,'read-aloud menu resized the reading area: '+beforeHeight+' -> '+frameHeight());
     check(pageNumber()===beforePage,'starting read-aloud moved the page: '+beforePage+' -> '+pageNumber());
     barClick('dismiss');

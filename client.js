@@ -186,6 +186,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tts-caption-close{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .bs-tts-caption-close:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-tts-caption-text{max-height:5.4em;overflow:hidden;font-size:13.5px;line-height:1.6;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.bs-tts-caption-sr{position:absolute;width:1px;height:1px;padding:0;border:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none;background:none;box-shadow:none;backdrop-filter:none}
 .bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px)}
 .bs-tts-file-open{justify-content:flex-start}
 .bs-tts-file-time{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
@@ -1747,6 +1748,59 @@ html.bb-paged body table tr{break-inside:avoid}
       return Math.max(0, Math.floor((rect.left + scrollLeft - info.padLeft + 1) / info.step))
     }
 
+    // A frosted-glass band painted over the sentence being read. It is a fixed
+    // layer inside the chapter document, so it never joins the paged columns:
+    // the text layout cannot move, and backdrop-filter still blurs the real page
+    // behind it (cross-document overlays cannot do that).
+    const SPEECH_GLASS_ID = 'bb-speech-glass'
+
+    function clearSpeechGlass(documentNode) {
+      const layer = documentNode ? documentNode.getElementById(SPEECH_GLASS_ID) : null
+      if (layer !== null) layer.remove()
+    }
+
+    function paintSpeechGlass(documentNode, range) {
+      if (!documentNode || !documentNode.documentElement || range === null) return
+      clearSpeechGlass(documentNode)
+      let rects = []
+      try {
+        rects = Array.from(range.getClientRects())
+      } catch {
+        rects = []
+      }
+      const lines = []
+      for (const rect of rects) {
+        if (!(rect.width > 0 && rect.height > 0)) continue
+        if (rect.right <= 0 || rect.bottom <= 0) continue
+        lines.push(rect)
+      }
+      if (lines.length === 0) return
+      const scheme = String(documentNode.documentElement.style.getPropertyValue('--bb-scheme') || '').trim()
+      const dark = scheme === 'dark'
+      const fill = dark ? 'rgba(150,190,255,.17)' : 'rgba(96,132,214,.13)'
+      const edge = dark ? 'rgba(255,255,255,.20)' : 'rgba(255,255,255,.62)'
+      const layer = documentNode.createElement('div')
+      layer.id = SPEECH_GLASS_ID
+      layer.setAttribute('aria-hidden', 'true')
+      layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;contain:strict'
+      for (const rect of lines) {
+        const band = documentNode.createElement('span')
+        band.style.cssText = [
+          'position:absolute',
+          'border-radius:5px',
+          `left:${Math.round(rect.left) - 2}px`,
+          `top:${Math.round(rect.top) - 1}px`,
+          `width:${Math.round(rect.width) + 4}px`,
+          `height:${Math.round(rect.height) + 2}px`,
+          `background:${fill}`,
+          'backdrop-filter:blur(3px) saturate(125%)',
+          `box-shadow:inset 0 0 0 1px ${edge}, 0 2px 10px -6px rgba(0,0,0,.45)`,
+        ].join(';')
+        layer.appendChild(band)
+      }
+      documentNode.documentElement.appendChild(layer)
+    }
+
     function useReadAloud({ base, t, language = '' }) {
       const [status, setStatus] = useState('idle')
       const [caption, setCaption] = useState('')
@@ -2013,6 +2067,16 @@ html.bb-paged body table tr{break-inside:avoid}
           if (batch !== null) void playBatch(batch, Math.max(0, indexRef.current))
           return
         }
+        if (status === 'stopped') {
+          // Sentence switching leaves the queue armed at indexRef; play resumes
+          // there instead of restarting from the page top.
+          unlock()
+          const batch = batchRef.current
+          if (batch !== null) {
+            void playBatch(batch, Math.max(0, indexRef.current))
+            return
+          }
+        }
         if (status === 'loading') return
         // idle: restart from the reader's current position.
         void start(driverRef.current && driverRef.current.restart ? driverRef.current.restart() : driverRef.current)
@@ -2039,16 +2103,25 @@ html.bb-paged body table tr{break-inside:avoid}
         setCaption('')
       }, [])
 
+      // Moving by hand only moves the highlight: the audio stays quiet until the
+      // reader presses play again. Automatic advance still goes through
+      // playBatch, so continuous reading is unaffected.
       const step = useCallback((delta) => {
         const batch = batchRef.current
         if (batch === null) return
         const target = Math.max(0, Math.min(batch.length - 1, indexRef.current + delta))
         if (target === indexRef.current) return
+        runRef.current += 1
+        pausedRef.current = false
         const audio = audioRef.current
         if (audio !== null) audio.pause()
-        pausedRef.current = false
-        void playBatch(batch, target)
-      }, [playBatch])
+        indexRef.current = target
+        setError('')
+        setCaption(batch[target].text)
+        setStatus('stopped')
+        const item = batch[target]
+        if (typeof item.enter === 'function') void Promise.resolve(item.enter()).catch(() => undefined)
+      }, [])
 
       const activeVoiceLabel = (() => {
         if (settings === null) return ''
@@ -2480,13 +2553,18 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     // Floating card showing the sentence read-aloud is on, or the last one it
-    // stopped at. It lives outside the control dock so the position cue remains
-    // after the controls are closed.
-    function ReaderSpeechCaption({ t, caption, status, onDismiss }) {
+    // stopped at. EPUB paints the glass band on the sentence itself, so there it
+    // is rendered visually hidden as an aria-live cue for assistive tech; PDF has
+    // no text layer, so the card is the visible fallback.
+    function ReaderSpeechCaption({ t, caption, status, onDismiss, srOnly = false }) {
       const live = status === 'playing' || status === 'paused' || status === 'loading'
       return h(
         'div',
-        { className: 'bs-tts-caption', role: 'status', 'aria-live': 'polite' },
+        {
+          className: srOnly ? 'bs-tts-caption bs-tts-caption-sr' : 'bs-tts-caption',
+          role: 'status',
+          'aria-live': 'polite',
+        },
         h(
           'div',
           { className: 'bs-tts-caption-head' },
@@ -3180,6 +3258,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     t,
                     caption: speech.readAloud.caption,
                     status: speech.readAloud.status,
+                    srOnly: speech.inlineHighlight === true,
                     onDismiss: speech.readAloud.clearCaption,
                   })
                 : null,
@@ -4292,6 +4371,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const scrollBindingRef = useRef(null)
       const frameTokenRef = useRef(0)
       const layoutGenerationRef = useRef(0)
+      const speechRangeRef = useRef(null)
       const lastSavedProgressRef = useRef('')
       const pageIndexRef = useRef(0)
       const pageCountRef = useRef(1)
@@ -4438,6 +4518,9 @@ html.bb-paged body table tr{break-inside:avoid}
           const windowNode = frame && frame.contentWindow
           if (!documentNode || !documentNode.body || !windowNode || documentNode.URL === 'about:blank') return
           const generation = ++layoutGenerationRef.current
+          // The speech band is viewport-fixed; a re-layout (page turn, resize,
+          // mode switch) would leave it over different text, so drop it first.
+          clearSpeechGlass(documentNode)
           ensurePagedStyle(documentNode)
           documentNode.documentElement.classList.add('bb-paged')
           configurePagedColumns(documentNode, settingsRef.current)
@@ -4831,9 +4914,18 @@ html.bb-paged body table tr{break-inside:avoid}
         let lastRatio = scrollRatioRef.current
         let frameRequest = 0
         let saveTimer = 0
+        let glassTimer = 0
         const onScroll = () => {
           if (restoringRef.current || settingsRef.current.pageMode === 'paged') return
           anchorRef.current = ''
+          // The glass bands are viewport-fixed, so a manual scroll leaves them
+          // behind; follow the sentence once the scroll settles.
+          if (glassTimer !== 0) clearTimeout(glassTimer)
+          glassTimer = setTimeout(() => {
+            glassTimer = 0
+            const range = speechRangeRef.current
+            if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
+          }, 140)
           if (frameRequest !== 0) return
           frameRequest = requestAnimationFrame(() => {
             frameRequest = 0
@@ -4853,6 +4945,7 @@ html.bb-paged body table tr{break-inside:avoid}
           windowNode.removeEventListener('scroll', onScroll)
           if (frameRequest !== 0) cancelAnimationFrame(frameRequest)
           if (saveTimer !== 0) clearTimeout(saveTimer)
+          if (glassTimer !== 0) clearTimeout(glassTimer)
           if (!restoringRef.current && chapterRef.current === boundChapter) {
             saveEpubProgress(
               boundChapter,
@@ -4871,6 +4964,8 @@ html.bb-paged body table tr{break-inside:avoid}
           const refresh = () => {
             if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+              const range = speechRangeRef.current
+              if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
             }
           }
           if (documentNode.fonts && documentNode.fonts.ready) {
@@ -5415,11 +5510,20 @@ html.bb-paged body table tr{break-inside:avoid}
               const frameNode = frameRef.current
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
+              speechRangeRef.current = entry.range
+              // Paint after the page turn or scroll settles so the glass bands
+              // match the final line boxes.
+              const paint = () => {
+                const live = frameRef.current
+                if (!live || live.contentDocument !== documentNode) return
+                paintSpeechGlass(documentNode, entry.range)
+              }
               if (paged) {
                 const page = rangePage(documentNode, windowNode, entry.range)
                 if (page !== null && page > pageIndexRef.current) {
                   layoutPagedFrame(frameNode, { targetPage: page, save: true })
                 }
+                windowNode.requestAnimationFrame(paint)
                 return
               }
               const rect = entry.range.getBoundingClientRect()
@@ -5427,6 +5531,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 const element = entry.range.startContainer.parentElement || documentNode.body
                 if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
               }
+              windowNode.requestAnimationFrame(paint)
             },
           }))
         }
@@ -5455,7 +5560,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
-          speech: { readAloud, start: startReadAloud },
+          speech: { readAloud, start: startReadAloud, inlineHighlight: true },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('parsing') })
