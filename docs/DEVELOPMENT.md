@@ -62,6 +62,56 @@ pnpm install --frozen-lockfile --ignore-scripts
 
 React 18 和 React DOM 是固定版本的测试开发依赖。生产插件继续使用 DSH 提供的 React。
 
+## 客户端模块地图与拆分约定
+
+客户端仍然**没有构建步骤**：`client.js` 以 classic script 形式交给
+`window.__ModuleLoader__`，因此不能用静态 `import`。纯逻辑与词条放进 `assets/` 下的
+浏览器模块，沿用既有的动态导入：
+
+```js
+import(absoluteServiceUrl(base, `${ASSET_ROOT}/lib/<name>.mjs?v=${ASSET_VERSION}`))
+```
+
+Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.mjs` 返回
+`text/javascript` 且 `no-cache`），所以模块里的纯函数可以直接在 `tests/*.mjs` 中静态
+`import` 测试。
+
+### 模块
+| 文件 | 内容 | 加载方式 |
+| --- | --- | --- |
+| `client.js` | React 胶水、样式字符串、同步渲染路径、首帧词条与 `apply` | DSH 直接加载 |
+| `assets/lib/text-index.mjs` | PDF 文本拼接、章节文本索引、句子 Range；只被异步朗读路径使用 | 阅读器打开前预加载 |
+| `assets/lib/clipboard.mjs` | 选区菜单的剪贴板写入（Async Clipboard，失败回退旧路径） | 阅读器打开前预加载 |
+| `assets/locales/<domain>.mjs` | 按领域拆分的 `en`/`zh` 词条：`import`、`apple-books`、`audiobook`、`speech`、`selection`、`reader`、`tags`、`settings`、`discussion`、`sidebar` | `apply` 后异步加载 |
+| `assets/epub.mjs`、`assets/tts-sentences.mjs`、`assets/reading-fonts.mjs`、`assets/reading-snapshot.mjs`、`assets/discussion.mjs`、`assets/pdf*.mjs` | 既有的解析器与辅助模块 | 按需动态导入 |
+
+`client.js` 内用区块 banner 排列；`===== [name] =====` 是主区块，
+`----- [section:sub] -----` 是子区块，便于定位和人工合并：
+
+```text
+[prelude] [styles] [ui] [hooks] [chrome] [frame] [reader] [shelf] [locales] [apply]
+```
+
+### 拆分约定
+1. **逻辑放 `assets/lib`，React 胶水留 `client.js`**：可测试的纯函数（解析、索引、
+   几何、词条）放模块；组件、effect、事件接线留在 `client.js`。
+2. **同步渲染路径不进动态模块**：`readingPalette`/DSH token 解析、`rangePage`、
+   `pagedMetrics`、渲染期格式化等必须保持同步可用，继续留在 `client.js`；
+   渲染函数里不要 `await` 模块导入。
+3. **新异步模块走统一预加载**：在 `assets/lib/<name>.mjs` 里 `export`，在
+   `CLIENT_LIB_NAMES` 或调用处的 `preloadClientLibs(base, [...])` 中预热；阅读器打开前
+   `await`，之后用 `clientLib('<name>')` 同步读取模块对象，渲染/事件路径不再触发导入。
+4. **词条**：新功能的 `en`/`zh` 加到对应 `assets/locales/<domain>.mjs`（新领域就新建
+   文件并加入 `LOCALE_DOMAINS`）。`client.js` 只保留**首帧**要用的 bootstrap 子集
+   （`bootstrapEn`/`bootstrapZh`）：`apply` 先同步注册它，模块加载完成后释放并重新注册
+   合并后的完整词条。同一个 key 不要同时出现在 bootstrap 和模块里——合并是按领域
+   `Object.assign`，重复 key 会让 inline 版本胜出。
+5. **改了 `assets/**` 后刷新 DSH 页面**即可（模块 URL 带 `ASSET_VERSION`，路由对
+   `.mjs` 返回 `no-cache`）；改 Host 代码需要重启 DSH。
+6. `scripts/check-syntax.mjs` 自动收集 `scripts`、`tests`、`host`、`tts`、`assets/lib`
+   等目录；`assets/locales` 目前不在它的收集列表里，由浏览器回归与本地
+   `node --check` 覆盖。
+
 ## 常用命令
 
 ```sh
@@ -184,7 +234,7 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 正式发布或提交前按顺序确认：
 
 1. `node scripts/run-checks.mjs all` 全绿（语法、单元/接口、全部浏览器回归）；网络类 provider 不参与自动化测试。
-2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`assets/tts-sentences.mjs`，且不含 `tests/`、截图和本机路径。
+2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs` 与 `assets/locales/*.mjs`，且不含 `tests/`、截图和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
    `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts.js` 中出现。
 4. 文档版本号与 `package.json` 一致（当前 `0.6.1`），README 中英两节同步描述 provider、自动音色、超时、整书语音与平台差异。
