@@ -186,7 +186,10 @@ test('edge provider drives the read-aloud websocket protocol', async t => {
   }
   const { service } = await withService(t, { platform: 'linux', websocket: FakeSocket })
   const synth = service.synthesize({ provider: 'edge', voice: 'zh-CN-XiaoxiaoNeural', text: '你好。', speed: 1.25 })
-  await new Promise(resolve => setTimeout(resolve, 0))
+  // The provider fetches a token and waits for settings before it opens the
+  // socket; one macrotask is not enough under a loaded runner.
+  const started = Date.now()
+  while (sockets.length === 0 && Date.now() - started < 5000) await new Promise(resolve => setTimeout(resolve, 5))
   assert.equal(sockets.length, 1)
   const socket = sockets[0]
   assert.ok(socket.url.startsWith('wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?'))

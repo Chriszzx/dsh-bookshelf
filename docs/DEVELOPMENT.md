@@ -1,7 +1,7 @@
 # 本地开发与测试
 
 下一版从本仓库的 `next` 分支继续开发。插件正式名称保持 `dsh-bookshelf`；0.5.0 在
-0.4.0 的基础上加入标签与阅读状态（0.5.1 补上读完确认与「已读完 100%」显示，0.5.2 加入列表排列，0.6.0 加入朗读：系统音色、Edge、DeepSeek、OpenAI 兼容、本地占位，按书籍语言自动选音色，设置窗口与音频缓存），功能变更在发布时递增版本号。
+0.4.0 的基础上加入标签与阅读状态（0.5.1 补上读完确认与「已读完 100%」显示，0.5.2 加入列表排列，0.6.0 加入朗读：系统音色、Edge、DeepSeek、OpenAI 兼容、本地占位，按书籍语言自动选音色，设置窗口与音频缓存；0.6.1 加入整书语音：任意可用语音服务、字数/时长/体积与 DeepSeek 费用估算、Host 后台合成、阅读器直接播放已生成文件），功能变更在发布时递增版本号。
 
 ## 开发安装
 
@@ -184,10 +184,10 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 正式发布或提交前按顺序确认：
 
 1. `node scripts/run-checks.mjs all` 全绿（语法、单元/接口、全部浏览器回归）；网络类 provider 不参与自动化测试。
-2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`assets/tts-sentences.mjs`，且不含 `tests/`、截图和本机路径。
+2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`assets/tts-sentences.mjs`，且不含 `tests/`、截图和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
    `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts.js` 中出现。
-4. 文档版本号与 `package.json` 一致（当前 `0.6.0`），README 中英两节同步描述 provider、自动音色、超时与平台差异。
+4. 文档版本号与 `package.json` 一致（当前 `0.6.1`），README 中英两节同步描述 provider、自动音色、超时、整书语音与平台差异。
 5. 需要真实 Edge `say` 冒烟时手动执行，失败不阻塞提交；DSH 重启后再做一次人工验收（朗读入口、设置窗口、自动音色）。
 6. 未经确认不要推送到远端，也不要改动版本号。
 
