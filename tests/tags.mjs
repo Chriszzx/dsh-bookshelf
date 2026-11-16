@@ -155,15 +155,17 @@ test('reading status follows progress and a manual override wins', () => {
   assert.equal(deriveReadingStatus({}), 'reading')
   assert.equal(deriveReadingStatus({ percent: 0 }), 'reading')
   assert.equal(deriveReadingStatus({ percent: 0.5 }), 'reading')
+  // Reaching the last page never infers "finished": the reader must confirm it,
+  // so an unconfirmed book that was read to the end stays in "reading".
   assert.equal(deriveReadingStatus({ percent: 0.994 }), 'reading')
-  assert.equal(deriveReadingStatus({ percent: 0.995 }), 'finished')
-  assert.equal(deriveReadingStatus({ percent: 1 }), 'finished')
-  assert.equal(deriveReadingStatus({ percent: '0.999' }), 'finished')
+  assert.equal(deriveReadingStatus({ percent: 0.995 }), 'reading')
+  assert.equal(deriveReadingStatus({ percent: 1 }), 'reading')
+  assert.equal(deriveReadingStatus({ percent: '0.999' }), 'reading')
   assert.equal(deriveReadingStatus({ percent: 'nonsense' }), 'reading')
 
   assert.deepEqual(readingStatusOf({}, null), { status: 'unread', manual: false })
   assert.deepEqual(readingStatusOf({}, { percent: 0.2 }), { status: 'reading', manual: false })
-  assert.deepEqual(readingStatusOf({ status: 'finished' }, { percent: 0.2 }), { status: 'finished', manual: true })
+  assert.deepEqual(readingStatusOf({ status: 'finished' }, { percent: 1 }), { status: 'finished', manual: true })
   assert.deepEqual(readingStatusOf({ status: 'unread' }, { percent: 0.9 }), { status: 'unread', manual: true })
   assert.deepEqual(readingStatusOf({ status: 'nonsense' }, null), { status: 'unread', manual: false })
 })

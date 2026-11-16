@@ -12,6 +12,7 @@ import { replaceFile } from './assets/atomic-file.mjs'
 import { ShelfSidebarSnapshotController, sidebarSnapshotProjection, createSidebarSnapshotCommand } from './sidebar.js'
 import {
   createTagStore,
+  FINISHED_PERCENT,
   isTagId,
   readingStatusOf,
   READING_STATUSES,
@@ -483,6 +484,26 @@ export function apply(ctx) {
       next.settings = sanitizeSettings(payload.settings) || {}
     }
     await updateStates((books) => ({ ...books, [id]: next }))
+    // Reading a finished book again drops the finished override as soon as the
+    // saved progress falls below the last page, so the shelf returns to
+    // "continue reading" without another manual step. Settings-only writes keep
+    // the override, which is why this checks the incoming patch.
+    if (
+      'progress' in payload &&
+      next.progress &&
+      typeof next.progress.percent === 'number' &&
+      next.progress.percent < FINISHED_PERCENT &&
+      record.status === 'finished'
+    ) {
+      await updateLibrary((books) =>
+        books.map((book) => {
+          if (book.id !== id || book.status !== 'finished') return book
+          const cleared = { ...book }
+          delete cleared.status
+          return cleared
+        }),
+      )
+    }
     sendJson(request, response, 200, { state: next })
   }
 

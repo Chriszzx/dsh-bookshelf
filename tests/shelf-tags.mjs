@@ -176,7 +176,8 @@ try {
     await until(()=>[...document.querySelectorAll('.bs-tag-choice')].find(node=>node.textContent==='心理学').getAttribute('aria-pressed')==='true');
     document.querySelector('.bs-tag-dialog button[type="submit"]').click();
     await until(()=>!document.querySelector('.bs-tag-dialog'));
-    await until(()=>document.querySelector('.bs-book-sub') && document.querySelector('.bs-book-sub').textContent.includes('statusFinished'));
+    await until(()=>document.querySelector('.bs-book-sub') && document.querySelector('.bs-book-sub').textContent.includes('finishedPercent(percent=100)'));
+    check(!document.querySelector('.bs-card-progress'),'finished books must not show a progress bar');
     await until(()=>tab('statusFinished') && tab('statusFinished').textContent==='statusFinished1' && tab('心理学').textContent==='心理学1');
     return true;
   })()`), true, 'the card shows the manual status and both tabs count the book')
@@ -203,7 +204,8 @@ try {
     check(tab('statusFinished').textContent==='statusFinished1','manual status persisted');
     check(tab('心理学').textContent==='心理学1','tag assignment persisted');
     check(tab('categoryAll').getAttribute('aria-pressed')==='true','view resets to all after reload');
-    check(document.querySelector('.bs-book-sub').textContent.includes('statusFinished'),'manual label after reload');
+    check(document.querySelector('.bs-book-sub').textContent.includes('finishedPercent(percent=100)'),'finished label after reload');
+    check(!document.querySelector('.bs-card-progress'),'no progress bar for finished books after reload');
     return true;
   })()`), true, 'status, assignment and definitions survive a page reload')
 

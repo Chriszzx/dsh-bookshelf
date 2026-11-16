@@ -27,8 +27,9 @@ export const TAG_LIMITS = Object.freeze({
   maxNameLength: 32,
 })
 
-// Reading a book past this share of its text counts as finished, matching the
-// threshold the shelf card already used before statuses became durable.
+// A book counts as read up to its last page from this share of the text on.
+// The reader offers to mark the book finished when it is closed there, and a
+// progress write below it again means the reader started re-reading.
 export const FINISHED_PERCENT = 0.995
 
 const TAG_ID_PATTERN = /^[0-9a-f-]{36}$/
@@ -83,9 +84,9 @@ function readableTagName(value) {
   return cleaned === '' ? null : cleaned
 }
 
-// Effective status: an explicit override always wins; otherwise progress
-// decides. A book that was opened but barely read counts as reading, which is
-// what the shelf card already implied.
+// Effective status: an explicit override always wins. Progress alone never
+// infers "finished": reaching the last page only prompts the reader, so a book
+// that was read to the end but not confirmed stays in "reading".
 export function readingStatusOf(record, progress) {
   if (record && READING_STATUSES.includes(record.status)) return { status: record.status, manual: true }
   return { status: deriveReadingStatus(progress), manual: false }
@@ -93,8 +94,6 @@ export function readingStatusOf(record, progress) {
 
 export function deriveReadingStatus(progress) {
   if (!progress || typeof progress !== 'object' || Array.isArray(progress)) return 'unread'
-  const percent = Number(progress.percent)
-  if (Number.isFinite(percent) && percent >= FINISHED_PERCENT) return 'finished'
   return 'reading'
 }
 

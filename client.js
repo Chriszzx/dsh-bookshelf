@@ -29,6 +29,9 @@ window.__ModuleLoader__.load({
       reading: 'statusReading',
       finished: 'statusFinished',
     })
+    // Share of the book that counts as its last page; must match the Host's
+    // FINISHED_PERCENT in tags.js.
+    const FINISHED_PERCENT = 0.995
 
     const CSS = `
 .bs-root{--bs-top-clearance:0px;--bs-popover-top:calc(var(--bs-top-clearance) + 56px);box-sizing:border-box;position:relative;display:flex;flex-direction:column;container:bookshelf / inline-size;width:100%;height:100%;min-width:0;min-height:0;overflow:hidden;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit}
@@ -156,6 +159,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tag-danger{color:var(--dsw-alias-state-error-primary)}
 .bs-tag-body{flex:1;min-height:0;overflow:auto}
 .bs-tag-foot{justify-content:flex-end}
+.bs-finish-body{margin:0;padding:0 18px 12px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-primary)}
 .bs-meta{display:flex;flex-direction:column;gap:2px;min-width:0;padding:0 2px}
 .bs-book-title{font-size:13px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-book-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -998,8 +1002,10 @@ html.bb-paged body table tr{break-inside:avoid}
         (keepalive = false) => {
           const patch = pendingRef.current
           pendingRef.current = null
-          if (patch === null || Object.keys(patch).length === 0) return
-          writeBookState(base, book.id, patch, keepalive).catch((failure) => {
+          if (patch === null || Object.keys(patch).length === 0) return Promise.resolve()
+          // Callers may await the write before leaving the reader, so the
+          // refreshed shelf already reflects the page the reader exited from.
+          return writeBookState(base, book.id, patch, keepalive).catch((failure) => {
             console.error('bookshelf: could not save reading state', failure)
           })
         },
@@ -1498,7 +1504,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: onBack,
+                  onClick: () => onBack(progress ? progress.percent : null),
                   title: t('back'),
                   'aria-label': t('back'),
                   autoFocus: true,
@@ -1553,7 +1559,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: onBack,
+                  onClick: () => onBack(progress ? progress.percent : null),
                   title: t('back'),
                   'aria-label': t('back'),
                 },
@@ -1891,6 +1897,16 @@ html.bb-paged body table tr{break-inside:avoid}
           )
         },
         [readerState.loaded, readerState.save],
+      )
+
+      const exitReader = useCallback(
+        (percent) => {
+          // Persist the page the reader left from before the shelf reloads, so
+          // the returned card already shows the exit progress.
+          readerState.flush(true)
+          onBack(typeof percent === 'number' ? percent : null)
+        },
+        [onBack, readerState.flush],
       )
 
       const savePdfSettings = useCallback(
@@ -2417,7 +2433,7 @@ html.bb-paged body table tr{break-inside:avoid}
         {
           t,
           book,
-          onBack,
+          onBack: exitReader,
           controls,
           state: status === 'ready' && pdfDocument ? t('pdfPages', { total: pdfDocument.numPages }) : undefined,
           progress: status === 'ready' && pdfDocument ? { percent, onSeek: onSeekProgress } : undefined,
@@ -2622,6 +2638,14 @@ html.bb-paged body table tr{break-inside:avoid}
           )
         },
         [data, metrics, readerState.loaded, readerState.save],
+      )
+
+      const exitReader = useCallback(
+        (percent) => {
+          readerState.flush(true)
+          onBack(typeof percent === 'number' ? percent : null)
+        },
+        [onBack, readerState.flush],
       )
 
       const updateSettings = useCallback(
@@ -3631,7 +3655,7 @@ html.bb-paged body table tr{break-inside:avoid}
         {
           t,
           book,
-          onBack,
+          onBack: exitReader,
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
@@ -4422,14 +4446,13 @@ html.bb-paged body table tr{break-inside:avoid}
       const status = STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
       const statusLabel = t(STATUS_LABEL_KEYS[status])
       const finished = status === 'finished'
-      const subParts = book.statusManual
-        ? [statusLabel, book.author || t('unknownAuthor')]
-        : percent > 0
-          ? [
-              finished ? t('finishedReading') : `${t('continueReading')} ${Math.round(percent * 100)}%`,
-              book.author || t('unknownAuthor'),
-            ]
-          : [book.author || t('unknownAuthor'), formatBytes(book.bytes), formatDate(book.addedAt)]
+      const subParts = finished
+        ? [t('finishedPercent', { percent: 100 }), book.author || t('unknownAuthor')]
+        : book.statusManual
+          ? [statusLabel, book.author || t('unknownAuthor')]
+          : percent > 0
+            ? [`${t('continueReading')} ${Math.round(percent * 100)}%`, book.author || t('unknownAuthor')]
+            : [book.author || t('unknownAuthor'), formatBytes(book.bytes), formatDate(book.addedAt)]
       const coverSrc =
         book.cover && book.cover.updatedAt && book.id
           ? resourceUrl(base, `${API_ROOT}/books/${book.id}/cover?v=${book.cover.updatedAt}`)
@@ -4595,7 +4618,7 @@ html.bb-paged body table tr{break-inside:avoid}
             { className: 'bs-book-sub', title: subParts.filter(Boolean).join(' · ') },
             subParts.filter(Boolean).join(' · '),
           ),
-          percent > 0
+          percent > 0 && !finished
             ? h(
                 'div',
                 {
@@ -5072,6 +5095,71 @@ html.bb-paged body table tr{break-inside:avoid}
       )
     }
 
+    function FinishBookDialog({ t, book, saving, error, onConfirm, onDismiss }) {
+      useEffect(() => {
+        const onKeyDown = (event) => {
+          if (event.key !== 'Escape' || event.defaultPrevented || saving) return
+          event.preventDefault()
+          event.stopPropagation()
+          onDismiss()
+        }
+        window.addEventListener('keydown', onKeyDown)
+        return () => window.removeEventListener('keydown', onKeyDown)
+      }, [onDismiss, saving])
+
+      return h(
+        React.Fragment,
+        null,
+        h('div', { className: 'bs-apple-backdrop', onClick: saving ? undefined : onDismiss }),
+        h(
+          'div',
+          {
+            className: 'bs-apple-dialog bs-tag-dialog',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': t('finishPromptTitle'),
+            onClick: (event) => event.stopPropagation(),
+          },
+          h(
+            'header',
+            { className: 'bs-apple-head' },
+            h(
+              'div',
+              { className: 'bs-apple-heading' },
+              h('h2', { className: 'bs-apple-title' }, t('finishPromptTitle')),
+              h('p', { className: 'bs-apple-hint' }, book.title || t('untitled')),
+            ),
+            h(
+              'button',
+              {
+                type: 'button',
+                className: 'bs-icon-button',
+                onClick: onDismiss,
+                title: t('dismiss'),
+                'aria-label': t('dismiss'),
+                disabled: saving,
+              },
+              h(CloseIcon),
+            ),
+          ),
+          h('p', { className: 'bs-finish-body' }, t('finishPromptBody', { title: book.title || t('untitled') })),
+          error !== ''
+            ? h('p', { className: 'bs-rename-error', role: 'alert', style: { margin: '0 18px 10px' } }, error)
+            : null,
+          h(
+            'div',
+            { className: 'bs-apple-foot bs-tag-foot' },
+            h('button', { type: 'button', className: 'bs-button', onClick: onDismiss, disabled: saving }, t('finishPromptDismiss')),
+            h(
+              'button',
+              { type: 'button', className: 'bs-button bs-button-primary', onClick: onConfirm, disabled: saving },
+              saving ? t('saving') : t('finishPromptConfirm'),
+            ),
+          ),
+        ),
+      )
+    }
+
     function ErrorPanel({ t, message, onRetry }) {
       return h(
         'div',
@@ -5126,6 +5214,9 @@ html.bb-paged body table tr{break-inside:avoid}
       const [sortMode, setStoredSort] = useShelfView(viewState, 'sortMode')
       const [category, setStoredCategory] = useShelfView(viewState, 'category')
       const [tagDefinitions, setTagDefinitions] = useState([])
+      const [finishPrompt, setFinishPrompt] = useState(null)
+      const [finishSaving, setFinishSaving] = useState(false)
+      const [finishError, setFinishError] = useState('')
       const [tagTarget, setTagTarget] = useState(null)
       const [tagSaving, setTagSaving] = useState(false)
       const [tagError, setTagError] = useState('')
@@ -5178,10 +5269,27 @@ html.bb-paged body table tr{break-inside:avoid}
       const defaultsRef = useRef(null)
       const base = useMemo(() => transportBase(), [])
       const effectiveDefaults = defaultReadingSettings || DEFAULT_READING_SETTINGS
-      const closeReader = useCallback(() => {
-        setOpen(null)
-        setReload((value) => value + 1)
-      }, [setOpen])
+      const closeReader = useCallback(
+        async (percent) => {
+          const book = open
+          setOpen(null)
+          if (book === null) {
+            setReload((value) => value + 1)
+            return
+          }
+          // The reader flushed its last page before calling back; wait for that
+          // write so the refreshed list already reflects where reading stopped.
+          const pending = stateWrites.get(resourceUrl(base, `${API_ROOT}/books/${book.id}/state`))
+          if (pending) await pending.catch(() => undefined)
+          setReload((value) => value + 1)
+          if (typeof percent === 'number' && percent >= FINISHED_PERCENT && book.status !== 'finished') {
+            setFinishError('')
+            setFinishSaving(false)
+            setFinishPrompt(book)
+          }
+        },
+        [base, open, setOpen],
+      )
 
       useEffect(() => {
         if (books === null) return
@@ -5299,6 +5407,34 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       // ------------------------------------------------------- finish prompt
+      const dismissFinishPrompt = useCallback(() => {
+        if (finishSaving) return
+        setFinishPrompt(null)
+        setFinishError('')
+      }, [finishSaving])
+
+      const confirmFinished = useCallback(async () => {
+        if (finishPrompt === null || finishSaving) return
+        setFinishSaving(true)
+        setFinishError('')
+        try {
+          await requestJson(base, `/books/${finishPrompt.id}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ status: 'finished' }),
+          })
+          setFinishPrompt(null)
+          setNotice({ kind: 'ok', text: t('markedFinished') })
+          setReload((value) => value + 1)
+        } catch (failure) {
+          setFinishError(
+            t('finishPromptSaveFailed', { message: failure instanceof Error ? failure.message : String(failure) }),
+          )
+        } finally {
+          setFinishSaving(false)
+        }
+      }, [base, finishPrompt, finishSaving, t])
+
       useEffect(() => {
         if (books === null) return
         if (typeof category !== 'string' || category === 'all') return
@@ -5983,6 +6119,16 @@ html.bb-paged body table tr{break-inside:avoid}
               onCreateTag: createTag,
             })
           : null,
+        finishPrompt !== null
+          ? h(FinishBookDialog, {
+              t,
+              book: finishPrompt,
+              saving: finishSaving,
+              error: finishError,
+              onConfirm: confirmFinished,
+              onDismiss: dismissFinishPrompt,
+            })
+          : null,
         tagsOpen
           ? h(TagManagerDialog, {
               t,
@@ -6154,6 +6300,13 @@ html.bb-paged body table tr{break-inside:avoid}
       statusUnread: 'Unread',
       statusReading: 'Reading',
       statusFinished: 'Finished',
+      finishedPercent: 'Finished {percent}%',
+      finishPromptTitle: 'Mark as finished?',
+      finishPromptBody: 'You reached the last page of “{title}”. Mark this book as finished?',
+      finishPromptConfirm: 'Mark as finished',
+      finishPromptDismiss: 'Not now',
+      markedFinished: 'Marked as finished.',
+      finishPromptSaveFailed: 'Could not mark the book as finished: {message}',
       categories: 'Categories',
       categoryAll: 'All',
       bookTags: 'Tags…',
@@ -6428,6 +6581,13 @@ html.bb-paged body table tr{break-inside:avoid}
       statusUnread: '未读',
       statusReading: '正在阅读',
       statusFinished: '已读完',
+      finishedPercent: '已读完 {percent}%',
+      finishPromptTitle: '标记为已读完？',
+      finishPromptBody: '《{title}》已经读到最后一页，要标记为已读完吗？',
+      finishPromptConfirm: '标记为已读完',
+      finishPromptDismiss: '暂不标记',
+      markedFinished: '已标记为已读完。',
+      finishPromptSaveFailed: '标记失败：{message}',
       categories: '分类',
       categoryAll: '全部',
       bookTags: '标签…',

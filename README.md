@@ -14,9 +14,13 @@ panel. Library, covers, progress, bookmarks and settings live under
   EPUB/PDF; EPUB source folders are packed on demand.
 - **Shelf**: left-aligned, stable-size cover grid that adapts to the panel width; search, sort, rename, delete.
 - **Tags and reading status**: every book has one built-in status (**Unread**,
-  **Reading**, **Finished** — derived from progress unless overridden) plus any
+  **Reading**, **Finished** — Unread/Reading follow progress, Finished is
+  confirmed when you leave the book on its last page or set it yourself) plus any
   number of custom tags. The shelf switches categories with tabs; tags can be
   created, renamed and deleted, and renaming keeps the books that carry them.
+- **Finished books** show **Finished 100%** on the shelf without a progress bar;
+  re-reading past the end drops the status and restores the continuing-reading
+  card.
 - **PDF.js reader**: fit page/width/custom zoom, single/continuous pages, page
   bookmarks, progress restore.
 - **EPUB reader**: paged/scroll, TOC, typography, light/dark themes, automatic
@@ -65,6 +69,11 @@ attach tags; **Manage tags** in the header creates, renames, or deletes tag
 definitions. A book may carry several tags, and deleting a tag removes it from
 every book. Tabs show how many books they hold; the search box narrows the
 selected category.
+
+Leaving a book on its last page asks whether to mark it as finished. Confirmed
+books show **Finished 100%** on the shelf and drop out of the progress view;
+reading on from an earlier page clears the status and the card returns to
+**Continue reading x%**.
 
 Progress, bookmarks, tags and status overrides are stored on the Host under
 `$DSH_HOME/bookshelf`. Switching panels preserves the open book, search/sort,

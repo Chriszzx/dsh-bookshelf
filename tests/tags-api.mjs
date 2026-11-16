@@ -93,7 +93,12 @@ test('tag definitions, assignments and status overrides round-trip through the H
     tags: Array.from({ length: 31 }, () => psychology.id),
   })).status, 400)
 
-  // A manual status outlives progress; null restores the derived value.
+  // Finishing is explicit: the last page alone does not set the status, but a
+  // manual mark outlives progress and only null restores the derived value.
+  assert.equal((await send('PUT', statePath(first.id), {
+    progress: { format: 'epub', chapterIndex: 9, percent: 1, updatedAt: Date.now() },
+  })).status, 200)
+  assert.equal(bookOf(await books(), first.id).status, 'reading')
   let overridden = await send('PATCH', `/books/${first.id}`, { status: 'finished' })
   assert.equal(overridden.payload.book.status, 'finished')
   assert.equal(overridden.payload.book.statusManual, true)
@@ -104,6 +109,28 @@ test('tag definitions, assignments and status overrides round-trip through the H
   const automatic = await send('PATCH', `/books/${first.id}`, { status: null })
   assert.equal(automatic.payload.book.status, 'reading')
   assert.equal(automatic.payload.book.statusManual, false)
+
+  // Re-reading below the last page clears a finished override automatically,
+  // while staying at the last page or saving only settings keeps it.
+  assert.equal((await send('PATCH', `/books/${first.id}`, { status: 'finished' })).status, 200)
+  assert.equal((await send('PUT', statePath(first.id), {
+    settings: { fontSize: 16 },
+  })).status, 200)
+  payload = await books()
+  assert.equal(bookOf(payload, first.id).status, 'finished')
+  assert.equal((await send('PUT', statePath(first.id), {
+    progress: { format: 'epub', chapterIndex: 9, percent: 0.999, updatedAt: Date.now() },
+  })).status, 200)
+  payload = await books()
+  assert.equal(bookOf(payload, first.id).status, 'finished')
+  assert.equal((await send('PUT', statePath(first.id), {
+    progress: { format: 'epub', chapterIndex: 4, percent: 0.5, updatedAt: Date.now() },
+  })).status, 200)
+  payload = await books()
+  assert.equal(bookOf(payload, first.id).status, 'reading')
+  assert.equal(bookOf(payload, first.id).statusManual, false)
+  const rereadLibrary = JSON.parse(await readFile(join(home, 'bookshelf', 'library.json'), 'utf8'))
+  assert.equal('status' in rereadLibrary.books.find(book => book.id === first.id), false)
 
   // Deleting a tag strips its assignments everywhere and reports the count.
   const removed = await send('DELETE', `/tags/${psychology.id}`, undefined)
