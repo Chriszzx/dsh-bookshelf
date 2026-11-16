@@ -3,6 +3,26 @@
 状态：**已按 2026-11-17 的确认更新**（拆分方式、渲染引擎、锚点、样式作用域、重定位语义已定）
 适用版本：0.6.1 之后、0.6.2 之前
 
+## 进度
+
+| 波次 | 状态 | 结果 |
+| --- | --- | --- |
+| W0 R1 客户端逻辑外置 | ✅ 已合并（`bc043a0`） | `assets/lib/text-index.mjs`、`assets/lib/clipboard.mjs`、`assets/locales/` 10 个模块、预加载基建（`loadClientLib` / `clientLib` / `preloadClientLibs`）、区块 banner；client.js 10163→9612 行 |
+| W0 R2 Host 拆分 | ✅ 已合并（`7ca5c84`） | `host/` 11 个模块、`tts/` 4 个模块、`tts.js` 之门面、audiobook 纯函数外置；index.js 1544→88 行 |
+| W0 回归 | ✅ | 语法 77 模块、单元 80 项（78 通过/2 跳过）、13 个浏览器套件全绿 |
+| W1 M1–M5 | ✅ 已提交（`00ea13b`） | `assets/lib/{annotations,highlights,selection-speech,reading-list}.mjs`；Host 标注持久化 + `cache:false` scratch；单元 150 项（148 通过/2 跳过） |
+| W2 G1/G2 | ⏳ 进行中 | 两个 worktree 并行接线 client.js |
+| W3 集成 | ⏳ 待开始 | 合并、全量回归、文档、版本 |
+
+### W1 交付的模块契约
+
+- `assets/lib/annotations.mjs`：`newAnnotationId`、`sanitizeAnnotations`、`normalizeAnnotationStyle`、`DEFAULT_ANNOTATION_STYLE`、`annotationLabel`、`anchorKey`、`hasSameAnchor`、`fromSelection`（可能返回 `null`）。
+- `assets/lib/highlights.mjs`：`READ_ALOUD_HIGHLIGHT='bb-ra'`、`annotationHighlightName`、`supportsCustomHighlights`、`buildHighlightPlan`、`applyHighlightPlan`、`clearHighlights`；朗读层 priority 0、反色 `color=palette.bg` / `background-color=palette.fg`，标注层 priority 100；标注需先解析出 `range`。
+- `assets/lib/selection-speech.mjs`：`splitSelectionSentences`、`lastSelectionSentence`、`resumeIndexFor`、`SELECTION_AUDIO_POLICY = { cache: false }`。
+- `assets/lib/reading-list.mjs`：`readingKind`、`mergeReadingItems`、`sortReadingItems`、`filterReadingItems`、`countReadingItems`。
+- Host：`PUT /books/:id/state` 接受 `annotations`；`POST /tts/synthesize` 接受 `cache:false`（写 `tts-scratch/`，不进 LRU，10 分钟 TTL）。
+
+
 ---
 
 ## 0. 已确认的决策
