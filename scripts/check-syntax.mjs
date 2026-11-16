@@ -17,7 +17,7 @@ async function collect(directory) {
 }
 // Optional module trees appear as the refactor lands; missing ones are skipped
 // so this check keeps working in either half of a parallel branch.
-for (const directory of ['scripts', 'tests', 'host', 'tts', 'assets/lib']) {
+for (const directory of ['scripts', 'tests', 'host', 'tts', 'assets/lib', 'assets/locales']) {
   try {
     await collect(directory)
   } catch (error) {
