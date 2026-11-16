@@ -175,7 +175,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-settings-foot{justify-content:flex-end}
 .bs-settings-actions{display:flex;gap:8px}
 .bs-tts-overlay{position:absolute;left:0;right:0;bottom:14px;z-index:9;display:flex;flex-direction:column;align-items:center;gap:8px;padding:0 12px;pointer-events:none}
-.bs-tts-dock{display:flex;align-items:center;gap:4px;max-width:min(780px,100%);min-width:0;padding:6px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 76%,transparent);backdrop-filter:blur(14px) saturate(140%);box-shadow:0 20px 44px -24px rgba(0,0,0,.65);pointer-events:auto}
+.bs-tts-dock{display:flex;align-items:center;gap:4px;max-width:min(780px,100%);min-width:0;padding:6px 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(165%);backdrop-filter:blur(18px) saturate(165%);box-shadow:0 20px 44px -24px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.16);pointer-events:auto}
 .bs-tts-status{flex:1;min-width:0;max-width:240px;font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-tts-panels{display:flex;flex-direction:column;gap:8px;width:min(420px,100%);pointer-events:auto}
 .bs-tts-controls{display:flex;flex-wrap:wrap;align-items:center;gap:6px;min-width:0}
@@ -186,7 +186,6 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-tts-caption-close{flex:none;display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
 .bs-tts-caption-close:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-tts-caption-text{max-height:5.4em;overflow:hidden;font-size:13.5px;line-height:1.6;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
-.bs-tts-caption-sr{position:absolute;width:1px;height:1px;padding:0;border:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;pointer-events:none;background:none;box-shadow:none;backdrop-filter:none}
 .bs-tts-file{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:14px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay) 88%,transparent);backdrop-filter:blur(12px)}
 .bs-tts-file-open{justify-content:flex-start}
 .bs-tts-file-time{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}
@@ -1669,37 +1668,60 @@ html.bb-paged body table tr{break-inside:avoid}
       return out
     }
 
-    // Locate the first text node containing this sentence and return the range
-    // of its first characters; page positioning only needs the start.
-    function findTextRange(doc, sentence, startIndex = 0) {
-      const needle = sentence.slice(0, 24)
-      if (needle === '') return null
+    // Flatten the chapter into whitespace-normalised text plus a per-character
+    // map back to (text node, offset). Sentences come from innerText, where block
+    // boundaries become newlines, so matching has to ignore whitespace layout.
+    function buildSpeechIndex(doc) {
       const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT)
+      let flat = ''
+      const entries = []
       let node
-      let position = 0
       while ((node = walker.nextNode())) {
         const parent = node.parentElement
         if (parent !== null && SPEECH_SKIP.has(parent.tagName)) continue
         const value = node.nodeValue || ''
-        const index = value.indexOf(needle)
-        if (index !== -1 && position >= startIndex) {
-          const range = doc.createRange()
-          range.setStart(node, index)
-          range.setEnd(node, Math.min(value.length, index + needle.length))
-          return range
+        for (let offset = 0; offset < value.length; offset += 1) {
+          const character = value[offset]
+          if (/\s/u.test(character)) {
+            // One space stands for any run of layout whitespace.
+            if (flat === '' || flat[flat.length - 1] === ' ') continue
+            flat += ' '
+            entries.push({ node, offset })
+            continue
+          }
+          flat += character
+          entries.push({ node, offset })
         }
-        position += value.length
       }
-      return null
+      return { flat, entries }
     }
 
+    function speechRangeFor(index, sentence, cursor) {
+      const target = sentence.replace(/\s+/gu, ' ').trim()
+      if (target === '' || index.entries.length === 0) return { range: null, cursor }
+      const at = index.flat.indexOf(target, cursor)
+      if (at < 0) return { range: null, cursor }
+      const first = index.entries[at]
+      const last = index.entries[Math.min(index.entries.length - 1, at + target.length - 1)]
+      const range = first && first.node.ownerDocument.createRange()
+      if (!range) return { range: null, cursor }
+      range.setStart(first.node, first.offset)
+      range.setEnd(last.node, last.offset + 1)
+      return { range, cursor: at + target.length }
+    }
+
+    // One index per chapter, then a full-sentence range for every sentence so
+    // the highlight covers the whole utterance instead of just its opening.
     function buildSpeechBatches(doc, sentences) {
+      const index = buildSpeechIndex(doc)
       let cursor = 0
-      return sentences.map((sentence) => {
-        const range = findTextRange(doc, sentence, cursor)
-        if (range !== null) cursor = range.startOffset + (range.endOffset - range.startOffset)
-        return { text: sentence, range }
-      })
+      const batches = []
+      for (const sentence of sentences) {
+        const found = speechRangeFor(index, sentence, cursor)
+        cursor = found.cursor
+        batches.push({ text: sentence, range: found.range })
+      }
+      return batches
     }
 
     // Read-aloud follows the book's own language when the provider offers a
@@ -1748,15 +1770,15 @@ html.bb-paged body table tr{break-inside:avoid}
       return Math.max(0, Math.floor((rect.left + scrollLeft - info.padLeft + 1) / info.step))
     }
 
-    // A frosted-glass band painted over the sentence being read. It is a fixed
-    // layer inside the chapter document, so it never joins the paged columns:
-    // the text layout cannot move, and backdrop-filter still blurs the real page
-    // behind it (cross-document overlays cannot do that).
-    const SPEECH_GLASS_ID = 'bb-speech-glass'
+    // A highlighter swipe painted over the sentence being read. Each band is a
+    // fixed-position child of the chapter root: a wrapper element would create
+    // its own stacking context and the multiply blend would stop reaching the
+    // page, so the ink would no longer look like a marker over the text.
+    const SPEECH_BAND_ATTR = 'data-bb-glass-band'
 
     function clearSpeechGlass(documentNode) {
-      const layer = documentNode ? documentNode.getElementById(SPEECH_GLASS_ID) : null
-      if (layer !== null) layer.remove()
+      if (!documentNode) return
+      for (const band of Array.from(documentNode.querySelectorAll(`[${SPEECH_BAND_ATTR}]`))) band.remove()
     }
 
     function paintSpeechGlass(documentNode, range) {
@@ -1772,33 +1794,41 @@ html.bb-paged body table tr{break-inside:avoid}
       for (const rect of rects) {
         if (!(rect.width > 0 && rect.height > 0)) continue
         if (rect.right <= 0 || rect.bottom <= 0) continue
-        lines.push(rect)
+        // Merge fragments that share a line so the stroke reads as one swipe.
+        const same = lines.find((line) => Math.abs(line.top - rect.top) < 2 && Math.abs(line.height - rect.height) < 2)
+        if (same) {
+          same.left = Math.min(same.left, rect.left)
+          same.right = Math.max(same.right, rect.right)
+        } else {
+          lines.push({ left: rect.left, right: rect.right, top: rect.top, height: rect.height })
+        }
       }
       if (lines.length === 0) return
       const scheme = String(documentNode.documentElement.style.getPropertyValue('--bb-scheme') || '').trim()
       const dark = scheme === 'dark'
-      const fill = dark ? 'rgba(150,190,255,.17)' : 'rgba(96,132,214,.13)'
-      const edge = dark ? 'rgba(255,255,255,.20)' : 'rgba(255,255,255,.62)'
-      const layer = documentNode.createElement('div')
-      layer.id = SPEECH_GLASS_ID
-      layer.setAttribute('aria-hidden', 'true')
-      layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;contain:strict'
-      for (const rect of lines) {
+      // Marker ink: warm translucent yellow in light mode, a soft glow in dark
+      // mode. Blend modes keep the glyph edges untouched and the words readable.
+      const fill = dark ? 'rgba(255,214,64,0.28)' : 'rgba(255,214,64,0.55)'
+      const blend = dark ? 'screen' : 'multiply'
+      // Bands hang directly off the root so the blend reaches the page content.
+      for (const line of lines) {
         const band = documentNode.createElement('span')
+        band.setAttribute(SPEECH_BAND_ATTR, '')
+        band.setAttribute('aria-hidden', 'true')
         band.style.cssText = [
-          'position:absolute',
-          'border-radius:5px',
-          `left:${Math.round(rect.left) - 2}px`,
-          `top:${Math.round(rect.top) - 1}px`,
-          `width:${Math.round(rect.width) + 4}px`,
-          `height:${Math.round(rect.height) + 2}px`,
+          'position:fixed',
+          'pointer-events:none',
+          'z-index:2147483000',
+          'border-radius:3px 5px 4px 6px',
+          `left:${Math.round(line.left) - 3}px`,
+          `top:${Math.round(line.top) - 1}px`,
+          `width:${Math.round(line.right - line.left) + 6}px`,
+          `height:${Math.round(line.height) + 2}px`,
           `background:${fill}`,
-          'backdrop-filter:blur(3px) saturate(125%)',
-          `box-shadow:inset 0 0 0 1px ${edge}, 0 2px 10px -6px rgba(0,0,0,.45)`,
+          `mix-blend-mode:${blend}`,
         ].join(';')
-        layer.appendChild(band)
+        documentNode.documentElement.appendChild(band)
       }
-      documentNode.documentElement.appendChild(layer)
     }
 
     function useReadAloud({ base, t, language = '' }) {
@@ -2552,19 +2582,14 @@ html.bb-paged body table tr{break-inside:avoid}
       return secrets
     }
 
-    // Floating card showing the sentence read-aloud is on, or the last one it
-    // stopped at. EPUB paints the glass band on the sentence itself, so there it
-    // is rendered visually hidden as an aria-live cue for assistive tech; PDF has
-    // no text layer, so the card is the visible fallback.
-    function ReaderSpeechCaption({ t, caption, status, onDismiss, srOnly = false }) {
+    // Floating preview card showing the sentence read-aloud is on, or the last
+    // one it stopped at. It stays for EPUB as well: the in-page glass band marks
+    // the exact words, while the card keeps a readable copy and a position cue.
+    function ReaderSpeechCaption({ t, caption, status, onDismiss }) {
       const live = status === 'playing' || status === 'paused' || status === 'loading'
       return h(
         'div',
-        {
-          className: srOnly ? 'bs-tts-caption bs-tts-caption-sr' : 'bs-tts-caption',
-          role: 'status',
-          'aria-live': 'polite',
-        },
+        { className: 'bs-tts-caption', role: 'status', 'aria-live': 'polite' },
         h(
           'div',
           { className: 'bs-tts-caption-head' },
@@ -3258,7 +3283,6 @@ html.bb-paged body table tr{break-inside:avoid}
                     t,
                     caption: speech.readAloud.caption,
                     status: speech.readAloud.status,
-                    srOnly: speech.inlineHighlight === true,
                     onDismiss: speech.readAloud.clearCaption,
                   })
                 : null,
