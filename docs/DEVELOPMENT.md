@@ -5,6 +5,8 @@
 
 0.6.2 把大文件拆成模块，并加入阅读标注：客户端纯逻辑与词条移入 `assets/lib` / `assets/locales`，Host 拆成 `host/` 与 `tts/`；阅读器支持下划线/高亮（两类互斥的样式面板、按书持久化、与整页书签混排并支持排序搜索），朗读当前句改为页面反色，选区菜单在鼠标位置打开，可朗读选中文字并把朗读位置重定位到选区末尾句（该次朗读不进缓存）。
 
+0.6.3 调整阅读体验与宣传素材：封面网格按行宽计算列数（20px 间距、164–196px 封面、末行靠左）；目录/书签标签固定在栏顶；关闭朗读同步清掉字幕与高亮，工具栏按钮成为一致的开关；设置弹窗改用 DSH 原生模态/菜单配色，表单控件与下拉箭头对齐 DSH；标注预览跟随阅读字体并使用 Lorem ipsum 示例；新增 README 截图、`docs/GALLERY.md` 与 `docs/DEMO.md`。
+
 ## 开发安装
 
 在 DSH 当前 profile 的「插件」中，选择本仓库的绝对目录进行本地安装，例如：
@@ -285,10 +287,10 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 正式发布或提交前按顺序确认：
 
 1. `node scripts/run-checks.mjs all` 全绿（语法、单元/接口、全部浏览器回归）；网络类 provider 不参与自动化测试。
-2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`host/**`、`tts/**`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs` 与 `assets/locales/*.mjs`，且不含 `tests/`、截图和本机路径。
+2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`host/**`、`tts/**`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs`、`assets/locales/*.mjs`、`docs/GALLERY.md`、`docs/DEMO.md` 与 `docs/images/**`，且不含 `tests/` 和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
    `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts/providers.js` 中出现。
-4. 文档版本号与 `package.json` 一致（当前 `0.6.2`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
+4. 文档版本号与 `package.json` 一致（当前 `0.6.3`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
 5. 需要真实 Edge `say` 冒烟时手动执行，失败不阻塞提交；DSH 重启后再做一次人工验收（朗读入口、设置窗口、自动音色）。
 6. 未经确认不要推送到远端，也不要改动版本号。
 

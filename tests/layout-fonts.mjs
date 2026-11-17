@@ -115,10 +115,11 @@ try {
   await evaluate(`(async()=>{await until(()=>document.querySelectorAll('.bs-card').length===16)})()`)
   const widths = []
   for (const width of [1260, 1600, 480, 1600]) {
-    const state = await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await wait(120);const root=document.querySelector('.bs-root'),g=document.querySelector('.bs-grid'),cards=[...g.children],a=cards[0].getBoundingClientRect(),r=root.getBoundingClientRect();return{viewport:innerWidth,left:a.left-r.left,card:a.width,columns:cards.filter(c=>Math.abs(c.getBoundingClientRect().top-a.top)<1).length,width:r.width,overflow:root.scrollWidth-root.clientWidth}})()`)
+    const state = await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await wait(120);const root=document.querySelector('.bs-root'),g=document.querySelector('.bs-grid'),cards=[...g.children],a=cards[0].getBoundingClientRect(),r=root.getBoundingClientRect();const row=cards.filter(c=>Math.abs(c.getBoundingClientRect().top-a.top)<1);const last=row[row.length-1].getBoundingClientRect();return{viewport:innerWidth,left:a.left-r.left,card:a.width,columns:row.length,rowRight:last.right,gridRight:g.getBoundingClientRect().right,width:r.width,overflow:root.scrollWidth-root.clientWidth}})()`)
     assert.equal(state.width, width)
     assert.ok(Math.abs(state.left - (width <= 720 ? 20 : 24)) < 1, 'grid starts at the content padding')
-    assert.ok(Math.abs(state.card - 176) < 1, 'cards stay a stable width')
+    assert.ok(state.card >= 163.5, 'cards keep a comfortable minimum width')
+    assert.ok(Math.abs(state.rowRight - state.gridRight) < 1.5, 'a full row reaches the grid edge')
     assert.ok(state.overflow < 2, 'content width does not overflow')
     widths.push(state)
   }

@@ -438,23 +438,37 @@ try {
     return true;
   })()`), true)
 
-  // Closing the dock stops playback but keeps the last sentence on screen: in
-  // paged mode that text is the only reliable position cue. The floating text
-  // can be dismissed on its own.
+  // Closing the dock returns the reader to its idle state: playback stops, the
+  // caption and spoken-sentence highlight disappear, and the toolbar button is
+  // no longer pressed. The toolbar button toggles through the same path.
   assert.equal(await evaluate(`(async()=>{
     const before=caption();
     check(before.length>0,'a caption must be visible while playing: '+before);
+    const frame=document.querySelector('.bs-epub-frame');
+    check(!!frame.contentWindow.CSS.highlights.get('bb-ra'),'sentence highlight is painted while reading');
+    const toolbar=()=>document.querySelector('.bs-reader-bar [aria-label="readAloud"]');
+    check(toolbar().getAttribute('aria-pressed')==='true','toolbar button is selected while the dock is open');
     barClick('dismiss');
     await until(()=>!document.querySelector('.bs-tts-dock'));
-    const shown=document.querySelector('.bs-tts-caption-text');
-    check(!!shown,'caption overlay must survive stopping read-aloud');
-    check(shown.textContent===before,'stopped caption differs: '+before+' -> '+shown.textContent);
-    check(document.querySelector('.bs-tts-caption-label').textContent==='ttsCaptionLast','stopped label');
+    await until(()=>!document.querySelector('.bs-tts-caption'));
+    check(!document.querySelector('.bs-tts-caption'),'closing must clear the caption card');
+    check(toolbar().getAttribute('aria-pressed')==='false','closing must unselect the toolbar button');
+    await until(()=>!frame.contentWindow.CSS.highlights.get('bb-ra'));
     const plays=window.audioEvents('play').length;
     await wait(200);
     check(window.audioEvents('play').length===plays,'closing must stop the queue');
-    document.querySelector('.bs-tts-caption-close').click();
+
+    // Reopen for the preview highlight, then close with the toolbar toggle:
+    // the same reset must happen instead of just hiding the dock.
+    toolbar().click();
+    await until(()=>document.querySelector('.bs-tts-dock'));
+    await until(()=>frame.contentWindow.CSS.highlights.get('bb-ra'));
+    check(toolbar().getAttribute('aria-pressed')==='true','reopened button is selected');
+    toolbar().click();
+    await until(()=>!document.querySelector('.bs-tts-dock'));
     await until(()=>!document.querySelector('.bs-tts-caption'));
+    check(toolbar().getAttribute('aria-pressed')==='false','toolbar toggle off unselects the button');
+    await until(()=>!frame.contentWindow.CSS.highlights.get('bb-ra'));
     check(window.errors.length===0,'console errors: '+window.errors.join(' | '));
     return true;
   })()`), true)

@@ -183,7 +183,10 @@ try {
     check(!document.querySelector('.bs-annotation-thickness'),'highlight category hides underline thickness');
     check(!document.querySelector('.bs-annotation-underline-options'),'highlight category hides underline styles');
     check(document.querySelector('.bs-annotation-hue').getAttribute('type')==='range','hue is a range input');
-    check(document.querySelector('.bs-annotation-preview').textContent==='annotationPreview','live preview label');
+    check(document.querySelector('.bs-annotation-preview').textContent.startsWith('Lorem ipsum dolor sit amet'),'live preview specimen');
+    const specimenStyle=getComputedStyle(document.querySelector('.bs-annotation-preview'));
+    check(specimenStyle.fontSize==='19px','preview follows the reading font size: '+specimenStyle.fontSize);
+    check(specimenStyle.fontFamily.includes('serif'),'preview follows the reading font family: '+specimenStyle.fontFamily);
     // The preview is exclusive: highlight mode paints a background and never an
     // underline.
     const highlightPreview=getComputedStyle(document.querySelector('.bs-annotation-preview'));

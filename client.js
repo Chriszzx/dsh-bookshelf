@@ -83,7 +83,7 @@ window.__ModuleLoader__.load({
 .bs-icon-button:disabled{opacity:.4;cursor:default}
 .bs-icon-button[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-scroll{flex:1;min-width:0;min-height:0;overflow:auto;padding:6px 24px 56px;overscroll-behavior:contain}
-.bs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(164px,100%),176px));justify-content:start;gap:24px 20px;min-width:0;width:100%;margin:0}
+.bs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),1fr));justify-content:stretch;gap:24px 20px;min-width:0;width:100%;margin:0}
 .bs-card{position:relative;display:flex;flex-direction:column;gap:9px;min-width:0}
 .bs-cover{position:relative;display:block;width:100%;aspect-ratio:3/4;margin:0;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden;text-align:left;color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12),0 10px 24px -16px rgba(0,0,0,.55)}
 button.bs-cover{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}
@@ -262,7 +262,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-progress:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
 .bs-progress-fill{position:absolute;top:5px;height:4px;background:var(--dsw-alias-brand-primary);border-radius:0 999px 999px 0;pointer-events:none}
 .bs-progress-thumb{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:var(--dsw-alias-brand-primary);box-shadow:0 0 0 2px var(--dsw-alias-bg-base);pointer-events:none}
-.bs-aside-tabs{display:flex;gap:4px;padding:0 6px 8px 0;border-bottom:1px solid var(--dsw-alias-border-l1);margin-bottom:8px}
+.bs-aside-tabs{flex:none;display:flex;gap:4px;padding:14px 10px 8px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);margin:0;background:inherit}
 .bs-aside-tab{flex:1;min-width:0;font:inherit;font-size:12px;line-height:1.4;padding:5px 6px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bs-aside-tab:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-aside-tab[aria-selected="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
@@ -358,6 +358,17 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-discussion-preview{margin:0;max-height:150px;overflow:auto;padding:10px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;font:inherit;font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
 .bs-discussion-workspace{display:flex;flex-direction:column;gap:6px;font-size:12px}
 .bs-discussion-workspace select{width:100%;min-width:0;padding:8px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit}
+
+/* Same 12px chevron the DSH settings selects use: hidden native arrow, one
+   shared glyph inset 12px from the right edge. */
+.bs-setting-select,.bs-tts-select,.bs-sort-select,.bs-discussion-workspace select{
+  -webkit-appearance:none;appearance:none;cursor:pointer;
+  padding-right:32px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2381858C' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position:right 12px center;
+  background-repeat:no-repeat;
+  background-size:12px 12px;
+}
 .bs-discussion-workspace select:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 .bs-discussion-dialog .bs-discussion-error{color:var(--dsw-alias-state-error-primary);overflow-wrap:anywhere}
 .bs-discussion-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
@@ -369,7 +380,8 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-pdf-canvas{display:block;max-width:100%;height:auto;transition:opacity .18s ease}
 .bs-pdf-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;color:#8a8f98}
 .bs-epub-body{position:relative;flex:1;min-height:0;display:flex;background:var(--dsw-alias-bg-base)}
-.bs-epub-toc{flex:none;width:264px;min-width:0;overflow:auto;padding:14px 10px 40px 14px;border-right:1px solid var(--dsw-alias-border-l1);overscroll-behavior:contain}
+.bs-epub-toc{flex:none;width:264px;min-width:0;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--dsw-alias-border-l1);background:inherit}
+.bs-aside-scroll{flex:1;min-height:0;overflow:auto;padding:8px 10px 40px 14px;overscroll-behavior:contain}
 .bs-toc-label{display:block;width:100%;margin:0 0 1px;padding:5px 8px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1.5;text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-toc-label:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-toc-label[aria-current="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-weight:600}
@@ -486,6 +498,67 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-audiobook-done .bs-button{text-decoration:none}
 @media (hover:none){.bs-more{opacity:1}}
 @media (hover:none){.bs-row-more{opacity:1}}
+
+/* ----- [styles:dsh-native] ----- */
+/* Dialogs follow the DSH modal primitive (bg-layer-2 panel, panel radius,
+   prominent elevation, mask tokens); menus and reader popovers follow the DSH
+   menu material (specific-menu fill, 40px blur, 16px radius). */
+.bs-apple-backdrop,.bs-discussion-backdrop{background:var(--dsw-alias-bg-mask-1);backdrop-filter:var(--dsw-mask-blur)}
+.bs-apple-dialog,.bs-discussion-dialog{
+  border:0;
+  border-radius:var(--dsw-radius-panel);
+  background:var(--dsw-alias-bg-layer-2);
+  box-shadow:var(--dsw-elevation-prominent);
+}
+.bs-reader-settings,.bs-annotation-menu,.bs-bookmarks-panel,.bs-tts-settings{
+  border:0;
+  border-radius:var(--dsw-radius-lg);
+  --dsw-elevation-stroke-color:var(--dsw-alias-border-l1);
+  background:var(--dsw-specific-menu);
+  -webkit-backdrop-filter:var(--dsw-menu-backdrop-filter);
+  backdrop-filter:var(--dsw-menu-backdrop-filter);
+  box-shadow:var(--dsw-elevation-prominent);
+}
+.bs-selection-menu,.bs-cover-menu,.bs-row-menu{
+  border:0;
+  border-radius:var(--dsw-radius-md);
+  --dsw-elevation-stroke-color:var(--dsw-alias-border-l1);
+  background:var(--dsw-specific-menu);
+  -webkit-backdrop-filter:var(--dsw-menu-backdrop-filter);
+  backdrop-filter:var(--dsw-menu-backdrop-filter);
+  box-shadow:var(--dsw-elevation-prominent);
+}
+.bs-settings-tab{border-color:transparent;background:transparent;color:var(--dsw-alias-label-secondary)}
+.bs-settings-tab:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
+.bs-settings-tab[aria-selected="true"]{background:var(--dsw-specific-sidebar-nav-item-active);border-color:transparent;color:var(--dsw-alias-label-primary)}
+.bs-settings-hint,.bs-apple-hint,.bs-audiobook-hint,.bs-tag-section-title{color:var(--dsw-alias-label-tertiary)}
+.bs-setting-label,.bs-tts-field{color:var(--dsw-alias-label-secondary)}
+.bs-cover-menu button:hover,.bs-row-menu button:hover,.bs-selection-item:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.bs-settings-body .bs-setting-select,.bs-settings-body .bs-setting-input,
+.bs-tts-settings .bs-tts-select,.bs-tts-settings .bs-tts-input,
+.bs-reader-settings select,.bs-reader-settings input,
+.bs-discussion-workspace select,.bs-audiobook-body select,.bs-rename-input,.bs-tts-input{
+  border:0.5px solid var(--dsw-alias-border-l4);
+  border-radius:var(--dsw-radius-md);
+  background:var(--dsw-alias-bg-layer-1);
+  color:var(--dsw-alias-label-primary);
+}
+.bs-settings-body .bs-setting-select:focus,.bs-settings-body .bs-setting-input:focus,
+.bs-tts-settings .bs-tts-select:focus,.bs-tts-settings .bs-tts-input:focus,
+.bs-reader-settings select:focus,.bs-reader-settings input:focus,
+.bs-discussion-workspace select:focus,.bs-audiobook-body select:focus,
+.bs-rename-input:focus,.bs-tts-input:focus{
+  outline:none;
+  border-color:var(--dsw-alias-state-business-primary);
+  box-shadow:none;
+}
+.bs-button{border:0;border-radius:var(--dsw-radius-md);background:transparent;box-shadow:inset 0 0 0 var(--dsh-hairline-width,.5px) var(--dsw-alias-border-l3)}
+.bs-button:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
+.bs-button-primary{background:var(--dsw-alias-button-primary-fill);box-shadow:none;color:var(--dsw-alias-label-primary-foreground)}
+.bs-button-primary:hover:not(:disabled){background:var(--dsw-alias-button-primary-hover);filter:none}
+.bs-audiobook-item{background:var(--dsw-alias-bg-module-platform);border-color:transparent}
+
+
 `
 
     const READING_CSS = `
@@ -567,6 +640,18 @@ html.bb-paged body table tr{break-inside:avoid}
       theme: 'auto',
       pageMode: 'scroll',
       pageSpread: 'auto',
+    }
+
+    // Inline typography for UI specimens that sit outside the chapter iframe
+    // but must read with the same font, weight, size and leading as the page.
+    function readingTypographyStyle(settings) {
+      return {
+        fontFamily: readingFonts ? readingFonts.fontStack(settings) : READER_FONTS[settings.fontFamily] || READER_FONTS.serif,
+        fontWeight: settings.fontWeight ? String(settings.fontWeight) : 'normal',
+        fontStyle: settings.fontStyle === 'italic' ? 'italic' : 'normal',
+        fontSize: `${Math.min(30, Math.max(12, Math.round(settings.fontSize || 19)))}px`,
+        lineHeight: String(Math.min(2.5, Math.max(1.2, settings.lineHeight || 1.85))),
+      }
     }
 
     // Fallbacks match the DSH desktop palettes so a build without the token
@@ -1382,6 +1467,11 @@ html.bb-paged body table tr{break-inside:avoid}
     const ANNOTATION_UNDERLINE_STYLES = Object.freeze(['solid', 'dashed', 'dotted', 'wavy'])
     const ANNOTATION_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
 
+    // Fixed specimen for the annotation style popover. The classic Lorem ipsum
+    // opening shows how a highlight or underline reads over a full sentence
+    // without embedding book text or UI copy in the preview.
+    const ANNOTATION_PREVIEW_TEXT = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+
     function defaultAnnotationStyle() {
       const module = clientLib('annotations')
       return module !== null ? module.DEFAULT_ANNOTATION_STYLE : FALLBACK_ANNOTATION_STYLE
@@ -1671,7 +1761,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // with its own sub-options. The preview is exclusive: it only renders the
     // category being edited, so strength never shows up on an underline preview
     // and thickness never shows up on a highlight one.
-    function AnnotationStyleMenu({ t, style, onChange, onClose }) {
+    function AnnotationStyleMenu({ t, style, previewTypography, onChange, onClose }) {
       const fallback = defaultAnnotationStyle()
       const mode = style.mode === 'underline' ? 'underline' : 'highlight'
       const storedColor = typeof style.color === 'string' && ANNOTATION_COLOR_PATTERN.test(style.color) ? style.color : fallback.color
@@ -1762,7 +1852,7 @@ html.bb-paged body table tr{break-inside:avoid}
             tab('highlight', t('annotationHighlight')),
             tab('underline', t('annotationUnderline')),
           ),
-          h('div', { className: 'bs-annotation-preview', 'data-mode': mode, style: preview }, t('annotationPreview')),
+          h('div', { className: 'bs-annotation-preview', 'data-mode': mode, style: { ...preview, ...(previewTypography || {}) } }, ANNOTATION_PREVIEW_TEXT),
           colorRow(),
           mode === 'highlight'
             ? h(
@@ -3767,6 +3857,24 @@ html.bb-paged body table tr{break-inside:avoid}
       useEffect(() => {
         speechRef.current = speech
       }, [speech])
+      const audiobookRef = useRef(audiobook)
+      useEffect(() => {
+        audiobookRef.current = audiobook
+      }, [audiobook])
+
+      // One close path for the dock button, the toolbar toggle, Escape and
+      // focus mode: stop both players and drop the caption and sentence
+      // highlight so the control returns to its unselected state.
+      const closeSpeech = useCallback(() => {
+        const current = speechRef.current
+        if (current !== null) {
+          current.readAloud.stop()
+          current.readAloud.clearCaption()
+          if (typeof current.clearHighlight === 'function') current.clearHighlight()
+        }
+        audiobookRef.current.stop()
+        setTtsOpen(false)
+      }, [])
       useEffect(() => {
         if (!ttsOpen || focusMode) return
         const current = speechRef.current
@@ -3776,19 +3884,20 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [ttsOpen, focusMode])
 
       useEffect(() => {
-        if (focusMode) setTtsOpen(false)
-      }, [focusMode])
+        if (!focusMode || !ttsOpen) return
+        closeSpeech()
+      }, [focusMode, ttsOpen, closeSpeech])
 
       useEffect(() => {
         if (!ttsOpen) return undefined
         const onKeyDown = (event) => {
           if (event.key !== 'Escape' || event.defaultPrevented) return
           event.preventDefault()
-          setTtsOpen(false)
+          closeSpeech()
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-      }, [ttsOpen])
+      }, [ttsOpen, closeSpeech])
 
       useEffect(() => {
         const onChange = () => setIsFullscreen(document.fullscreenElement === shellRef.current)
@@ -3874,8 +3983,11 @@ html.bb-paged body table tr{break-inside:avoid}
                         key: 'read-aloud',
                         type: 'button',
                         className: 'bs-icon-button',
-                        onClick: () => setTtsOpen((value) => !value),
-                        'aria-pressed': speech.readAloud.running || audiobook.running,
+                        onClick: () => {
+                          if (ttsOpen) closeSpeech()
+                          else setTtsOpen(true)
+                        },
+                        'aria-pressed': ttsOpen,
                         'aria-expanded': ttsOpen,
                         title: t('readAloud'),
                         'aria-label': t('readAloud'),
@@ -3933,11 +4045,7 @@ html.bb-paged body table tr{break-inside:avoid}
                       audiobook.stop()
                       speech.start()
                     },
-                    onClose: () => {
-                      speech.readAloud.stop()
-                      audiobook.stop()
-                      setTtsOpen(false)
-                    },
+                    onClose: closeSpeech,
                   })
                 : null,
             ),
@@ -5301,6 +5409,15 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         return plan
       }, [resolveAnnotationRanges])
+
+      // Closing the read-aloud window resets the sentence selection: the
+      // highlight must disappear with the dock instead of outliving it.
+      const clearSpeechHighlight = useCallback(() => {
+        speechRangeRef.current = null
+        const frame = frameRef.current
+        const documentNode = frame && frame.contentDocument
+        if (documentNode) repaintHighlights(documentNode)
+      }, [repaintHighlights])
 
       // A replaced chapter document must not keep its registry entries or its
       // ::highlight() style element alive.
@@ -6737,7 +6854,7 @@ html.bb-paged body table tr{break-inside:avoid}
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
-          speech: { readAloud, start: startReadAloud, preview: previewReadAloud },
+          speech: { readAloud, start: startReadAloud, preview: previewReadAloud, clearHighlight: clearSpeechHighlight },
         },
         status === 'loading'
           ? h(ReaderState, { message: t('parsing') })
@@ -6784,7 +6901,10 @@ html.bb-paged body table tr{break-inside:avoid}
                           `${t('bookmarksTab')} (${readingTabCount})`,
                         ),
                       ),
-                      asideTab === 'toc'
+                      h(
+                        'div',
+                        { className: 'bs-aside-scroll' },
+                        asideTab === 'toc'
                         ? toc.map((entry, index) =>
                             h(
                               'button',
@@ -6854,6 +6974,7 @@ html.bb-paged body table tr{break-inside:avoid}
                                   onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
                                 }),
                           ),
+                      ),
                     )
                   : null,
                 h(
@@ -6905,6 +7026,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   ? h(AnnotationStyleMenu, {
                       t,
                       style: annotationStyle,
+                      previewTypography: readingTypographyStyle(settings),
                       onChange: saveAnnotationStyle,
                       onClose: () => setAnnotationOpen(false),
                     })
@@ -8890,6 +9012,26 @@ html.bb-paged body table tr{break-inside:avoid}
       return [value, update]
     }
 
+    // Set the cover grid from the measured row width: fixed 20px gutters, one
+    // more column whenever the cards would outgrow a comfortable 196px, and a
+    // 164px floor so a column is dropped rather than squeezed. Full rows span
+    // the whole width; a short last row stays left-aligned.
+    const SHELF_GRID_GAP = 20
+    const SHELF_CARD_MIN = 164
+    const SHELF_CARD_MAX = 196
+    function shelfCoverColumns(width, count) {
+      if (!(width > 0) || !(count > 0)) return 0
+      const maxColumns = Math.max(1, Math.floor((width + SHELF_GRID_GAP) / (SHELF_CARD_MIN + SHELF_GRID_GAP)))
+      let columns = Math.max(1, Math.min(count, Math.ceil((width + SHELF_GRID_GAP) / (SHELF_CARD_MAX + SHELF_GRID_GAP))))
+      columns = Math.min(columns, maxColumns)
+      while (columns > 1) {
+        const card = (width - SHELF_GRID_GAP * (columns - 1)) / columns
+        if (card >= SHELF_CARD_MIN) break
+        columns -= 1
+      }
+      return columns
+    }
+
     function Bookshelf(props) {
       const t = props.t
       const viewState = props.viewState
@@ -8933,6 +9075,22 @@ html.bb-paged body table tr{break-inside:avoid}
       const [tagError, setTagError] = useState('')
       const [tagsOpen, setTagsOpen] = useState(false)
       const shelfScrollRef = useRef(null)
+      const gridRef = useRef(null)
+      const [gridWidth, setGridWidth] = useState(0)
+      useLayoutEffect(() => {
+        if (activeLayout !== 'grid') return undefined
+        const node = gridRef.current
+        if (node === null) return undefined
+        const measure = () => setGridWidth(node.getBoundingClientRect().width)
+        measure()
+        if (typeof ResizeObserver !== 'function') {
+          window.addEventListener('resize', measure)
+          return () => window.removeEventListener('resize', measure)
+        }
+        const observer = new ResizeObserver(measure)
+        observer.observe(node)
+        return () => observer.disconnect()
+      }, [activeLayout, books])
       const setQuery = useCallback((value) => {
         viewState.scrollTop = 0
         if (shelfScrollRef.current) shelfScrollRef.current.scrollTop = 0
@@ -9478,6 +9636,10 @@ html.bb-paged body table tr{break-inside:avoid}
               )
         return sortBookList(filtered, sortMode)
       })()
+      const shelfColumns = activeLayout === 'grid' ? shelfCoverColumns(gridWidth, visibleBooks.length) : 0
+      const shelfCardWidth = shelfColumns > 0
+        ? (gridWidth - SHELF_GRID_GAP * (shelfColumns - 1)) / shelfColumns
+        : 0
       const showLoading = loading && books === null
       const showEmpty = !loading && error === '' && books !== null && books.length === 0
       const showCategoryEmpty =
@@ -9799,7 +9961,13 @@ html.bb-paged body table tr{break-inside:avoid}
                       )
                     : h(
                         'div',
-                        { className: 'bs-grid' },
+                        {
+                          className: 'bs-grid',
+                          ref: gridRef,
+                          style: shelfColumns > 0
+                            ? { gridTemplateColumns: `repeat(${shelfColumns}, ${shelfCardWidth}px)` }
+                            : undefined,
+                        },
                         visibleBooks.map((book) => h(BookCard, bookViewProps(book))),
                       ),
         ),
