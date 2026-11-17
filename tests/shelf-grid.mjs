@@ -150,6 +150,40 @@ try {
     assert.ok(state.overflow < 2, `grid does not overflow: ${JSON.stringify(state)}`)
   }
   assert.equal(await evaluate(`Boolean(document.querySelector('.bs-card-ornament'))`), false, 'no bookend decorations remain')
+
+  // Regression: a shelf that does not fill its last row keeps the same column
+  // count and cover size as a full one. Anchoring the columns to the number of
+  // visible books used to stretch three covers across the whole panel.
+  const few = await evaluate(`(async()=>{
+    document.getElementById('root').style.width='1440px';
+    const input=document.querySelector('.bs-search-input');
+    const setValue=(value)=>{const setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;setter.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}))};
+    setValue('Book1');
+    await wait(320);
+    const grid=document.querySelector('.bs-grid');
+    const cards=[...grid.children];
+    const widths=cards.map(card=>card.getBoundingClientRect().width);
+    const first=cards[0].getBoundingClientRect();
+    const result={
+      count:cards.length,
+      columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+      minCard:Math.min(...widths),
+      maxCard:Math.max(...widths),
+      firstLeft:first.left,
+      gridLeft:grid.getBoundingClientRect().left,
+      overflow:grid.scrollWidth-grid.clientWidth,
+    };
+    setValue('');
+    await wait(260);
+    return result;
+  })()`)
+  assert.equal(few.count, 3, `search shows three covers: ${JSON.stringify(few)}`)
+  assert.equal(few.columns, 7, `a short shelf keeps the full column count: ${JSON.stringify(few)}`)
+  assert.ok(Math.abs(few.maxCard - few.minCard) < 0.5, `short-row covers share one width: ${JSON.stringify(few)}`)
+  assert.ok(few.minCard >= 164 && few.maxCard <= 196, `short-row covers stay in the comfortable range: ${JSON.stringify(few)}`)
+  assert.ok(Math.abs(few.firstLeft - few.gridLeft) < 1.5, `short row stays left-aligned: ${JSON.stringify(few)}`)
+  assert.ok(few.overflow < 2, `short shelf does not overflow: ${JSON.stringify(few)}`)
+
   assert.deepEqual(await evaluate('window.errors'), [])
   console.log('shelf grid: fixed 20px gutters, 164-196px covers, left-aligned short row')
 } finally {

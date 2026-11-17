@@ -83,7 +83,7 @@ window.__ModuleLoader__.load({
 .bs-icon-button:disabled{opacity:.4;cursor:default}
 .bs-icon-button[aria-pressed="true"]{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
 .bs-scroll{flex:1;min-width:0;min-height:0;overflow:auto;padding:6px 24px 56px;overscroll-behavior:contain}
-.bs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),1fr));justify-content:stretch;gap:24px 20px;min-width:0;width:100%;margin:0}
+.bs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(164px,100%),196px));justify-content:start;gap:24px 20px;min-width:0;width:100%;margin:0}
 .bs-card{position:relative;display:flex;flex-direction:column;gap:9px;min-width:0}
 .bs-cover{position:relative;display:block;width:100%;aspect-ratio:3/4;margin:0;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;overflow:hidden;text-align:left;color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12),0 10px 24px -16px rgba(0,0,0,.55)}
 button.bs-cover{cursor:pointer;transition:transform .16s ease,box-shadow .16s ease}
@@ -9014,16 +9014,17 @@ html.bb-paged body table tr{break-inside:avoid}
 
     // Set the cover grid from the measured row width: fixed 20px gutters, one
     // more column whenever the cards would outgrow a comfortable 196px, and a
-    // 164px floor so a column is dropped rather than squeezed. Full rows span
-    // the whole width; a short last row stays left-aligned.
+    // 164px floor so a column is dropped rather than squeezed. The column count
+    // depends on the row width only — never on how many books are visible — so a
+    // shelf that does not fill its last row keeps normal-sized covers instead of
+    // stretching a handful of cards across the panel.
     const SHELF_GRID_GAP = 20
     const SHELF_CARD_MIN = 164
     const SHELF_CARD_MAX = 196
     function shelfCoverColumns(width, count) {
       if (!(width > 0) || !(count > 0)) return 0
       const maxColumns = Math.max(1, Math.floor((width + SHELF_GRID_GAP) / (SHELF_CARD_MIN + SHELF_GRID_GAP)))
-      let columns = Math.max(1, Math.min(count, Math.ceil((width + SHELF_GRID_GAP) / (SHELF_CARD_MAX + SHELF_GRID_GAP))))
-      columns = Math.min(columns, maxColumns)
+      let columns = Math.max(1, Math.min(maxColumns, Math.ceil((width + SHELF_GRID_GAP) / (SHELF_CARD_MAX + SHELF_GRID_GAP))))
       while (columns > 1) {
         const card = (width - SHELF_GRID_GAP * (columns - 1)) / columns
         if (card >= SHELF_CARD_MIN) break
