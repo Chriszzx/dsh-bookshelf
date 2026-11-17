@@ -4,8 +4,7 @@
 // same module can be imported by Node and dynamically preloaded in the
 // browser (see loadClientLib in client.js).
 //
-// Stored shape, exactly as documented in docs/PLAN-split-and-annotations.md
-// §4.1 (state.json, next to bookmarks):
+// Stored shape (state.json, next to bookmarks):
 //   { id, type, chapterIndex, start, end, quote, prefix, suffix, color,
 //     strength, thickness, underlineStyle, createdAt, label }
 // `start`/`end` address the chapter's whitespace-normalised text; `end` is

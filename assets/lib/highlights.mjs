@@ -5,7 +5,7 @@
  * pin colours, priorities, chapter filtering and the overlay fallback; only
  * applyHighlightPlan / clearHighlights touch a real document.
  *
- * See docs/PLAN-split-and-annotations.md §4.2:
+ * Two layers in one plan:
  *   bb-ra       spoken sentence  color = palette.bg, background-color = palette.fg  priority 0
  *   bb-an-<id>  annotation       highlight: color-mix(); underline: text-decoration-*  priority 100
  *

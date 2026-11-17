@@ -2684,7 +2684,7 @@ html.bb-paged body table tr{break-inside:avoid}
       // the selection is spoken. Selection audio is never cached. When a
       // read-aloud driver is active, playback then resumes at the chapter
       // sentence that contains the selection's last sentence — that sentence is
-      // deliberately read once more (docs/PLAN-split-and-annotations.md §6.2).
+      // deliberately read once more.
       const speakText = useCallback(async (text) => {
         const value = String(text || '').trim()
         if (value === '') return

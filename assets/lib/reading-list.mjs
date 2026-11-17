@@ -119,7 +119,7 @@ function itemId(kind, value, index) {
 }
 
 // Fallback label for a bookmark whose stored label was empty (legacy or
-// hand-edited state): "第 N 页 · x%" per docs/PLAN-split-and-annotations.md §7.
+// hand-edited state): "第 N 页 · x%".
 // Callers that render another language can pass `pageLabel(page)`.
 function fallbackBookmarkLabel(bookmark, pageLabel) {
   const parts = []

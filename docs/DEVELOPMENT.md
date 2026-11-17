@@ -12,7 +12,7 @@
 在 DSH 当前 profile 的「插件」中，选择本仓库的绝对目录进行本地安装，例如：
 
 ```text
-D:\Github\dsh-bookshelf
+C:\path\to\dsh-bookshelf
 ```
 
 DSH 会将插件链接到工作目录。GitHub 安装是独立的安装副本，不会跟随这里的编辑；`@local/dsh-bookshelf` 这个旧别名也不代表本地目录。

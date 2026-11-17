@@ -2,7 +2,6 @@
  * Selection read-aloud logic: cut the selected text into the temporary sentence
  * queue that is spoken, find where continuous read-aloud resumes afterwards,
  * and mark that the selection audio must not be cached.
- * See docs/PLAN-split-and-annotations.md §6.2/§6.3.
  *
  * Flow. "Read selected text" speaks the selection as a plain sentence queue and
  * never caches it (SELECTION_AUDIO_POLICY). When that queue ends, the reader

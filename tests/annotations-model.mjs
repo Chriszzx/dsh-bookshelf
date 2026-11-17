@@ -1,5 +1,5 @@
-// M1 annotation model contract: the stored shape is the one in
-// docs/PLAN-split-and-annotations.md §4.1, the Host sanitizer drops malformed
+// Annotation model contract: the stored shape is the per-book Host state
+// shape, the Host sanitizer drops malformed
 // entries instead of failing a whole batch, and the Reader glue gets legal
 // annotations from a selection. Pure data tests only: no DOM is needed.
 import test from 'node:test'
