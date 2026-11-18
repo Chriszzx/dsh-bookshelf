@@ -198,7 +198,7 @@ try {
  for(const width of [1000,1500,1100,1500]){
   await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await settled()})()`)
   const state=await evaluate('inspect()');assert.equal(state.columns,width===1500?2:1)
-  assert.ok((await evaluate('anchorVisible()')).visible,'same text remains visible through single/dual reflow');assert.deepEqual(state.leaks,[])
+  const glyph=await evaluate('anchorVisible()');assert.ok(glyph.visible,`anchor at width ${width} on ${state.label}: ${JSON.stringify(glyph)}`);assert.deepEqual(state.leaks,[])
  }
  // Font 19 fits two 24em columns, font 25 does not at this actual width.
  await evaluate("click('readingSettings')")

@@ -5516,29 +5516,43 @@ html.bb-paged body table tr{break-inside:avoid}
         if (!documentNode || !documentNode.body || !windowNode) return
         const info = pagedMetrics(documentNode, windowNode)
         if (info === null) return
-        const x = info.padLeft + 3
-        const y = info.padTop + 3
-        let range = null
-        try {
-          if (typeof documentNode.caretRangeFromPoint === 'function') {
-            range = documentNode.caretRangeFromPoint(x, y)
-          } else if (typeof documentNode.caretPositionFromPoint === 'function') {
-            const position = documentNode.caretPositionFromPoint(x, y)
-            if (position && position.offsetNode) {
-              range = documentNode.createRange()
-              range.setStart(position.offsetNode, position.offset)
-              range.collapse(true)
+        function visibleTextAt(x, y) {
+          let node, offset
+          if (documentNode.caretRangeFromPoint) {
+            const caret = documentNode.caretRangeFromPoint(x, y)
+            node = caret?.startContainer
+            offset = caret?.startOffset
+          } else {
+            const caret = documentNode.caretPositionFromPoint?.(x, y)
+            node = caret?.offsetNode
+            offset = caret?.offset
+          }
+          if (node?.nodeType !== 3 || !node.length) return null
+          const anchor = { node, offset: Math.min(offset, node.length - 1) }
+          const rect = pageAnchorRect(documentNode, anchor)
+          return rect && rect.width > 0 && rect.height > 0 &&
+            rect.left >= -1 && rect.right <= windowNode.innerWidth + 1 &&
+            rect.top >= -1 && rect.bottom <= windowNode.innerHeight + 1 ? anchor : null
+        }
+        let anchor = visibleTextAt(info.padLeft + 3, info.padTop + 3)
+        // At a column break, hit-testing the margin can return a caret on the
+        // preceding page. Use the first visible line of the current fragment.
+        if (!anchor) {
+          const walker = documentNode.createTreeWalker(documentNode.body, NodeFilter.SHOW_TEXT)
+          const range = documentNode.createRange()
+          while (!anchor && walker.nextNode()) {
+            range.selectNodeContents(walker.currentNode)
+            for (const line of range.getClientRects()) {
+              if (line.width < 1 || line.left < 0 || line.left >= windowNode.innerWidth ||
+                  line.top < 0 || line.bottom > windowNode.innerHeight + 1) continue
+              anchor = visibleTextAt(line.left + Math.min(1, line.width / 2), line.top + line.height / 2)
+              if (anchor) break
             }
           }
-        } catch {
-          range = null
         }
-        if (range && range.startContainer) {
-          const rect = range.getBoundingClientRect()
-          if (rect.width > 0 || rect.height > 0) {
-            pageAnchorRef.current = { node: range.startContainer, offset: range.startOffset }
-            return
-          }
+        if (anchor) {
+          pageAnchorRef.current = anchor
+          return
         }
         const nodes = documentNode.body.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,figure,img,table')
         for (const node of nodes) {
