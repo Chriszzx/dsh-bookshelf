@@ -7,14 +7,14 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-settings-dialog-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 const calls = { settings: 0, ttsSettings: 0, cacheClear: 0 }
 let hangSynthesize = false

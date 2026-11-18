@@ -12,7 +12,7 @@ import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { join, relative, sep } from 'node:path'
+import { basename, join, relative, sep } from 'node:path'
 import { zipSync } from './assets/fflate.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -113,7 +113,7 @@ function bookFromRow(row) {
   const progress = Number(row.ZREADINGPROGRESS)
   return {
     assetID: text(row.ZASSETID),
-    title: text(row.ZTITLE, '未命名书籍'),
+    title: text(row.ZTITLE, basename(sourcePath) || '未命名书籍'),
     author: text(row.ZAUTHOR),
     format,
     progress: Number.isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0,

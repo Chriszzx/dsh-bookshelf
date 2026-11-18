@@ -130,7 +130,7 @@ test('service plans, renders and serves one WAV without a real provider', async 
     assert.equal(planned.sentences, 2)
     assert.equal(await service.state('book-1').then((state) => state.status), 'idle')
 
-    const started = await service.start('book-1', { voice: 'tide', speed: 1 })
+    const started = await service.start('book-1', { planId: planned.id })
     assert.equal(started.status, 'running')
     let state
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -168,8 +168,8 @@ test('service merges MP3 provider chunks into one .mp3 file', async () => {
       },
     }
     const service = createAudiobookService({ rootDir: root, tts, logger: { warn() {} } })
-    await service.plan('book-mp3', { text: '第一句。第二句。', provider: 'edge', voice: '', speed: 1 })
-    await service.start('book-mp3', { provider: 'edge', voice: '', speed: 1 })
+    const planned = await service.plan('book-mp3', { text: '第一句。第二句。', provider: 'edge', voice: '', speed: 1 })
+    await service.start('book-mp3', { planId: planned.id })
     let state
     for (let attempt = 0; attempt < 100; attempt += 1) {
       state = await service.state('book-mp3')
@@ -190,8 +190,8 @@ test('service merges MP3 provider chunks into one .mp3 file', async () => {
 test('service cancels a running render and keeps no audio file', async () => {
   await withService(async (root) => {
     const service = createAudiobookService({ rootDir: root, tts: stubTts({ delayMs: 40 }), logger: { warn() {} } })
-    await service.plan('book-2', { text: '一。二。三。四。', voice: 'stella', speed: 1 })
-    await service.start('book-2', { voice: 'stella', speed: 1 })
+    const planned = await service.plan('book-2', { text: '一。二。三。四。', voice: 'stella', speed: 1 })
+    await service.start('book-2', { planId: planned.id })
     await service.cancel('book-2')
     let state
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -207,8 +207,8 @@ test('service cancels a running render and keeps no audio file', async () => {
 test('service reports provider failures without leaving a partial WAV', async () => {
   await withService(async (root) => {
     const service = createAudiobookService({ rootDir: root, tts: stubTts({ failOn: 2 }), logger: { warn() {} } })
-    await service.plan('book-3', { text: '一。二。三。', voice: 'stella', speed: 1 })
-    await service.start('book-3', { voice: 'stella', speed: 1 })
+    const planned = await service.plan('book-3', { text: '一。二。三。', voice: 'stella', speed: 1 })
+    await service.start('book-3', { planId: planned.id })
     let state
     for (let attempt = 0; attempt < 100; attempt += 1) {
       state = await service.state('book-3')

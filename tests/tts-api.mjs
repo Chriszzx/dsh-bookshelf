@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 function makeRun() {
   return async (command, args) => {

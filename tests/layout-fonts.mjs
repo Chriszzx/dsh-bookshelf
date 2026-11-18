@@ -1,6 +1,8 @@
 // Real Host/Client functional regression in an owned browser profile. Font-access
 // responses are controlled fixtures; no personal font permission is granted.
+import { installVisibleTextProbe } from './helpers/visible-text-probe.mjs'
 import assert from 'node:assert/strict'
+import { embeddedFontFixtures, verifyEmbeddedFonts } from './helpers/embedded-fonts.mjs'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,7 +15,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-layout-fonts-'))
 const owned = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 apply({ effect: fn => fn(), webServer: { register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 const page = `<!doctype html><html data-platform="win32" data-windows-titlebar style="--dsh-frame-top-clearance:36px"><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;font:14px Arial}#root{width:1600px;height:900px}</style></head><body><div id="root"></div>
@@ -39,15 +41,16 @@ window.queryLocalFonts=async()=>{
  return [['Georgia','Regular',400,false,false],['Georgia','Bold',700,false,false],['Georgia','Italic',400,true,false],['Georgia','Bold Italic',700,true,false],['Noto Serif SC','Regular',400,false,true],['Source Han Serif CN','Medium',500,false,false]].map(([family,style,weight,italic,variable])=>({family,style,blob:async()=>nativeFontBlob(weight,italic,variable)}));
 };
 window.fontQueryFixture=window.queryLocalFonts;
-window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,s=w.getComputedStyle(d.body),r=d.caretRangeFromPoint(parseFloat(s.paddingLeft)+3,parseFloat(s.paddingTop)+3);if(!r)throw Error('no anchor');window.anchor={node:r.startContainer,offset:r.startOffset};return true};
-window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1};
+(${installVisibleTextProbe.toString()})();
 </script></body></html>`
 
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
+  const embedded = embeddedFontFixtures(await readFile(join(pluginDir, 'tests/fixtures/wasteland-woff.epub')))
   server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://test').pathname
+      if (await embedded.serve(path, res)) return
       const files = { '/react.js': join(fixtures, 'node_modules/react/umd/react.development.js'), '/react-dom.js': join(fixtures, 'node_modules/react-dom/umd/react-dom.development.js'), '/client.js': join(pluginDir, 'client.js') }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
@@ -57,13 +60,16 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
   const archive = await readFile(join(fixtures, 'paged-long.epub'))
+  const sample = await readFile(join(pluginDir, 'tests/fixtures/typography-reference.epub'))
   const books = []
   for (let i = 0; i < 16; i++) {
-    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: archive })
+    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: i === 2 ? sample : embedded.books[i - 3] || archive })
     assert.equal(response.status, 201)
     books.push((await response.json()).book)
   }
   for (const [book, settings] of [
+    ...books.slice(3, 8).map(book => [book, { fontFamily: 'publisher', fontSize: 20, pageSpread: 'single' }]),
+    [books[2], { fontFamily: 'publisher', fontSize: 19 }],
     [books[0], { fontFamily: 'mono', fontSize: 18 }],
     [books[1], { fontFamily: 'serif', fontName: 'Unavailable Font For Test', fontWeight: 0, fontStyle: 'normal' }],
   ]) {
@@ -142,13 +148,49 @@ try {
   assert.equal(await evaluate(`document.querySelector('select[aria-label="fontFamily"]').value`), 'font:Source Han Serif CN')
   await evaluate(`(async()=>{click('dismiss');document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900)})()`)
   const title = await evaluate(`document.querySelector('.bs-reader-title').textContent`)
+  async function verifyToolbarAlignment() {
+    const geometry = await evaluate(`(()=>{
+      const bar=document.querySelector('.bs-reader-bar')
+      const buttons=[...bar.querySelectorAll('button')]
+      const centers=buttons.map(button=>{const r=button.getBoundingClientRect();return r.top+r.height/2})
+      const icon=bar.querySelector('[aria-label="discussPage"] img')
+      const glyphSpans=buttons.map(button=>{
+        const svg=button.querySelector('svg')
+        if(!svg){
+          const canvas=document.createElement('canvas')
+          canvas.width=icon.naturalWidth;canvas.height=icon.naturalHeight
+          const ctx=canvas.getContext('2d')
+          ctx.drawImage(icon,0,0)
+          const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data
+          let top=canvas.height,bottom=-1
+          for(let i=3;i<pixels.length;i+=4){
+            if(pixels[i]<128)continue
+            const y=Math.floor((i>>2)/canvas.width)
+            top=Math.min(top,y);bottom=Math.max(bottom,y)
+          }
+          return (bottom-top+1)*icon.height/canvas.height
+        }
+        const bounds=svg.getBBox()
+        return Math.max(bounds.width,bounds.height)*svg.getScreenCTM().a+1.5
+      })
+      return {spread:Math.max(...centers)-Math.min(...centers),width:icon.naturalWidth,glyphSpans,
+        equalTargets:buttons.every(b=>b.offsetWidth===30&&b.offsetHeight===30),
+        navigation:[...bar.querySelectorAll('.bs-reader-navigation button')].map(button=>button.getAttribute('aria-label'))}
+    })()`)
+    assert.deepEqual(geometry.navigation, ['back', 'toc'])
+    assert.ok(geometry.equalTargets, 'every reader icon has a 30px square hit area')
+    assert.ok(geometry.glyphSpans.every(v=>v>=15 && v<=17.5), 'visible icon sizes: '+geometry.glyphSpans)
+    assert.equal(geometry.width, 96, 'the selected discussion artwork loads')
+    assert.ok(geometry.spread <= 1, `toolbar centerlines differ by ${geometry.spread}px`)
+  }
+  await verifyToolbarAlignment()
   const winHeader = await evaluate(`(()=>{const b=document.querySelector('.bs-reader-bar'),r=b.getBoundingClientRect();return{height:r.height,padding:parseFloat(getComputedStyle(b).paddingTop),subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
   assert.equal(winHeader.padding, 6, 'Windows caption space is not added a second time')
   assert.ok(winHeader.height >= 48 && winHeader.height < 51)
   assert.notEqual(winHeader.subtitle, 'none')
   assert.ok((await evaluate(`document.querySelector('.bs-epub-frame').contentWindow.getComputedStyle(document.querySelector('.bs-epub-frame').contentDocument.body).fontFamily`)).includes('Source Han Serif CN'))
   await evaluate(`(async()=>{click('nextPage');await wait(500);capture();click('readingSettings');await until(()=>[...document.querySelector('select[aria-label="fontFamily"]').options].some(o=>o.value==='font:Georgia'));choose('fontFamily','font:Georgia');await until(()=>[...document.querySelector('select[aria-label="fontWeight"]').options].some(o=>o.value==='700'));await wait(450);choose('fontWeight',700);await wait(450);choose('fontStyle','italic');await wait(600)})()`)
-  assert.ok(await evaluate('anchorVisible()'), 'font family, weight and italic changes retain the visible reading anchor')
+  assert.ok(await evaluate('anchorVisible().visible'), 'font family, weight and italic changes retain the visible reading anchor')
   const applied = await evaluate(`(()=>{const f=document.querySelector('.bs-epub-frame'),s=f.contentWindow.getComputedStyle(f.contentDocument.body);return{family:s.fontFamily,weight:s.fontWeight,style:s.fontStyle}})()`)
   assert.ok(applied.family.includes('Georgia'), JSON.stringify(applied))
   assert.equal(applied.weight, '700')
@@ -159,6 +201,11 @@ try {
   assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.bs-reader-bar')).paddingTop)`), 54, 'macOS keeps its overlay clearance')
   await evaluate(`(async()=>{document.documentElement.dataset.platform='win32';document.getElementById('root').style.width='480px';await wait(300)})()`)
   const narrow = await evaluate(`(()=>{const s=document.querySelector('.bs-reader').getBoundingClientRect(),p=document.querySelector('.bs-reader-settings').getBoundingClientRect();return{inside:p.left>=s.left&&p.right<=s.right+1&&p.bottom<=s.bottom+1,subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
+  await verifyToolbarAlignment()
+  // Reserve the depth of a classic horizontal scrollbar even on overlay-scrollbar hosts.
+  await evaluate("document.querySelector('.bs-reader-controls').style.paddingBottom='12px'")
+  await verifyToolbarAlignment()
+  await evaluate("document.querySelector('.bs-reader-controls').style.removeProperty('padding-bottom')")
   assert.ok(narrow.inside, 'narrow settings stay inside the content panel')
   assert.notEqual(narrow.subtitle, 'none')
   await evaluate(`(async()=>{click('dismiss');click('back');await until(()=>document.querySelector('.bs-cover'));document.getElementById('root').style.width='1600px';document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900)})()`)
@@ -173,6 +220,69 @@ try {
   assert.equal(await evaluate(`document.querySelector('select[aria-label="fontFamily"]').value`), 'font:Unavailable Font For Test')
   assert.ok(await evaluate(`document.querySelector('.bs-reader-settings').textContent.includes('fontMissingHint')`), 'missing fonts retain the saved preference and explain the fallback')
   assert.ok(await evaluate(`document.querySelector('.bs-epub-frame').contentDocument.querySelector('p').getBoundingClientRect().height>0`), 'missing fonts still render readable content')
+  await evaluate(`(async()=>{
+    click('dismiss'); click('back');
+    await until(()=>document.querySelector('.bs-card'));
+    const card=[...document.querySelectorAll('.bs-card')].find(c=>c.querySelector('.bs-book-title')?.textContent==='Layout 2');
+    card.querySelector('.bs-cover').click();
+    await until(()=>document.querySelector('.bs-epub-frame')?.contentDocument?.getElementById('note'));
+    click('readingSettings');
+    await until(()=>document.querySelector('select[aria-label="fontFamily"]'));
+  })()`)
+  for (const [mode, size] of [['publisher', 19], ['mono', 20], ['publisher', 20]]) {
+    await evaluate(`choose('fontFamily','preset:${mode}')`)
+    if (mode === 'mono') await evaluate(`click('fontLarger')`)
+    const result = await evaluate(`(async()=>{
+      const wanted=${size}, mode='${mode}';
+      function sample(selector) {
+        const frame=document.querySelector(selector), doc=frame?.contentDocument;
+        if (!doc?.getElementById('note')) return null;
+        const style=selector=>frame.contentWindow.getComputedStyle(doc.querySelector(selector));
+        const base=parseFloat(style('#body').fontSize);
+        return {
+          base, family:style('#body').fontFamily, title:parseFloat(style('h1').fontSize)/base,
+          subtitle:parseFloat(style('#subtitle').fontSize)/base, note:parseFloat(style('#note').fontSize)/base,
+          weight:style('#kicker').fontWeight, headingFamily:style('h1').fontFamily,
+          indent:parseFloat(style('#poem').marginLeft)/base, quote:parseFloat(style('blockquote').paddingLeft),
+          code:parseFloat(style('pre code').fontSize)/base, language:doc.documentElement.lang,
+          ruby:doc.querySelector('[lang="ja"] rt').textContent,
+        };
+      }
+      const visible=()=>sample('.bs-epub-frame'), probe=()=>sample('.bs-epub-probe');
+      await until(()=>visible()?.base===wanted && (mode==='mono'?visible().family.includes('monospace'):visible().family.includes('Songti'))
+        && JSON.stringify(visible())===JSON.stringify(probe()));
+      return visible();
+    })()`)
+    assert.ok(Math.abs(result.title - 1.7) < .001)
+    assert.ok(Math.abs(result.subtitle - 1.15) < .001)
+    assert.ok(Math.abs(result.note - .8) < .001)
+    assert.equal(result.weight, '700')
+    assert.equal(result.headingFamily, 'sans-serif')
+    assert.equal(result.indent, 2)
+    assert.ok(result.quote > 0)
+    assert.ok(Math.abs(result.code - .86) < .001)
+    assert.equal(result.language, 'zh-Hans')
+    assert.equal(result.ruby, 'みなも')
+  }
+  const chapterRules = await evaluate(`(async()=>{
+    const { renderChapterHtml } = await import('/bookshelf/assets/epub.mjs')
+    const html = '<html><head><link rel="stylesheet" href="../missing.css"><style>.title{font:bold 24px serif;position:fixed;background-image:url(/unused.png)} .caption{font-size:75%}</style></head>' +
+      '<body class="chapter"><h1 class="title">Title</h1><p class="caption" xml:lang="fr" style="font-size:12pt">Caption</p></body></html>'
+    const result = renderChapterHtml({ data:{chapters:[{path:'text/chapter.xhtml',html}], language:'en'},
+      chapterIndex:0, resourceIndex:new Map(), imageCache:new Map(), readingCss:':root{font-size:20px}' })
+    const frame=document.createElement('iframe')
+    const loaded=new Promise(resolve=>{frame.onload=resolve})
+    frame.srcdoc=result; document.body.appendChild(frame); await loaded
+    const doc=frame.contentDocument, css=el=>frame.contentWindow.getComputedStyle(doc.querySelector(el))
+    const actual={title:css('h1').fontSize,weight:css('h1').fontWeight,caption:css('p').fontSize,
+      lang:doc.documentElement.lang,captionLang:doc.querySelector('p').lang,body:doc.body.className,position:css('h1').position,
+      image:css('h1').backgroundImage,link:!!doc.querySelector('link')}
+    frame.remove()
+    return actual
+  })()`)
+  assert.deepEqual(chapterRules, {title:'30px', weight:'700', caption:'20px', lang:'en',
+    captionLang:'fr', body:'chapter', position:'static', image:'none', link:false})
+  await verifyEmbeddedFonts({ evaluate, command, fixture: embedded, state: async () => (await (await fetch(`${origin}/bookshelf/api/books/${books[3].id}/state`)).json()).state })
   assert.deepEqual(await evaluate('errors'), [])
   console.log('Layout, platform clearance, font access fallback, native styles, persistence and reading-anchor regressions passed.', widths)
 } finally {

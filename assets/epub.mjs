@@ -324,12 +324,14 @@ function coverOf(packageDocument, manifest, files, index, opfDirectory) {
 }
 
 /**
- * Parse a complete EPUB into chapters, TOC entries, and image resources.
+ * Parse a complete EPUB into chapters, TOC entries and local publication resources.
  * @param {Uint8Array} bytes - complete EPUB file bytes.
  * @returns {{
  *   title: string, author: string, language: string, opfPath: string,
  *   chapters: Array<{path: string, html: string, label: string}>,
  *   toc: Array<{label: string, chapterIndex: number, anchor: string, depth: number}>,
+ *   stylesheets: Map<string, {source: string, directory: string}>,
+ *   fonts: Map<string, {bytes: Uint8Array, type: string, url?: string}>,
  *   resources: Record<string, {type: string, data: Uint8Array}>,
  *   cover: {type: string, data: Uint8Array} | null,
  * }}
@@ -362,8 +364,23 @@ export function parseEpub(bytes) {
   }
   if (chapters.length === 0) throw new Error('this EPUB has no readable chapters')
 
-  const resources = {}
+  const stylesheets = new Map()
+  const fonts = new Map()
+  const resources = Object.create(null)
   for (const item of manifest.values()) {
+    if (item.mediaType === 'text/css') {
+      const bytes = readEntry(files, index, item.href)
+      if (bytes) stylesheets.set(item.href.toLowerCase(), { source: decodeText(bytes), directory: directoryOf(item.href) })
+      continue
+    }
+    if (/^(?:font\/|application\/(?:font-|x-font-|vnd\.ms-opentype|x-truetype|octet-stream))/i.test(item.mediaType) ||
+        /\.(?:ttf|otf|woff2?)$/i.test(item.href)) {
+      const bytes = readEntry(files, index, item.href)
+      const signature = bytes && String.fromCharCode(...bytes.subarray(0, 4))
+      const type = FONT_TYPES.get(signature)
+      if (type) fonts.set(item.href.toLowerCase(), { bytes, type })
+      continue
+    }
     if (!item.mediaType.startsWith('image/')) continue
     if (item.href === '') continue
     const data = readEntry(files, index, item.href)
@@ -391,6 +408,8 @@ export function parseEpub(bytes) {
     chapters,
     toc,
     resources,
+    stylesheets,
+    fonts,
     cover,
   }
 }
@@ -412,28 +431,144 @@ const BLOCKED_TAGS = new Set([
   'track', 'canvas', 'svg', 'math', 'template', 'noscript', 'dialog', 'slot',
 ])
 
-const SAFE_STYLE_PROPERTIES = new Set([
-  'font-style', 'font-weight', 'font-variant', 'font-size', 'font-family', 'text-align', 'text-indent',
-  'text-decoration', 'text-transform', 'letter-spacing', 'word-spacing', 'line-height', 'color',
-  'background-color', 'vertical-align', 'white-space', 'margin-top', 'margin-bottom', 'margin-left',
+// CSSOM expands shorthands before we select typography. No unsanitized at-rules,
+// resource-valued properties, priorities or custom properties enter the frame.
+const TYPOGRAPHY = [
+  'font-family', 'font-weight', 'font-style', 'font-variant-caps', 'font-size', 'line-height',
+  'letter-spacing', 'word-spacing', 'text-align', 'text-indent', 'text-decoration-line',
+  'text-transform', 'vertical-align', 'white-space', 'margin-top', 'margin-bottom', 'margin-left',
   'margin-right', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
-])
+]
 
-function sanitizeStyleAttribute(element) {
-  const raw = element.getAttribute('style')
-  if (!raw) return
+function publicationDeclarations(style, prose) {
   const kept = []
-  for (const declaration of raw.split(';')) {
-    const colon = declaration.indexOf(':')
-    if (colon === -1) continue
-    const property = declaration.slice(0, colon).trim().toLowerCase()
-    const value = declaration.slice(colon + 1).trim()
-    if (!SAFE_STYLE_PROPERTIES.has(property)) continue
-    if (value === '' || /url\s*\(|expression\s*\(|@import|javascript:/i.test(value)) continue
+  for (const property of TYPOGRAPHY) {
+    let value = style.getPropertyValue(property)
+    if (!value || /[(){};<>@\\]/u.test(value)) continue
+    if (property === 'font-size' || property === 'line-height') {
+      // A print-point or pixel size should grow with the reader's base size,
+      // even when the element is nested inside another scaled paragraph.
+      const absolute = /^(\d*\.?\d+)(px|pt)$/i.exec(value)
+      if (absolute) value = Number(absolute[1]) / (absolute[2] === 'pt' ? 12 : 16) + 'rem'
+    }
+    if (prose && property === 'font-family' && !/^(inherit|initial|unset|revert)$/i.test(value)) {
+      value = `var(--bb-prose-font,${value})`
+    }
     kept.push(`${property}:${value}`)
   }
-  if (kept.length === 0) element.removeAttribute('style')
-  else element.setAttribute('style', kept.join(';'))
+  return kept.join(';')
+}
+
+const FONT_TYPES = new Map([
+  ['wOFF', 'font/woff'], ['wOF2', 'font/woff2'], ['OTTO', 'font/otf'], ['\x00\x01\x00\x00', 'font/ttf'],
+])
+
+function packagePath(directory, href) {
+  if (!href || /^(?:[a-z][\w+.-]*:|\/\/|#)/i.test(href) || href.includes('\\')) return ''
+  return resolveHref(directory, href).toLowerCase()
+}
+
+export function releasePublicationFonts(data) {
+  for (const sheet of data.stylesheets.values()) delete sheet.compiled
+  for (const font of data.fonts.values()) {
+    if (font.url) URL.revokeObjectURL(font.url)
+    delete font.url
+  }
+}
+
+// Use only archive entries here. CSSOM supplies canonical descriptor values;
+// never copy a publication's src into a live document.
+function publicationFace(style, directory, fonts) {
+  const family = style.getPropertyValue('font-family')
+  if (!family || /[;<>{}\\()]/u.test(family)) return ''
+  const sources = []
+  const src = style.getPropertyValue('src')
+  // CSSOM quotes URL arguments. Also accept the unquoted serialization used
+  // by some WebKit versions. Preserve source order for format fallback.
+  const candidates = src.match(/(?:[^,"']|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')+/g) || []
+  for (const candidate of candidates) {
+    const match = /^\s*url\(\s*(?:"([^"]+)"|'([^']+)'|([^\s)"']+))\s*\)(?:\s+format\([^()]+\))?\s*$/i.exec(candidate)
+    if (!match) continue
+    const font = fonts?.get(packagePath(directory, match[1] || match[2] || match[3]))
+    if (!font) continue
+    font.url ||= URL.createObjectURL(new Blob([font.bytes], { type: font.type }))
+    sources.push(`url("${font.url}")`)
+  }
+  if (!sources.length) return ''
+  const declarations = [`font-family:${family}`, `src:${sources.join(',')}`, 'font-display:swap']
+  for (const property of ['font-weight', 'font-style', 'font-stretch', 'unicode-range']) {
+    const value = style.getPropertyValue(property)
+    if (value && !/[;{}<>()\\]/u.test(value)) declarations.push(`${property}:${value}`)
+  }
+  return `@font-face{${declarations.join(';')}}`
+}
+
+// A constructed stylesheet discards @import. Read plain imports from the
+// prelude, then let CSSOM parse all other rules without fetching anything.
+function compilePublicationSheet(source, directory, fonts) {
+  const imports = []
+  const prefix = /\s+|\/\*[\s\S]*?\*\/|@charset\s+"[^"]*"\s*;|@import\s*(?:url\(\s*(?:"([^"]+)"|'([^']+)'|([^\s)'"]+))\s*\)|"([^"]+)"|'([^']+)')\s*([^;]*);/iy
+  let consumed = 0
+  let token
+  while ((token = prefix.exec(source))) {
+    consumed = prefix.lastIndex
+    if (token[6] === undefined || !/^(?:|all|screen)$/i.test(token[6].trim())) continue
+    const path = packagePath(directory, token.slice(1, 6).find(Boolean))
+    if (path) imports.push(path)
+  }
+  return { imports, css: publicationCss(source.slice(consumed), directory, fonts) }
+}
+
+function publicationCss(source, directory, fonts) {
+  if (typeof CSSStyleSheet === 'undefined' || !CSSStyleSheet.prototype.replaceSync) return ''
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(source)
+  const kept = []
+  for (const rule of sheet.cssRules) {
+    if (rule.type === CSSRule.FONT_FACE_RULE) {
+      kept.push(publicationFace(rule.style, directory, fonts))
+      continue
+    }
+    if (rule.type !== CSSRule.STYLE_RULE || /[<>{}]|::/u.test(rule.selectorText)) continue
+    const prose = /^(?:(?:html|:root|body|p|div|span|\*)[\s,>+~]*)+$/i.test(rule.selectorText)
+    const declarations = publicationDeclarations(rule.style, prose)
+    if (declarations) kept.push(`${rule.selectorText}{${declarations}}`)
+  }
+  return kept.join('\n')
+}
+
+function sanitizeStyleAttribute(element) {
+  const kept = publicationDeclarations(element.style, /^(?:p|body|html)$/i.test(element.localName))
+  if (kept) element.setAttribute('style', kept)
+  else element.removeAttribute('style')
+}
+
+function chapterStyles(parsed, directory, data) {
+  const pending = []
+  for (const node of parsed.querySelectorAll('style,link[rel~="stylesheet" i]')) {
+    if (node.hasAttribute('disabled') || node.relList?.contains('alternate') || !/^(?:|screen|all)$/i.test((node.media || '').trim())) continue
+    if (node.type && node.type.toLowerCase() !== 'text/css') continue
+    if (node.localName === 'style') pending.push(compilePublicationSheet(node.textContent, directory, data.fonts))
+    else pending.push(packagePath(directory, (node.getAttribute('href') || '').trim()))
+  }
+  // Traverse from the end so repeated imports retain their last position in
+  // the cascade. A cycle or a long import chain never recurses on the JS stack.
+  const visited = new Set()
+  const rules = []
+  while (pending.length) {
+    let compiled = pending.pop()
+    if (typeof compiled === 'string') {
+      const path = compiled
+      const sheet = data.stylesheets?.get(path)
+      if (!sheet || visited.has(path)) continue
+      visited.add(path)
+      sheet.compiled ||= compilePublicationSheet(sheet.source, sheet.directory, data.fonts)
+      compiled = sheet.compiled
+    }
+    rules.push(compiled.css)
+    for (const path of compiled.imports) pending.push(path)
+  }
+  return rules.reverse().join('\n')
 }
 
 function base64Of(bytes) {
@@ -457,7 +592,7 @@ function safeDataUrl(resource, path, imageCache) {
 /**
  * Turn one spine chapter into a self-contained, script-free HTML document.
  *
- * The source is untrusted: scripts, stylesheets, embedded content, forms,
+ * The source is untrusted: scripts, external stylesheets, embedded content, forms,
  * event handlers, remote images, and non-typographic CSS are removed. Images
  * resolve through the EPUB manifest into data URLs, internal links carry
  * `data-bb-chapter`/`data-bb-anchor`, and external links carry
@@ -480,6 +615,15 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
   const body = parsed.body
   if (body === null) return '<!doctype html><html><body></body></html>'
   const chapterDirectory = directoryOf(chapter.path)
+  const css = chapterStyles(parsed, chapterDirectory, data)
+  // Rebuild the chapter shell with just the attributes needed by typography.
+  for (const element of [parsed.documentElement, body]) {
+    if (!element.lang) element.lang = element.getAttribute('xml:lang') || parsed.documentElement.lang || data.language || ''
+    for (const name of element.getAttributeNames()) {
+      if (!['class', 'id', 'lang', 'style'].includes(name)) element.removeAttribute(name)
+    }
+    sanitizeStyleAttribute(element)
+  }
   const nodeCount = body.querySelectorAll('*').length
   if (nodeCount > 12000) {
     const notice = parsed.createElement('p')
@@ -514,6 +658,9 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
       if (BLOCKED_TAGS.has(tag)) {
         element.remove()
         continue
+      }
+      if (!element.hasAttribute('lang') && element.hasAttribute('xml:lang')) {
+        element.setAttribute('lang', element.getAttribute('xml:lang'))
       }
       for (const attribute of Array.from(element.attributes)) {
         const name = attribute.name.toLowerCase()
@@ -575,6 +722,9 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
       }
     }
   }
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${readingCss}</style></head><body>${body.innerHTML}</body></html>`
+  const style = parsed.createElement('style')
+  style.textContent = readingCss + '\n' + css
+  parsed.head.replaceChildren(style)
+  return '<!doctype html>' + parsed.documentElement.outerHTML
 }
 

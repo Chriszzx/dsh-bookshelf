@@ -8,7 +8,7 @@ import { access, lstat, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 test('folder listing and duplicate import report the copy fallback', async t => {
   const root = await mkdtemp(join(tmpdir(), 'bookshelf-link-mode-'))
@@ -138,7 +138,7 @@ test('the host copies a folder import when Windows denies the symbolic link', as
     assert.equal(imported.status, 201)
     const result = await imported.json()
     assert.equal(result.mode, 'copy')
-    assert.equal(result.book.title, 'fallback')
+    assert.equal(result.book.title, 'fallback.epub')
 
     const library = JSON.parse(await readFile(join(process.env.DSH_HOME, 'bookshelf', 'library.json'), 'utf8'))
     assert.equal(library.books.length, 1)

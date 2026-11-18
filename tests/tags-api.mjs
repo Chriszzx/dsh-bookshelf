@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 test('tag definitions, assignments and status overrides round-trip through the Host', async t => {
   const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-tags-api-'))

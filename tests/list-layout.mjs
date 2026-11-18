@@ -5,10 +5,10 @@
 // Run: node tests/list-layout.mjs (needs Chrome and React UMD fixtures).
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -16,7 +16,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-list-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 
 apply({
@@ -196,10 +196,10 @@ try {
     const beta=rowOf('Beta');
     check(!!beta.querySelector('.bs-row-progress'),'reading row shows a progress bar');
     check(beta.querySelector('.bs-row-progress').getAttribute('aria-valuenow')==='42','reading row progress value');
-    check(beta.textContent.includes('continueReading 42%'),'reading row label');
+    check(beta.textContent.includes('statusReading 42%'),'reading row label');
     const gamma=rowOf('Gamma');
     check(!gamma.querySelector('.bs-row-progress'),'finished row hides the progress bar');
-    check(gamma.textContent.includes('finishedPercent(percent=100)'),'finished row label');
+    check(gamma.textContent.includes('statusFinished'),'finished row label');
     check(!rowOf('Alpha').querySelector('.bs-row-progress'),'unread row has no progress bar');
     return titles().slice().sort().join(',');
   })()`), 'Alpha,Beta,Delta,Gamma')
@@ -230,6 +230,9 @@ try {
     await until(()=>document.querySelector('.bs-reader'));
     document.querySelector('.bs-reader-bar .bs-icon-button').click();
     await until(()=>document.querySelectorAll('.bs-row').length===4);
+    // This fixture fits on one page, so returning can offer to mark it finished.
+    document.querySelector('[aria-label="finishPromptTitle"] [aria-label="dismiss"]')?.click();
+    await until(()=>!document.querySelector('[aria-label="finishPromptTitle"]'));
     check(!!document.querySelector('.bs-list'),'list survives the reader');
     openRowMenu('Beta');
     await until(()=>document.querySelector('.bs-row-menu'));
@@ -305,6 +308,25 @@ try {
     return true;
   })()`), true)
 
+  // Existing libraries can contain blank metadata and a manual status override.
+  const libraryFile = join(temporary, 'home', 'bookshelf', 'library.json')
+  const library = JSON.parse(await readFile(libraryFile, 'utf8'))
+  Object.assign(library.books.find(book => book.id === beta.id), { title: '  ', author: '', status: 'unread' })
+  await writeFile(libraryFile, JSON.stringify(library))
+  await navigateTestPage(socket, `${origin}/test.html`)
+  await waitForMount()
+  for (const layout of ['layoutList', 'layoutCover']) {
+    await evaluate(`toggleLayout('${layout}')`)
+    const actual = await evaluate(`(async()=>{
+      const selector='.bs-row-open,.bs-card'
+      await until(()=>[...document.querySelectorAll(selector)].some(book=>book.textContent.includes('Beta.epub')))
+      const book=[...document.querySelectorAll(selector)].find(book=>book.textContent.includes('Beta.epub'))
+      return [book.querySelector('.bs-book-title,.bs-row-title').textContent,
+        book.querySelector('.bs-book-sub,.bs-row-sub').textContent, !!book.querySelector('[role="progressbar"]'),
+        !!book.querySelector('.bs-cover-format,.bs-row-format')]
+    })()`)
+    assert.deepEqual(actual, ['Beta.epub', 'statusUnread · unnamedAuthor', false, false])
+  }
   const listed = await (await fetch(`${api}/books`)).json()
   assert.equal(listed.books.length, 3)
   assert.deepEqual(await evaluate('window.errors'), [])

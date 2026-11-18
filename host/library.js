@@ -3,6 +3,7 @@ import { createReadStream, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 
 import { AppleBooksImportError, packEpubDirectory } from '../apple-books.js'
+import { applyMarkEdits } from '../assets/lib/reading-marks.mjs'
 import { sourceRevision } from '../source-revision.js'
 import { FINISHED_PERCENT, isTagId, READING_STATUSES, readingStatusOf, TAG_LIMITS } from '../tags.js'
 
@@ -12,6 +13,29 @@ import { cleanText, sanitizeAnnotations, sanitizeBookmarks, sanitizeProgress, sa
 
 // Book records: import, metadata, covers, file serving and per-book state
 // routes. Helpers shared with the link and Apple Books routes are exported.
+
+function publicReadingState(state) {
+  if (!state) return null
+  const { recentMarkEdits, ...visible } = state
+  return visible
+}
+
+function validatedMarkEdits(payload) {
+  const edits = payload.markEdits
+  if (!Array.isArray(edits) || !edits.length || edits.length > 2000 ||
+      'bookmarks' in payload || 'annotations' in payload) throw new HttpError(400, 'invalid reading mark patch')
+  const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value)
+  return edits.map(edit => {
+    if (!edit || !validId(edit.id) || !validId(edit.token) ||
+        !['bookmarks', 'annotations'].includes(edit.collection)) throw new HttpError(400, 'invalid reading mark edit')
+    if (edit.value === null) return edit
+    if (edit.value?.id !== edit.id) throw new HttpError(400, 'reading mark ID mismatch')
+    const sanitize = edit.collection === 'annotations' ? sanitizeAnnotations : sanitizeBookmarks
+    const [value] = sanitize([edit.value])
+    if (!value) throw new HttpError(400, 'invalid reading mark')
+    return { ...edit, value }
+  })
+}
 
 function normalizedBookText(value) {
   return String(value || '')
@@ -59,8 +83,7 @@ function publicBookView(record, state, knownTagIds) {
 
 function titleFromName(name) {
   const base = name.replace(/\\/g, '/').split('/').pop() || 'Untitled'
-  const withoutExtension = base.replace(/\.[^.]+$/, '')
-  return cleanText(withoutExtension, 'Untitled')
+  return cleanText(base, 'Untitled')
 }
 
 export { sameShelfBook, publicBook, titleFromName }
@@ -85,7 +108,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     const record = library.books.find((book) => book.id === id)
     if (record === undefined) throw new HttpError(404, 'book not found')
     const states = await readStates()
-    sendJson(request, response, 200, { state: states.books[id] || null })
+    sendJson(request, response, 200, { state: publicReadingState(states.books[id]) })
   }
 
   async function putBookState(request, response, id) {
@@ -95,41 +118,59 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     const body = await readJsonBody(request, MAX_STATE_BYTES)
     const payload = body && typeof body === 'object' && !Array.isArray(body) && body.state !== undefined ? body.state : body
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new HttpError(400, 'state must be an object')
-    const states = await readStates()
-    const current = states.books[id] && typeof states.books[id] === 'object' && !Array.isArray(states.books[id]) ? states.books[id] : {}
-    const next = { ...current }
+    const patch = {}
     if ('progress' in payload) {
       const progress = sanitizeProgress(payload.progress, record.format)
       if (progress === undefined) throw new HttpError(400, 'progress must be an object')
       progress.format = record.format
-      next.progress = progress
+      patch.progress = progress
     }
     if ('bookmarks' in payload) {
       if (!Array.isArray(payload.bookmarks)) throw new HttpError(400, 'bookmarks must be an array')
-      next.bookmarks = sanitizeBookmarks(payload.bookmarks)
+      patch.bookmarks = sanitizeBookmarks(payload.bookmarks)
     }
     // Annotations are stored next to bookmarks. The shared model drops malformed
     // entries one by one, so only a non-array request is a client error.
     if ('annotations' in payload) {
       if (!Array.isArray(payload.annotations)) throw new HttpError(400, 'annotations must be an array')
-      next.annotations = sanitizeAnnotations(payload.annotations)
+      patch.annotations = sanitizeAnnotations(payload.annotations)
     }
     if ('settings' in payload) {
       if (!payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) {
         throw new HttpError(400, 'settings must be an object')
       }
-      next.settings = sanitizeSettings(payload.settings) || {}
+      patch.settings = sanitizeSettings(payload.settings) || {}
     }
-    await updateStates((books) => ({ ...books, [id]: next }))
+    const edits = request.method === 'PATCH' ? validatedMarkEdits(payload) : []
+    let next
+    await updateStates((books) => {
+      const previous = books[id]
+      const current = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {}
+      next = { ...current, ...patch }
+      if (edits.length) {
+        // The previous response may have been lost after the atomic write.
+        // Replaying an acknowledged add must not resurrect another reader's deletion.
+        const seen = new Set(current.recentMarkEdits || [])
+        const fresh = edits.filter(edit => {
+          if (seen.has(edit.token)) return false
+          seen.add(edit.token)
+          return true
+        })
+        next = applyMarkEdits(next, fresh)
+        if (next.bookmarks?.length > 500 || next.annotations?.length > 1000) {
+          throw new HttpError(409, 'reading mark limit reached')
+        }
+        next.recentMarkEdits = Array.from(seen).slice(-2048)
+      }
+      return { ...books, [id]: next }
+    })
     // Reading a finished book again drops the finished override as soon as the
     // saved progress falls below the last page, so the shelf returns to
     // "continue reading" without another manual step. Settings-only writes keep
     // the override, which is why this checks the incoming patch.
     if (
-      'progress' in payload &&
-      next.progress &&
-      typeof next.progress.percent === 'number' &&
-      next.progress.percent < FINISHED_PERCENT &&
+      typeof patch.progress?.percent === 'number' &&
+      patch.progress.percent < FINISHED_PERCENT &&
       record.status === 'finished'
     ) {
       await updateLibrary((books) =>
@@ -141,7 +182,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
         }),
       )
     }
-    sendJson(request, response, 200, { state: next })
+    sendJson(request, response, 200, { state: publicReadingState(next) })
   }
 
   async function sendCover(request, response, id) {
@@ -421,6 +462,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     }),
     regexRoute(new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/state$`), {
       GET: (request, response, context) => getBookState(request, response, context.params[1]),
+      PATCH: (request, response, context) => putBookState(request, response, context.params[1]),
       PUT: (request, response, context) => putBookState(request, response, context.params[1]),
     }),
     regexRoute(new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/cover$`), {

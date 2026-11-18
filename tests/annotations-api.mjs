@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 async function startHost(t) {
   const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-annotations-api-'))
@@ -71,6 +71,22 @@ function annotation(overrides = {}) {
     ...overrides,
   }
 }
+
+test('concurrent patches preserve progress, bookmarks, annotations and settings', async t => {
+  const { json, send, statePath } = await startHost(t)
+  const writes = await Promise.all([
+    send('PUT', statePath, { progress: { chapterIndex: 3, percent: 0.4 } }),
+    send('PUT', statePath, { bookmarks: [{ id: 'bm_race0001', label: 'Concurrent bookmark', chapterIndex: 1 }] }),
+    send('PUT', statePath, { annotations: [annotation()] }),
+    send('PUT', statePath, { settings: { fontSize: 21 } }),
+  ])
+  assert.deepEqual(writes.map(result => result.status), [200, 200, 200, 200])
+  const { state } = (await json(statePath)).payload
+  assert.equal(state.progress.chapterIndex, 3)
+  assert.equal(state.bookmarks[0].id, 'bm_race0001')
+  assert.equal(state.annotations[0].id, 'an_test0001')
+  assert.equal(state.settings.fontSize, 21)
+})
 
 test('annotation state round-trips without disturbing progress, bookmarks or settings', async t => {
   const { json, send, statePath, home, book } = await startHost(t)
@@ -216,4 +232,33 @@ test('annotation lists are capped at 1000 entries per book', async t => {
 
   const onDisk = JSON.parse(await readFile(join(home, 'bookshelf', 'state.json'), 'utf8'))
   assert.equal(onDisk.books[book.id].annotations.length, 1000)
+})
+
+test('a retried mark addition cannot restore a mark deleted after the first response', async t => {
+  const { send, json, statePath } = await startHost(t)
+  const item = annotation()
+  const edit = { collection: 'annotations', id: item.id, token: 'first-add', value: item }
+  const patch = markEdits => send('PATCH', statePath, { markEdits })
+  assert.equal((await patch([edit])).status, 200)
+  assert.equal((await patch([{ ...edit, token: 'peer-remove', value: null }])).status, 200)
+  assert.equal((await patch([edit])).status, 200)
+  assert.deepEqual((await json(statePath)).payload.state.annotations, [])
+  const invalid = await patch([edit, { ...edit, id: 'other', token: 'mismatched' }])
+  assert.equal(invalid.status, 400)
+  assert.deepEqual((await json(statePath)).payload.state.annotations, [])
+})
+
+test('mark capacity rejects the whole write and a reader can remove an item and retry', async t => {
+  const { send, json, statePath } = await startHost(t)
+  const bookmarks = Array.from({ length: 500 }, (_, i) => ({ id: 'b' + i, label: String(i) }))
+  await send('PUT', statePath, { bookmarks })
+  const add = { collection: 'bookmarks', id: 'extra', token: 'add-extra', value: { id: 'extra' } }
+  const remove = { collection: 'bookmarks', id: 'b1', token: 'remove-b1', value: null }
+  assert.equal((await send('PATCH', statePath, { markEdits: [add] })).status, 409)
+  assert.deepEqual((await json(statePath)).payload.state.bookmarks.map(b => b.id), bookmarks.map(b => b.id))
+  const retried = await send('PATCH', statePath, { markEdits: [add, remove] })
+  assert.equal(retried.status, 200)
+  assert.equal(retried.payload.state.bookmarks.length, 500)
+  assert.equal(retried.payload.state.bookmarks[0].id, 'extra')
+  assert.ok(!retried.payload.state.bookmarks.some(b => b.id === 'b1'))
 })

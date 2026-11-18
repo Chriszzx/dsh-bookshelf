@@ -11,6 +11,7 @@
 // and `assets/lib/audiobook-pricing.mjs`; this module keeps the service
 // assembly and its job/state machine.
 
+import { createHash, randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { dirname, join } from 'node:path'
 
@@ -18,7 +19,6 @@ import { readWav, stripMp3Tags, wavHeader } from './assets/lib/audiobook-audio.m
 import {
   AUDIOBOOK_LIMITS,
   AudiobookError,
-  clampSpeed,
   estimateAudiobook,
   sanitizeAudiobookProvider,
   sanitizeVoice,
@@ -35,12 +35,16 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
   if (!tts || typeof tts.synthesize !== 'function') throw new TypeError('a tts service is required')
   const root = join(rootDir, 'audiobooks')
   const jobs = new Map()
+  const planning = new Map()
+  const starting = new Map()
+  const removing = new Map()
 
   const bookDir = (id) => join(root, id)
   const sourcePath = (id) => join(bookDir(id), 'source.txt')
   const planPath = (id) => join(bookDir(id), 'plan.json')
   const audioPath = (id, ext) => join(bookDir(id), `book${ext}`)
   const metaPath = (id) => join(bookDir(id), 'book.json')
+  const hashSource = (text) => createHash('sha256').update(text).digest('hex')
 
   async function readJson(path) {
     try {
@@ -67,7 +71,7 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     }
   }
 
-  async function plan(id, { text, voice, speed, provider } = {}) {
+  async function writePlan(id, { text, voice, speed, provider }) {
     const chosenProvider = sanitizeAudiobookProvider(provider)
     let normalized = typeof text === 'string' ? normalizeSpeakText(text) : ''
     if (normalized === '') normalized = (await readSource(id)) || ''
@@ -78,6 +82,8 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     const estimate = estimateAudiobook({ text: normalized, speed, provider: chosenProvider })
     const value = {
       ...estimate,
+      id: randomUUID(),
+      sourceHash: hashSource(normalized),
       voice: sanitizeVoice(voice, chosenProvider),
       updatedAt: new Date().toISOString(),
     }
@@ -85,10 +91,20 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     const sourceTemp = `${sourcePath(id)}.${process.pid}.tmp`
     await fs.writeFile(sourceTemp, normalized)
     await replaceFile(sourceTemp, sourcePath(id))
-    const planTemp = `${planPath(id)}.${process.pid}.tmp`
-    await fs.writeFile(planTemp, JSON.stringify(value, null, 2))
-    await replaceFile(planTemp, planPath(id))
+    await writeJson(planPath(id), value)
     return value
+  }
+
+  async function plan(id, options = {}) {
+    if (removing.has(id)) throw new AudiobookError(409, '正在删除整书语音，请稍后重新估算')
+    const previous = planning.get(id) || Promise.resolve()
+    const pending = previous.catch(() => undefined).then(() => writePlan(id, options))
+    planning.set(id, pending)
+    try {
+      return await pending
+    } finally {
+      if (planning.get(id) === pending) planning.delete(id)
+    }
   }
 
   // Older renders wrote book.wav with a meta file that had no extension; keep
@@ -149,7 +165,7 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
         speed: job.speed,
         startedAt: job.startedAt,
         finishedAt: job.finishedAt || null,
-        plan: planValue,
+        plan: job.plan,
         audio,
       }
     }
@@ -169,19 +185,41 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
     }
   }
 
-  async function start(id, { voice, speed, provider } = {}) {
+  async function start(id, { planId } = {}) {
+    if (!planId) throw new AudiobookError(409, '请先重新估算这本书再生成')
+    if (removing.has(id)) throw new AudiobookError(409, '正在删除整书语音，请稍后重新估算')
+    const pending = starting.get(id)
+    if (pending?.planId === planId) return pending.result
     const running = jobs.get(id)
-    if (running && (running.status === 'running' || running.status === 'cancelling')) {
+    if (running?.plan.id === planId && ['running', 'cancelling', 'done'].includes(running.status)) {
+      return jobState(id)
+    }
+    if (pending || running?.status === 'running' || running?.status === 'cancelling') {
       throw new AudiobookError(409, '这本书的整书语音正在生成')
     }
-    const source = await readSource(id)
-    if (source === null) throw new AudiobookError(409, '请先估算这本书再生成')
+    // Reserve the start before another request can interleave with disk reads.
+    const result = beginRender(id, planId)
+    starting.set(id, { planId, result })
+    try {
+      return await result
+    } finally {
+      starting.delete(id)
+    }
+  }
+
+  async function beginRender(id, planId) {
+    const [source, planValue, existing] = await Promise.all([
+      readSource(id),
+      readJson(planPath(id)),
+      resolveAudio(id),
+    ])
+    if (removing.has(id) || source === null || planValue?.id !== planId || planValue.sourceHash !== hashSource(source)) {
+      throw new AudiobookError(409, '整书语音估算已变更，请重新打开并确认估算')
+    }
+    if (existing?.meta?.planId === planId) return jobState(id)
     const sentences = splitSentences(source)
     if (sentences.length === 0) throw new AudiobookError(400, '没有可朗读的文字')
     if (sentences.length > AUDIOBOOK_LIMITS.maxSentences) throw new AudiobookError(413, '整书语音句子过多')
-    const rate = clampSpeed(speed)
-    const chosenProvider = sanitizeAudiobookProvider(provider)
-    const chosenVoice = sanitizeVoice(voice, chosenProvider)
     const job = {
       status: 'running',
       done: 0,
@@ -189,15 +227,16 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
       characters: 0,
       bytes: 0,
       error: '',
-      provider: chosenProvider,
-      voice: chosenVoice,
-      speed: rate,
+      plan: planValue,
+      provider: planValue.provider,
+      voice: planValue.voice,
+      speed: planValue.speed,
       startedAt: new Date().toISOString(),
       finishedAt: null,
       cancelled: false,
     }
     jobs.set(id, job)
-    void render(id, sentences, job).catch((error) => {
+    job.completion = render(id, sentences, job).catch((error) => {
       logger.warn?.(`bookshelf: audiobook render failed: ${error instanceof Error ? error.message : String(error)}`)
     })
     return jobState(id)
@@ -205,7 +244,6 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
 
   async function render(id, sentences, job) {
     const temporary = join(bookDir(id), 'book.tmp')
-    const planValue = await readJson(planPath(id))
     let handle = null
     let ext = null
     let wavFormat = null
@@ -260,16 +298,18 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
       }
       await handle.close()
       handle = null
+      if (job.cancelled) throw new AudiobookError(499, '已取消')
       await fs.rm(audioPath(id, ext === '.wav' ? '.mp3' : '.wav'), { force: true }).catch(() => undefined)
       await replaceFile(temporary, audioPath(id, ext))
       const finishedAt = new Date().toISOString()
       const seconds = ext === '.wav' && wavFormat
         ? Math.round((dataBytes / (wavFormat.sampleRate * wavFormat.channels * (wavFormat.bitsPerSample / 8))) * 10) / 10
-        : planValue && Number.isFinite(planValue.durationSeconds) ? planValue.durationSeconds : null
+        : job.plan.durationSeconds
       // Publish the meta before reporting completion: `file()` resolves the
       // audio through this file, so flipping the state first would open a window
       // where a finished render looks missing to a concurrent reader.
       await writeJson(metaPath(id), {
+        planId: job.plan.id,
         provider: job.provider,
         voice: job.voice,
         speed: job.speed,
@@ -284,11 +324,11 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
       job.finishedAt = finishedAt
       job.status = 'done'
     } catch (error) {
-      job.status = job.cancelled ? 'cancelled' : 'failed'
       job.error = error instanceof Error ? error.message : String(error)
       job.finishedAt = new Date().toISOString()
       if (handle !== null) await handle.close().catch(() => undefined)
       await fs.rm(temporary, { force: true }).catch(() => undefined)
+      job.status = job.cancelled ? 'cancelled' : 'failed'
       if (job.status === 'failed') logger.warn?.(`bookshelf: audiobook ${id} failed: ${job.error}`)
     }
   }
@@ -316,10 +356,23 @@ export function createAudiobookService({ rootDir, tts, logger = console } = {}) 
   }
 
   async function remove(id) {
-    const job = jobs.get(id)
-    if (job && job.status === 'running') job.cancelled = true
-    jobs.delete(id)
-    await fs.rm(bookDir(id), { recursive: true, force: true })
+    if (removing.has(id)) return removing.get(id)
+    const pending = Promise.resolve().then(async () => {
+      const job = jobs.get(id)
+      if (job && job.status === 'running') {
+        job.cancelled = true
+        job.status = 'cancelling'
+      }
+      await Promise.allSettled([job?.completion, starting.get(id)?.result, planning.get(id)])
+      await fs.rm(bookDir(id), { recursive: true, force: true })
+      jobs.delete(id)
+    })
+    removing.set(id, pending)
+    try {
+      await pending
+    } finally {
+      removing.delete(id)
+    }
   }
 
   return { plan, start, state: jobState, cancel, file, remove }

@@ -9,7 +9,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -17,7 +17,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-selection-speech-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 
 function makeRun() {
@@ -137,7 +137,7 @@ try {
   const preferenceResponse = await fetch(`${api}/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ theme: 'light', pageMode: 'scroll' }),
+    body: JSON.stringify({ theme: 'light' }),
   })
   assert.equal(preferenceResponse.status, 200)
 
@@ -207,7 +207,7 @@ try {
     await until(()=>document.querySelectorAll('.bs-card').length===1);
     await openBook('Selection');
     await until(()=>chapterText().includes('第一章第一句话'),'chapter one renders');
-    document.querySelector('button[title="nextChapter"]').click();
+    document.querySelectorAll('.bs-toc-label')[1].click();
     await until(()=>chapterText().includes('第二章第一句话'),'chapter two renders');
     // Opening read-aloud arms a driver (preview) without playing anything; the
     // selection queue must resume through that driver afterwards.

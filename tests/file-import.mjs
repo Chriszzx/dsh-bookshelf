@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm, stat, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -14,7 +14,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-import-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 let delayedLibraryRead = false
 
@@ -194,7 +194,7 @@ try {
   await evaluate(`(async()=>{await until(()=>document.querySelectorAll('.bs-book-title').length===2);return true})()`)
   assert.deepEqual(
     (await evaluate(`[...document.querySelectorAll('.bs-book-title')].map(e=>e.textContent)`)).sort(),
-    ['Picked Book', 'dropped'],
+    ['Picked Book', 'dropped.pdf'],
   )
 
   // Folder linking stays available as a separate, explicit action.
@@ -217,7 +217,7 @@ try {
   assert.ok(picked, 'EPUB metadata title imported')
   assert.equal(picked.author, 'Ada Lovelace')
   assert.equal(picked.link, undefined, 'file import is a shelf copy, not a soft link')
-  assert.ok(listed.books.some(book => book.title === 'dropped'), 'dropped file imported')
+  assert.ok(listed.books.some(book => book.title === 'dropped.pdf'), 'dropped file imported')
   const stored = await readdir(join(temporary, 'home', 'bookshelf', 'books'))
   assert.equal(stored.length, 2, 'two shelf files stored')
   for (const name of stored) {

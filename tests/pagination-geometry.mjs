@@ -1,6 +1,7 @@
 // Functional browser regression of the installed reader's pagination geometry.
 // Uses an isolated Host and generated EPUB; does not inspect a personal browser
 // or claim to verify the live DSH shell. React fixtures come from pinned dev dependencies.
+import { installVisibleTextProbe } from './helpers/visible-text-probe.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -16,7 +17,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-geometry-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 apply({ effect: fn => fn(), webServer: { register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>html,body,#root{height:100%;margin:0}#root{width:1400px;height:900px}</style></head><body><div id="root"></div>
@@ -65,8 +66,7 @@ window.settled=async()=>{
  }
  throw Error('Paged layout did not settle: '+JSON.stringify(inspect()));
 };
-window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,s=w.getComputedStyle(d.body);const r=d.caretRangeFromPoint(parseFloat(s.paddingLeft)+3,parseFloat(s.paddingTop)+3);if(!r)throw Error('no anchor');window.anchor={node:r.startContainer,offset:r.startOffset};return {text:r.startContainer.textContent.slice(r.startOffset,r.startOffset+40)}};
-window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return {visible:q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1,left:q.left,top:q.top}};
+(${installVisibleTextProbe.toString()})();
 </script></body></html>`
 try {
  const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
@@ -95,10 +95,31 @@ try {
  let sequence=0
  async function command(method,params){const id=++sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{socket.removeEventListener('message',listener);reject(Error('CDP timeout'))},45000);const listener=event=>{const m=JSON.parse(event.data);if(m.id!==id)return;clearTimeout(timer);socket.removeEventListener('message',listener);if(m.error||m.result?.exceptionDetails)reject(Error(JSON.stringify(m.error||m.result.exceptionDetails)));else resolve(m.result)};socket.addEventListener('message',listener);socket.send(JSON.stringify({id,method,params}))})}
  async function evaluate(expression){return (await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}))?.result?.value}
+ await command('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false})
  const start=Date.now();while(true){try{if(await evaluate('Boolean(window.inspect)'))break}catch(e){if(!e.message.includes('Execution context was destroyed'))throw e}assert.ok(Date.now()-start<10000);await new Promise(r=>setTimeout(r,100))}
  await evaluate(`(async()=>{await until(()=>document.querySelector('.bs-cover'));document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(1000)})()`)
  const baseline=await evaluate('inspect()');console.log('Initial geometry',baseline)
  assert.deepEqual(baseline.leaks,[],'adjacent page text must not appear inside the current page margins')
+ // Select text with the keyboard inside the chapter, then page normally.
+ await evaluate(`(()=>{
+  const frame=document.querySelector('.bs-epub-frame')
+  frame.contentWindow.focus()
+  const sample=frame.contentDocument.querySelector('#p0').firstChild
+  frame.contentWindow.getSelection().setBaseAndExtent(sample,0,sample,1)
+ })()`)
+ async function arrow(key, modifiers = 0) {
+  const params={key,code:key,windowsVirtualKeyCode:key==='ArrowRight'?39:37,modifiers}
+  await command('Input.dispatchKeyEvent',{...params,type:'keyDown'})
+  await command('Input.dispatchKeyEvent',{...params,type:'keyUp'})
+ }
+ await arrow('ArrowRight',8)
+ assert.equal(await evaluate("document.querySelector('.bs-epub-frame').contentWindow.getSelection().toString()"),'Pa','Shift+Right extends the selection by one character')
+ assert.equal((await evaluate('inspect()')).scroll,baseline.scroll,'extending a selection stays on the current page')
+ await evaluate("document.querySelector('.bs-epub-frame').contentWindow.getSelection().removeAllRanges()")
+ await arrow('ArrowRight')
+ await evaluate('until(()=>inspect().scroll>0)')
+ await arrow('ArrowLeft')
+ await evaluate('until(()=>inspect().scroll===0)')
  const pointer=await evaluate(`(()=>{const r=document.querySelector('.bs-epub-frame').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`)
  await command('Input.dispatchMouseEvent',{type:'mouseWheel',...pointer,deltaX:baseline.width*.55,deltaY:0})
  await evaluate('wait(250)')
@@ -111,15 +132,18 @@ try {
   await evaluate('document.activeElement?.blur();wait(200)')
   const before=await evaluate('inspect()')
   await evaluate('capture()')
+  const originalText = await evaluate('anchorVisible()')
+  assert.ok(originalText.visible, 'track a visible glyph before hover')
   const track=await evaluate(`(()=>{const p=document.querySelector('.bs-progress'),r=p.getBoundingClientRect(),shell=p.closest('.bs-reader').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,bottom:r.bottom,shellBottom:shell.bottom}})()`)
   for(let i=0;i<3;i++){
    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:track.x,y:track.y})
    await evaluate('wait(180)')
+   assert.ok(await evaluate("document.querySelector('.bs-progress').matches(':hover')"), 'pointer reaches the progress control')
    const hovered=await evaluate('inspect()')
    assert.equal(hovered.height,before.height,'progress hover must not resize reading viewport')
    assert.equal(hovered.label,before.label,'progress hover must not change page counts or position')
    assert.equal(hovered.scroll,before.scroll,'progress hover must not shift displayed text')
-   assert.ok((await evaluate('anchorVisible()')).visible,'progress hover preserves the visible text')
+   assert.deepEqual(await evaluate('anchorVisible()'),originalText,'hover keeps the same glyph in the same place')
    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2})
    await evaluate('wait(180)')
    assert.deepEqual(await evaluate('inspect()'),before,'leaving progress must preserve pagination')
@@ -168,14 +192,16 @@ try {
  await evaluate(`(async()=>{document.getElementById('root').style.width='1500px';document.getElementById('root').style.height='900px';segment('spreadAuto');await wait(700);document.querySelector('.bs-progress').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));await wait(150);click('nextPage');await wait(100)})()`)
  let dual=await evaluate('inspect()');console.log('First dual spread',dual)
  assert.equal(dual.columns,2);assert.match(dual.label,/current=3,end=4/);assert.deepEqual(dual.leaks,[])
+ await evaluate("click('dismiss')")
  await checkProgressGeometry()
  const dualAnchor=await evaluate('capture()')
  for(const width of [1000,1500,1100,1500]){
   await evaluate(`(async()=>{document.getElementById('root').style.width='${width}px';await settled()})()`)
   const state=await evaluate('inspect()');assert.equal(state.columns,width===1500?2:1)
-  assert.ok((await evaluate('anchorVisible()')).visible,'same text remains visible through single/dual reflow');assert.deepEqual(state.leaks,[])
+  const glyph=await evaluate('anchorVisible()');assert.ok(glyph.visible,`anchor at width ${width} on ${state.label}: ${JSON.stringify(glyph)}`);assert.deepEqual(state.leaks,[])
  }
  // Font 19 fits two 24em columns, font 25 does not at this actual width.
+ await evaluate("click('readingSettings')")
  for(let i=0;i<6;i++)await evaluate(`(async()=>{click('fontLarger');await wait(60)})()`)
  await evaluate('wait(650)');assert.equal((await evaluate('inspect()')).columns,1);assert.ok((await evaluate('anchorVisible()')).visible)
  for(let i=0;i<6;i++)await evaluate(`(async()=>{click('fontSmaller');await wait(60)})()`)
@@ -223,6 +249,9 @@ try {
   const state=await evaluate('inspect()');assert.equal(state.columns,2);assert.equal(state.label,`pageOf(current=${current},total=3)`,'short/empty chapters count one real page each');assert.equal(state.scroll,0);assert.deepEqual(state.leaks,[])
   if(current<3)await evaluate(`(async()=>{click('nextPage');await wait(700)})()`)
  }
+ const shortState = await (await fetch(`${origin}/bookshelf/api/books/${shortBook.id}/state`)).json()
+ assert.equal(shortState.state.progress.percent, 1, 'the single-page last chapter completes the book')
+ assert.equal(shortState.state.progress.scrollRatio, 0, 'its saved location still refers to the start of that page')
  assert.ok(await evaluate(`(()=>{const table=document.querySelector('.bs-epub-frame').contentDocument.querySelector('.bb-table-wrap');return table.scrollWidth>table.clientWidth})()`),'wide table really overflows within its own scroller without adding pages')
  await evaluate(`(async()=>{click('previousPage');await wait(700)})()`)
  assert.equal((await evaluate('inspect()')).label,'pageOf(current=2,total=3)','previous chapter restores final spread')

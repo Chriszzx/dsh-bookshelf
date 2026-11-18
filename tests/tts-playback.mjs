@@ -8,7 +8,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -16,7 +16,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-tts-playback-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 const calls = { synthesize: 0, settings: 0 }
 
@@ -242,9 +242,7 @@ try {
     return true;
   })()`), true)
 
-  // The page theme must follow DSH desktop: "follow" mirrors the live scheme,
-  // and the pinned Light/Dark options use the DSH palettes themselves instead of
-  // an approximation of them.
+  // The reading surface tracks the DSH desktop palette in both directions.
   assert.equal(await evaluate(`(async()=>{
     const style=document.createElement('style');
     style.id='dsh-tokens';
@@ -260,16 +258,7 @@ try {
     check(value('--bb-bg')==='#151517','follow mode must use the DSH dark surface: '+value('--bb-bg'));
     document.querySelector('.bs-reader-bar [aria-label="readingSettings"]').click();
     await until(()=>document.querySelector('.bs-reader-settings'));
-    const pick=(label)=>{const node=[...document.querySelectorAll('.bs-reader-settings button')].find(item=>item.textContent===label);check(!!node,'theme option '+label);node.click()};
-    pick('themeLight');
-    await until(()=>scheme()==='light');
-    check(value('--bb-fg')==='#0f1115','pinned light must use the DSH light text: '+value('--bb-fg'));
-    check(value('--bb-bg')==='#ffffff','pinned light must use the DSH light surface: '+value('--bb-bg'));
-    pick('themeDark');
-    await until(()=>scheme()==='dark');
-    check(value('--bb-fg')==='#f9fafb','pinned dark must use the DSH dark text: '+value('--bb-fg'));
-    pick('themeAuto');
-    await until(()=>scheme()==='dark');
+    check(!document.querySelector('.bs-reader-settings').textContent.includes('readingTheme'),'manual theme setting removed');
     document.body.removeAttribute('data-ds-dark-theme');
     await until(()=>scheme()==='light');
     check(value('--bb-fg')==='#0f1115','follow mode must track DSH back to light: '+value('--bb-fg'));

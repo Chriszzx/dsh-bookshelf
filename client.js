@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '10'
+    const ASSET_VERSION = '16'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -94,11 +94,9 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-cover-frame::before{content:"";position:absolute;inset:8px;border:1px solid rgba(255,255,255,.2);border-radius:4px;pointer-events:none}
 .bs-cover-title{position:relative;padding-right:26px;font-family:'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif;font-size:15.5px;line-height:1.35;font-weight:600;letter-spacing:.01em;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.28)}
 .bs-cover-author{position:relative;margin-top:auto;padding-top:12px;padding-right:34px;font-size:11px;line-height:1.4;color:rgba(246,241,231,.76);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-cover-format{position:absolute;top:10px;left:10px;right:auto;padding:2px 5px;border-radius:3px;background:rgba(0,0,0,.3);color:rgba(255,255,255,.86);font-size:9px;font-weight:600;letter-spacing:.12em;line-height:1.4;z-index:3}
 .bs-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;opacity:0;background:var(--dsw-alias-bg-base);transition:opacity .18s ease}
 .bs-cover-img[data-loaded="true"]{opacity:1}
 .bs-cover-frame::before{z-index:2}
-.bs-cover-format{z-index:3}
 .bs-cover-title,.bs-cover-author{z-index:0}
 .bs-shelf-tools{flex:none;display:flex;align-items:center;gap:10px;padding:9px 24px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
 .bs-search{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:32px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary)}
@@ -221,7 +219,6 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-book-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-card-progress{height:2px;margin-top:2px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
 .bs-card-progress-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);transition:width .2s ease}
-.bs-card-progress[data-finished="true"] .bs-card-progress-fill{background:var(--dsw-alias-state-success-primary)}
 .bs-delete{position:absolute;top:8px;right:8px;z-index:2;display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:7px;background:rgba(12,12,14,.55);color:#f4f1ea;opacity:0;cursor:pointer;transition:opacity .14s ease,background .14s ease;backdrop-filter:blur(4px)}
 .bs-card:hover .bs-delete,.bs-delete:focus-visible{opacity:1}
 .bs-delete:hover{background:rgba(185,58,58,.9)}
@@ -249,11 +246,17 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 @keyframes bs-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.bs-spinner{animation-duration:2.4s}button.bs-cover{transition:none}}
 .bs-reader{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base)}
-.bs-reader-bar{flex:none;display:flex;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-reader-bar{flex:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-reader-navigation{display:flex;align-items:center;gap:2px}
 .bs-reader-title-wrap{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;padding:0 4px}
 .bs-reader-title{font-size:14px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-sub{font-size:11.5px;line-height:1.35;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-reader-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex:none;flex-wrap:wrap;row-gap:3px}
+.bs-reader-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:nowrap}
+/* Match visible strokes as well as hit areas. Glyphs have different internal margins. */
+.bs-reader-bar .bs-icon-button svg>*{vector-effect:non-scaling-stroke;stroke-width:1.5px}
+.bs-reader-bar .bs-text-button{height:30px}
+.bs-discuss-glyph{display:block;width:17px;height:17px;opacity:.78}
+.bs-icon-button:hover .bs-discuss-glyph{opacity:1}
 .bs-control-label{font-size:11.5px;line-height:1;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;padding:0 5px;white-space:nowrap}
 .bs-percent{min-width:34px;text-align:right}
 /* Reserve a fixed footer: hover/focus must never resize the EPUB viewport. */
@@ -394,9 +397,11 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-scroll{padding-left:20px;padding-right:20px}
   .bs-banner{margin-left:20px;margin-right:20px}
   .bs-epub-toc{position:absolute;left:0;top:0;bottom:0;z-index:4;width:min(82vw,290px);background:var(--dsw-alias-bg-overlay);box-shadow:18px 0 40px -28px rgba(0,0,0,.8)}
-  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;flex-wrap:wrap}
-  .bs-reader-title-wrap{padding:0 2px;min-width:120px}
-  .bs-reader-controls{gap:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:3px;width:100%}
+  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;grid-template-columns:auto minmax(0,1fr)}
+  .bs-reader-title-wrap{grid-row:1;grid-column:1/-1;padding:0 2px}
+  .bs-reader-navigation,.bs-reader-controls{grid-row:2;align-self:start}
+  .bs-reader-controls{gap:2px;min-width:0;overflow-x:auto;justify-content:safe flex-end;scrollbar-width:thin}
+  .bs-reader-controls>*{flex:none}
   .bs-reader-controls .bs-divider{margin:0 2px}
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-annotation-menu{right:8px;left:8px;width:auto}
@@ -443,7 +448,6 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-row-open:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
 .bs-row-thumb{position:relative;flex:none;width:44px;height:58px;border-radius:6px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .bs-row-cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.bs-row-format{position:absolute;left:4px;bottom:4px;font-size:7.5px;font-weight:700;letter-spacing:.06em;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .bs-row-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .bs-row-title{font-size:13.5px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-row-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -562,9 +566,15 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 `
 
     const READING_CSS = `
-:root{color-scheme:var(--bb-scheme,light)}
+@layer readerDefaults {
+html{font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif);}
+:root{color-scheme:var(--bb-scheme,light);font-size:var(--bb-font-size,19px)!important}
 html,body{margin:0;padding:0;background:var(--bb-bg,transparent)}
-body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif);font-size:var(--bb-font-size,19px);font-weight:var(--bb-font-weight,normal);font-style:var(--bb-font-style,normal);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
+body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-size:1em;font-weight:var(--bb-font-weight,normal);font-style:var(--bb-font-style,normal);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
+html.bb-custom-font body{font-family:var(--bb-prose-font)!important}
+html.bb-custom-weight body{font-weight:var(--bb-font-weight)!important}
+html.bb-custom-italic body{font-style:italic!important}
+html.bb-custom-leading body{line-height:var(--bb-line-height)!important}
 body > :first-child{margin-top:0}
 h1,h2,h3,h4,h5,h6{margin:1.55em 0 .65em;font-weight:600;line-height:1.35;text-align:left;text-wrap:balance}
 h1{font-size:1.6em}h2{font-size:1.34em}h3{font-size:1.16em}
@@ -580,7 +590,7 @@ blockquote p{margin-bottom:.5em}
 pre,code,kbd,samp{font-family:ui-monospace,'SFMono-Regular',Menlo,monospace;font-size:.86em}
 pre{margin:1em 0;padding:.85em 1em;border:1px solid var(--bb-border);border-radius:8px;background:var(--bb-code-bg);white-space:pre-wrap;overflow-wrap:anywhere;text-align:left}
 code{padding:.1em .3em;border-radius:4px;background:var(--bb-code-bg)}
-pre code{padding:0;background:transparent}
+pre code{font-size:inherit;padding:0;background:transparent}
 hr{margin:2em 0;border:0;border-top:1px solid var(--bb-border)}
 .bb-table-wrap{max-width:100%;overflow-x:auto;scrollbar-width:thin}
 .bb-table-wrap table{margin:.4em 0}
@@ -590,8 +600,10 @@ th{background:var(--bb-code-bg);font-weight:600}
 ul,ol{margin:.4em 0 1em;padding-left:1.5em}
 li{margin:.18em 0}
 dt{font-weight:600}dd{margin:0 0 .6em 1.4em}
+:where([role="doc-footnote"],[role="doc-endnote"],[epub\\:type~="footnote"],[epub\\:type~="endnote"]){font-size:.85em;line-height:1.5}
 sup,sub{line-height:0}
 ::selection{background:rgba(80,130,240,.26)}
+}
 `
 
     const PAGED_CSS = `
@@ -630,7 +642,7 @@ html.bb-paged body table tr{break-inside:avoid}
     const READER_LINE_HEIGHTS = { compact: 1.65, normal: 1.85, loose: 2.05 }
 
     const DEFAULT_READING_SETTINGS = {
-      fontFamily: 'serif',
+      fontFamily: 'publisher',
       fontName: '',
       fontWeight: 0,
       fontStyle: 'normal',
@@ -638,7 +650,7 @@ html.bb-paged body table tr{break-inside:avoid}
       lineHeight: 1.85,
       pageMargin: 'standard',
       theme: 'auto',
-      pageMode: 'scroll',
+      pageMode: 'paged',
       pageSpread: 'auto',
     }
 
@@ -698,87 +710,6 @@ html.bb-paged body table tr{break-inside:avoid}
       return false
     }
 
-    // DSH ships both base palettes in one stylesheet: `body{}` carries the light
-    // values and `body[data-ds-dark-theme]{}` the dark ones, with alias tokens
-    // pointing at the static palette through var(). Reading those rules lets a
-    // pinned page theme use the other scheme's exact DSH colors.
-    function dshSheetPalettes() {
-      const result = { light: new Map(), dark: new Map() }
-      if (typeof document === 'undefined' || !document.styleSheets) return result
-      const visit = (rules) => {
-        for (const rule of Array.from(rules || [])) {
-          if (rule.cssRules && rule.cssRules.length > 0) visit(rule.cssRules)
-          const selector = typeof rule.selectorText === 'string' ? rule.selectorText.trim() : ''
-          if (!/^(?:html)?body(?:\[[^\]]*\])?$/i.test(selector)) continue
-          const target = selector.includes('data-ds-dark-theme') ? result.dark : result.light
-          const style = rule.style
-          if (!style) continue
-          for (let index = 0; index < style.length; index += 1) {
-            const name = style.item(index)
-            if (!name.startsWith('--')) continue
-            const value = (style.getPropertyValue(name) || '').trim()
-            if (value !== '') target.set(name, value)
-          }
-        }
-      }
-      const sheets = []
-      for (const sheet of Array.from(document.styleSheets || [])) sheets.push(sheet)
-      for (const sheet of Array.from(document.adoptedStyleSheets || [])) sheets.push(sheet)
-      for (const sheet of sheets) {
-        let rules = null
-        try {
-          rules = sheet.cssRules
-        } catch {
-          rules = null
-        }
-        if (rules) visit(rules)
-      }
-      return result
-    }
-
-    function dshResolveToken(map, name, depth = 0) {
-      if (depth > 8) return ''
-      const raw = map.get(name)
-      if (raw === undefined) return ''
-      const single = /^var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)$/.exec(raw)
-      if (single) {
-        const inner = dshResolveToken(map, single[1], depth + 1)
-        if (inner !== '') return inner
-        return single[2] === undefined ? '' : single[2].trim()
-      }
-      if (!raw.includes('var(')) return raw
-      let failed = false
-      const expanded = raw.replace(/var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)/g, (whole, reference, fallback) => {
-        const inner = dshResolveToken(map, reference, depth + 1)
-        if (inner !== '') return inner
-        if (fallback !== undefined) return fallback.trim()
-        failed = true
-        return ''
-      })
-      return failed ? '' : expanded
-    }
-
-    function dshSheetPalette(mode) {
-      const palettes = dshSheetPalettes()
-      const map = mode === 'dark' ? palettes.dark : palettes.light
-      if (map.size === 0) return null
-      const read = (name) => dshResolveToken(map, name)
-      const fg = read(DSH_ALIAS_PROBES.fg)
-      const bg = read(DSH_ALIAS_PROBES.bg)
-      if (fg === '' || bg === '') return null
-      const fallback = READING_THEMES[mode]
-      return {
-        mode,
-        fg,
-        bg,
-        muted: read(DSH_ALIAS_PROBES.muted) || fallback.muted,
-        border: read(DSH_ALIAS_PROBES.border) || fallback.border,
-        accent: read(DSH_ALIAS_PROBES.accent) || fallback.accent,
-        codeBg: read(DSH_ALIAS_PROBES.codeBg) || fallback.codeBg,
-        scheme: mode,
-      }
-    }
-
     // Live tokens cover the active scheme exactly, including user theme
     // overrides and custom registered themes.
     function dshLivePalette() {
@@ -803,13 +734,7 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
-    function readingPalette(settings) {
-      const mode = settings && settings.theme
-      if (mode === 'light' || mode === 'dark') {
-        const exact = dshSheetPalette(mode)
-        if (exact !== null) return exact
-        return { ...READING_THEMES[mode], mode }
-      }
+    function readingPalette() {
       const live = dshLivePalette()
       if (live !== null) return live
       const dark = dshPrefersDark()
@@ -872,7 +797,11 @@ html.bb-paged body table tr{break-inside:avoid}
       await stateWrites.get(url)
       const response = await fetch(url, { cache: 'no-store' })
       const payload = await parseResponse(response)
-      return payload && payload.state && typeof payload.state === 'object' && !Array.isArray(payload.state) ? payload.state : {}
+      if (payload?.state === null) return {}
+      if (!payload?.state || typeof payload.state !== 'object' || Array.isArray(payload.state)) {
+        throw new Error('Invalid reading state response')
+      }
+      return payload.state
     }
 
     async function readDefaults(base) {
@@ -896,12 +825,17 @@ html.bb-paged body table tr{break-inside:avoid}
       const body = JSON.stringify(patch)
       const pending = (stateWrites.get(url) || Promise.resolve()).then(async () => {
         const response = await fetch(url, {
-          method: 'PUT',
+          method: patch.markEdits ? 'PATCH' : 'PUT',
           headers: { 'content-type': 'application/json' },
           body,
           keepalive,
         })
-        await parseResponse(response)
+        const saved = (await parseResponse(response))?.state
+        if (!saved || typeof saved !== 'object' || Array.isArray(saved) ||
+            patch.markEdits?.some(edit => !Array.isArray(saved[edit.collection]))) {
+          throw new Error('Invalid reading state response')
+        }
+        return saved
       })
       // A failed request is reported by its caller, but must not block later saves.
       const settled = pending.catch(() => undefined)
@@ -987,7 +921,7 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     function bookStatus(book) {
-      return STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
+      return STATUS_CATEGORIES.includes(book.status) ? book.status : book.progress ? 'reading' : 'unread'
     }
 
     function bookCoverUrl(book, base) {
@@ -996,14 +930,15 @@ html.bb-paged body table tr{break-inside:avoid}
         : ''
     }
 
-    function bookSubParts(book, t) {
-      const percent = bookPercent(book)
+    function shelfTitle(book, t) {
+      return book.title?.trim() || book.name?.trim() || t('untitled')
+    }
+
+    function shelfSubtitle(book, t) {
       const status = bookStatus(book)
-      const author = book.author || t('unknownAuthor')
-      if (status === 'finished') return [t('finishedPercent', { percent: 100 }), author]
-      if (book.statusManual) return [t(STATUS_LABEL_KEYS[status]), author]
-      if (percent > 0) return [`${t('continueReading')} ${Math.round(percent * 100)}%`, author]
-      return [author, formatBytes(book.bytes), formatDate(book.addedAt)]
+      const label = t(STATUS_LABEL_KEYS[status])
+      const progress = status === 'reading' ? ` ${Math.round(bookPercent(book) * 100)}%` : ''
+      return `${label}${progress} · ${book.author?.trim() || t('unnamedAuthor')}`
     }
 
     function coverStyle(book) {
@@ -1541,11 +1476,21 @@ html.bb-paged body table tr{break-inside:avoid}
     // ----- [hooks:state] -----
     // Per-book reader state: initial load, optimistic save queue, exit flush.
 
+    function mergeReadingPatches(older, newer) {
+      const patch = { ...older, ...newer }
+      if (older?.markEdits && newer?.markEdits) patch.markEdits = [...older.markEdits, ...newer.markEdits]
+      return patch
+    }
+
     function useReaderState(base, book) {
       const [state, setState] = useState(null)
+      const [loadFailed, setLoadFailed] = useState(false)
+      const [loadAttempt, setLoadAttempt] = useState(0)
+      const [saveErrorKey, setSaveErrorKey] = useState('')
       const stateRef = useRef({})
       const loadedRef = useRef(false)
       const pendingRef = useRef(null)
+      const inFlightRef = useRef(null)
       const timerRef = useRef(0)
 
       useEffect(() => {
@@ -1554,8 +1499,10 @@ html.bb-paged body table tr{break-inside:avoid}
         pendingRef.current = null
         loadedRef.current = false
         setState(null)
-        readBookState(base, book.id)
-          .then((value) => {
+        setSaveErrorKey('')
+        setLoadFailed(false)
+        Promise.all([readBookState(base, book.id), loadClientLib(base, 'reading-marks')])
+          .then(([value]) => {
             if (cancelled) return
             stateRef.current = value
             loadedRef.current = true
@@ -1564,25 +1511,42 @@ html.bb-paged body table tr{break-inside:avoid}
           .catch((failure) => {
             if (cancelled) return
             console.error('bookshelf: could not load reading state', failure)
-            stateRef.current = {}
-            loadedRef.current = true
-            setState({})
+            setLoadFailed(true)
           })
         return () => {
           cancelled = true
         }
-      }, [base, book.id])
+      }, [base, book.id, loadAttempt])
 
       const flush = useCallback(
-        (keepalive = false) => {
+        function flushPending(keepalive = false) {
+          if (inFlightRef.current !== null) {
+            return inFlightRef.current.then((saved) => saved && flushPending(keepalive))
+          }
           const patch = pendingRef.current
+          if (patch === null || Object.keys(patch).length === 0) return Promise.resolve(true)
           pendingRef.current = null
-          if (patch === null || Object.keys(patch).length === 0) return Promise.resolve()
-          // Callers may await the write before leaving the reader, so the
-          // refreshed shelf already reflects the page the reader exited from.
-          return writeBookState(base, book.id, patch, keepalive).catch((failure) => {
-            console.error('bookshelf: could not save reading state', failure)
-          })
+          const request = writeBookState(base, book.id, patch, keepalive).then(
+            (saved) => {
+              if (patch.markEdits) {
+                const marks = { bookmarks: saved.bookmarks || [], annotations: saved.annotations || [] }
+                const reconciled = clientLib('reading-marks').applyMarkEdits(marks, pendingRef.current?.markEdits || [])
+                stateRef.current = { ...stateRef.current, ...reconciled }
+                setState(stateRef.current)
+              }
+              setSaveErrorKey('')
+              return true
+            },
+            (failure) => {
+              // Newer edits take precedence when retrying a failed write.
+              pendingRef.current = mergeReadingPatches(patch, pendingRef.current)
+              console.error('bookshelf: could not save reading state', failure)
+              setSaveErrorKey(failure.message === 'reading mark limit reached' ? 'readingMarkLimit' : 'readingSaveFailed')
+              return false
+            },
+          ).finally(() => { inFlightRef.current = null })
+          inFlightRef.current = request
+          return request
         },
         [base, book.id],
       )
@@ -1590,9 +1554,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const save = useCallback(
         (patch, immediate = false) => {
           if (!loadedRef.current) return
-          stateRef.current = { ...stateRef.current, ...patch }
+          stateRef.current = patch.markEdits
+            ? clientLib('reading-marks').applyMarkEdits(stateRef.current, patch.markEdits)
+            : { ...stateRef.current, ...patch }
           setState(stateRef.current)
-          pendingRef.current = { ...(pendingRef.current || {}), ...patch }
+          pendingRef.current = mergeReadingPatches(pendingRef.current, patch)
           if (timerRef.current !== 0) {
             clearTimeout(timerRef.current)
             timerRef.current = 0
@@ -1620,7 +1586,10 @@ html.bb-paged body table tr{break-inside:avoid}
         [flush],
       )
 
-      return { state, loaded: state !== null, stateRef, save, flush }
+      const editMark = useCallback((collection, id, value = null) => {
+        save({ markEdits: [{ collection, id, value, token: newBookmarkId() }] }, true)
+      }, [save])
+      return { state, editMark, loadFailed, retryLoad: () => setLoadAttempt(value => value + 1), loaded: state !== null, stateRef, save, flush, saveErrorKey }
     }
 
     // ----- [ui:reader] -----
@@ -2028,6 +1997,7 @@ html.bb-paged body table tr{break-inside:avoid}
           setMessage(error.name === 'NotAllowedError' ? 'fontAccessDenied' : error.name === 'NotSupportedError' || error.name === 'SecurityError' ? 'fontAccessUnavailable' : 'fontScanFailed')
         }).finally(() => { if (mounted.current) setBusy(false) })
       }
+      const scanStatus = message || (catalog?.complete ? 'fontScanComplete' : '')
       const fonts = catalog?.fonts || []
       const selected = settings.fontName || ''
       const listed = fonts.some(font => font.family === selected)
@@ -2038,7 +2008,8 @@ html.bb-paged body table tr{break-inside:avoid}
           options.map(option => h('option', { key: String(option.value), value: option.value }, option.label))))
       return h(React.Fragment, null,
         h('h3', { className: 'bs-settings-section' }, t('fontSection')),
-        row('fontFamily', selected ? `font:${selected}` : `preset:${settings.fontFamily || 'serif'}`, [
+        row('fontFamily', selected ? `font:${selected}` : `preset:${settings.fontFamily || 'publisher'}`, [
+          { value: 'preset:publisher', label: t('fontPublisher') },
           { value: 'preset:serif', label: t('fontDefaultSerif') },
           { value: 'preset:sans', label: t('fontDefaultSans') },
           { value: 'preset:mono', label: t('fontDefaultMono') },
@@ -2051,7 +2022,7 @@ html.bb-paged body table tr{break-inside:avoid}
         }),
         h('div', { className: 'bs-font-actions' },
           h('button', { type: 'button', className: 'bs-text-button', disabled: !module || busy, onClick: scan, 'aria-label': t('scanSystemFonts') }, busy ? t('fontScanning') : t('scanSystemFonts'))),
-        h('p', { className: 'bs-font-status', role: 'status' }, t(message || (catalog?.complete ? 'fontScanComplete' : 'fontCommonHint'))),
+        scanStatus ? h('p', { className: 'bs-font-status', role: 'status' }, t(scanStatus)) : null,
         selected && catalog?.complete && !listed ? h('p', { className: 'bs-font-status', role: 'status' }, t('fontMissingHint')) : null,
         h('div', { className: 'bs-settings-divider' }),
         h('h3', { className: 'bs-settings-section' }, t('typographySection')),
@@ -2178,15 +2149,6 @@ html.bb-paged body table tr{break-inside:avoid}
             onChange: (value) => onChange({ pageMargin: value }),
           }),
           h(ReadingSegmented, {
-            label: t('readingMode'),
-            value: settings.pageMode,
-            options: [
-              { value: 'scroll', label: t('modeScroll') },
-              { value: 'paged', label: t('modePaged') },
-            ],
-            onChange: (value) => onChange({ pageMode: value }),
-          }),
-          settings.pageMode === 'paged' ? h(ReadingSegmented, {
             label: t('pageSpread'),
             value: settings.pageSpread || 'auto',
             options: [
@@ -2194,16 +2156,6 @@ html.bb-paged body table tr{break-inside:avoid}
               { value: 'single', label: t('spreadSingle') },
             ],
             onChange: (value) => onChange({ pageSpread: value }),
-          }) : null,
-          h(ReadingSegmented, {
-            label: t('readingTheme'),
-            value: settings.theme,
-            options: [
-              { value: 'auto', label: t('themeAuto') },
-              { value: 'light', label: t('themeLight') },
-              { value: 'dark', label: t('themeDark') },
-            ],
-            onChange: (value) => onChange({ theme: value }),
           }),
       )
     }
@@ -2296,6 +2248,49 @@ html.bb-paged body table tr{break-inside:avoid}
       } catch {
         return ''
       }
+    }
+
+    // Column/page numbers change when a face swaps in. The chapter DOM and
+    // text offsets stay stable, including across a close and reopen.
+    function pageAnchorRect(doc, anchor) {
+      if (anchor?.element) return doc.body.contains(anchor.element) ? anchor.element.getClientRects()[0] : null
+      const node = anchor?.node
+      if (!node || !doc.body.contains(node)) return null
+      const range = doc.createRange()
+      if (node.nodeType === 3 && node.length) {
+        // At a column boundary, a collapsed caret can sit at the end of the
+        // preceding column. Measure the glyph the reader is about to read.
+        const start = Math.min(anchor.offset || 0, node.length - 1)
+        range.setStart(node, start)
+        range.setEnd(node, start + 1)
+      } else {
+        range.selectNodeContents(node)
+      }
+      return range.getClientRects()[0]
+    }
+
+    function encodePageLocator(anchor, body) {
+      let node = anchor?.node || anchor?.element
+      if (!body || !node || !body.contains(node) || node === body) return ''
+      const doc = body.ownerDocument
+      const rect = pageAnchorRect(doc, anchor)
+      if (!rect || rect.right <= 0 || rect.left >= doc.defaultView.innerWidth) return ''
+      const path = []
+      while (node !== body) {
+        const siblings = node.parentNode.childNodes
+        path.push(Array.prototype.indexOf.call(siblings, node))
+        node = node.parentNode
+      }
+      return path.reverse().join('.') + ':' + (anchor.offset || 0)
+    }
+
+    function decodePageLocator(locator, body) {
+      if (!locator) return null
+      const [path, offset] = locator.split(':')
+      let node = body
+      for (const index of path.split('.')) node = node?.childNodes[Number(index)]
+      if (node?.nodeType === 3 && Number(offset) <= node.length) return { node, offset: Number(offset) }
+      return node?.nodeType === 1 ? { element: node } : null
     }
 
     function rangePage(doc, win, range) {
@@ -3839,7 +3834,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // Reader shell: top bar, aside, read-aloud dock, selection menu and the
     // overlay chrome they open.
 
-    function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech }) {
+    function ReaderShell({ t, base, book, onBack, navigationToggle, controls, children, state, progress, speech, readerState }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
@@ -3916,7 +3911,7 @@ html.bb-paged body table tr{break-inside:avoid}
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [focusMode])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         const shell = shellRef.current, chrome = chromeRef.current
         if (!shell || !chrome) return undefined
         const measure = () => {
@@ -3940,6 +3935,17 @@ html.bb-paged body table tr{break-inside:avoid}
         if (typeof node.requestFullscreen === 'function') node.requestFullscreen().catch(() => undefined)
       }, [])
 
+      const leavingRef = useRef(false)
+      const back = async () => {
+        if (leavingRef.current) return
+        leavingRef.current = true
+        try {
+          await onBack(progress ? progress.percent : null)
+        } finally {
+          leavingRef.current = false
+        }
+      }
+
       return h(
         'section',
         {
@@ -3954,17 +3960,16 @@ html.bb-paged body table tr{break-inside:avoid}
           : h(
               'header',
               { className: 'bs-reader-bar', ref: chromeRef },
-              h(
-                'button',
-                {
+              h('div', { className: 'bs-reader-navigation' },
+                h('button', {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: () => onBack(progress ? progress.percent : null),
+                  onClick: back,
                   title: t('back'),
                   'aria-label': t('back'),
                   autoFocus: true,
-                },
-                h(ArrowLeftIcon),
+                }, h(ArrowLeftIcon, { size: 25 })),
+                navigationToggle,
               ),
               h(
                 'div',
@@ -3992,7 +3997,7 @@ html.bb-paged body table tr{break-inside:avoid}
                         title: t('readAloud'),
                         'aria-label': t('readAloud'),
                       },
-                      h(SpeechIcon),
+                      h(SpeechIcon, { size: 22 }),
                     )
                   : null,
                 h('span', { key: 'shell-div', className: 'bs-divider' }),
@@ -4005,7 +4010,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     title: t('immersive'),
                     'aria-label': t('immersive'),
                   },
-                  h(ImmersiveIcon),
+                  h(ImmersiveIcon, { size: 22 }),
                 ),
                 h(
                   'button',
@@ -4017,12 +4022,19 @@ html.bb-paged body table tr{break-inside:avoid}
                     title: isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                     'aria-label': isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                   },
-                  isFullscreen ? h(MinimizeIcon) : h(FullscreenIcon),
+                  isFullscreen ? h(MinimizeIcon, { size: 20 }) : h(FullscreenIcon, { size: 20 }),
                 ),
                 progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
               ),
             ),
-        children,
+        readerState.saveErrorKey
+          ? h('div', { className: 'bs-banner bs-banner-error', role: 'alert' },
+              h('span', null, t(readerState.saveErrorKey)),
+              h('button', { type: 'button', className: 'bs-button', onClick: () => { void readerState.flush() } }, t('retry')))
+          : null,
+        readerState.loadFailed
+          ? h(ReaderState, { error: true, message: t('readingLoadFailed'), onRetry: readerState.retryLoad, retryLabel: t('retry') })
+          : children,
         focusMode || !speech
           ? null
           : h(
@@ -4059,11 +4071,11 @@ html.bb-paged body table tr{break-inside:avoid}
                 {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: () => onBack(progress ? progress.percent : null),
+                  onClick: back,
                   title: t('back'),
                   'aria-label': t('back'),
                 },
-                h(ArrowLeftIcon),
+                h(ArrowLeftIcon, { size: 25 }),
               ),
               h(
                 'button',
@@ -4075,7 +4087,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   'aria-label': t('exitImmersive'),
                   autoFocus: true,
                 },
-                h(MinimizeIcon),
+                h(MinimizeIcon, { size: 20 }),
               ),
               h(
                 'button',
@@ -4087,7 +4099,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   title: isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                   'aria-label': isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                 },
-                isFullscreen ? h(MinimizeIcon) : h(FullscreenIcon),
+                isFullscreen ? h(MinimizeIcon, { size: 20 }) : h(FullscreenIcon, { size: 20 }),
               ),
               progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
             )
@@ -4131,11 +4143,21 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function paintFrame(documentNode, settings) {
       if (!documentNode || !documentNode.documentElement) return
-      const palette = readingPalette(settings)
+      const palette = readingPalette()
       const margins = PAGE_MARGINS[settings.pageMargin] || PAGE_MARGINS.standard
       const root = documentNode.documentElement
       const body = documentNode.body
       root.style.setProperty('--bb-font-family', readingFonts ? readingFonts.fontStack(settings) : READER_FONTS[settings.fontFamily] || READER_FONTS.serif)
+      if (settings.fontName || (settings.fontFamily && settings.fontFamily !== 'publisher')) {
+        root.style.setProperty('--bb-prose-font', root.style.getPropertyValue('--bb-font-family'))
+        root.classList.add('bb-custom-font')
+      } else {
+        root.style.removeProperty('--bb-prose-font')
+        root.classList.remove('bb-custom-font')
+      }
+      root.classList.toggle('bb-custom-weight', Boolean(settings.fontWeight))
+      root.classList.toggle('bb-custom-italic', settings.fontStyle === 'italic')
+      root.classList.toggle('bb-custom-leading', Boolean(settings.lineHeight && settings.lineHeight !== DEFAULT_READING_SETTINGS.lineHeight))
       root.style.setProperty('--bb-font-weight', settings.fontWeight ? String(settings.fontWeight) : 'normal')
       root.style.setProperty('--bb-font-style', settings.fontStyle === 'italic' ? 'italic' : 'normal')
       root.style.setProperty('--bb-font-size', `${Math.min(30, Math.max(12, Math.round(settings.fontSize || 19)))}px`)
@@ -4235,12 +4257,6 @@ html.bb-paged body table tr{break-inside:avoid}
       style.id = 'bb-paged-style'
       style.textContent = PAGED_CSS
       ;(documentNode.head || documentNode.documentElement).appendChild(style)
-    }
-
-    function clearPagedLayout(documentNode) {
-      if (documentNode && documentNode.documentElement) {
-        documentNode.documentElement.classList.remove('bb-paged')
-      }
     }
 
     // ===== [reader] =====
@@ -4412,12 +4428,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       const exitReader = useCallback(
-        (percent) => {
-          // Persist the page the reader left from before the shelf reloads, so
-          // the returned card already shows the exit progress.
-          readerState.flush(true)
-          onBack(typeof percent === 'number' ? percent : null)
-        },
+        (percent) => onBack(typeof percent === 'number' ? percent : null, readerState.flush),
         [onBack, readerState.flush],
       )
 
@@ -4584,7 +4595,7 @@ html.bb-paged body table tr{break-inside:avoid}
         savePdfProgress(currentPage)
       }, [currentPage, status, pdfDocument, savePdfProgress])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready') return undefined
         const node = scrollRef.current
         if (node === null) return undefined
@@ -4696,7 +4707,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const toggleBookmark = useCallback(() => {
         if (pdfDocument === null) return
         if (currentBookmark) {
-          readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== currentBookmark.id) }, true)
+          readerState.editMark('bookmarks', currentBookmark.id)
           return
         }
         const bookmarkPercent = Math.min(1, Math.max(0, currentPage / pdfDocument.numPages))
@@ -4708,10 +4719,9 @@ html.bb-paged body table tr{break-inside:avoid}
           percent: bookmarkPercent,
           createdAt: Date.now(),
         }
-        const nextBookmarks = [bookmark, ...bookmarks.filter((item) => !(item.format === 'pdf' && item.page === currentPage))].slice(0, 500)
-        readerState.save({ bookmarks: nextBookmarks }, true)
+        readerState.editMark('bookmarks', bookmark.id, bookmark)
         setBookmarksOpen(true)
-      }, [bookmarks, currentBookmark, currentPage, pdfDocument, readerState.save, t])
+      }, [currentBookmark, currentPage, pdfDocument, readerState.editMark, t])
 
       const jumpToPage = useCallback(
         (page) => {
@@ -4775,7 +4785,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: currentBookmark ? t('removeBookmark') : t('addBookmark'),
             'aria-label': currentBookmark ? t('removeBookmark') : t('addBookmark'),
           },
-          h(BookmarkIcon, { filled: Boolean(currentBookmark) }),
+          h(BookmarkIcon, { size: 21, filled: Boolean(currentBookmark) }),
         ),
       )
       controls.push(
@@ -4807,7 +4817,7 @@ html.bb-paged body table tr{break-inside:avoid}
               title: t('zoomOut'),
               'aria-label': t('zoomOut'),
             },
-            h(ZoomOutIcon),
+            h(ZoomOutIcon, { size: 23 }),
           ),
           h('span', { className: 'bs-control-label' }, `${Math.round(effectiveZoom * 100)}%`),
           h(
@@ -4820,7 +4830,7 @@ html.bb-paged body table tr{break-inside:avoid}
               title: t('zoomIn'),
               'aria-label': t('zoomIn'),
             },
-            h(ZoomInIcon),
+            h(ZoomInIcon, { size: 23 }),
           ),
           h(
             'button',
@@ -4860,7 +4870,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('previousPage'),
             'aria-keyshortcuts': 'ArrowLeft PageUp',
           },
-          h(ChevronLeftIcon),
+          h(ChevronLeftIcon, { size: 25 }),
         ),
       )
       controls.push(h('span', { key: 'page', className: 'bs-control-label', 'aria-live': 'polite', 'aria-atomic': 'true' }, pdfDocument ? t('pageOf', { current: currentPage, total: pdfDocument.numPages }) : ''))
@@ -4877,7 +4887,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('nextPage'),
             'aria-keyshortcuts': 'ArrowRight PageDown',
           },
-          h(ChevronRightIcon),
+          h(ChevronRightIcon, { size: 25 }),
         ),
       )
       controls.push(
@@ -4936,7 +4946,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 setBookmarksOpen(false)
                 jumpToPage(bookmark.page || 1)
               },
-              onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
+              onDelete: (bookmark) => readerState.editMark('bookmarks', bookmark.id),
             }),
           )
         : null
@@ -5010,6 +5020,7 @@ html.bb-paged body table tr{break-inside:avoid}
           base,
           book,
           onBack: exitReader,
+          readerState,
           controls,
           state: status === 'ready' && pdfDocument ? t('pdfPages', { total: pdfDocument.numPages }) : undefined,
           progress: status === 'ready' && pdfDocument ? { percent, onSeek: onSeekProgress } : undefined,
@@ -5039,17 +5050,6 @@ html.bb-paged body table tr{break-inside:avoid}
 
     // ----- [frame:epub] -----
     // Scroll-frame helper for the EPUB reader.
-
-    function frameScrollRatio(frame) {
-      const documentNode = frame && frame.contentDocument
-      const windowNode = frame && frame.contentWindow
-      if (!documentNode || !windowNode) return 0
-      const root = documentNode.scrollingElement || documentNode.documentElement
-      if (!root) return 0
-      const maximum = root.scrollHeight - windowNode.innerHeight
-      if (maximum <= 0) return 0
-      return Math.min(1, Math.max(0, root.scrollTop / maximum))
-    }
 
     // ----- [chrome:dialog] -----
     // "Discuss this page" handoff dialog.
@@ -5276,7 +5276,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const [directBusy, setDirectBusy] = useState(false)
       const discussionClickRef = useRef(false)
       const [chapter, setChapter] = useState(0)
-      const [anchor, setAnchor] = useState('')
       const [scrollRatio, setScrollRatio] = useState(0)
       const [settings, setSettings] = useState(() => ({ ...DEFAULT_READING_SETTINGS, ...(defaultSettings || {}) }))
       const [settingsOpen, setSettingsOpen] = useState(false)
@@ -5284,6 +5283,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [asideTab, setAsideTab] = useState('toc')
       const [attempt, setAttempt] = useState(0)
       const [pageIndex, setPageIndex] = useState(0)
+      const [activeSection, setActiveSection] = useState(null)
       const [pageCount, setPageCount] = useState(1)
       const [pageColumns, setPageColumns] = useState(1)
       const [bookPageCounts, setBookPageCounts] = useState(null)
@@ -5301,12 +5301,14 @@ html.bb-paged body table tr{break-inside:avoid}
       const probeTokenRef = useRef(0)
       const imageCacheRef = useRef(new Map())
       const scrollRatioRef = useRef(0)
-      const pendingScrollRef = useRef(0)
+      const positionRatioRef = useRef(0)
+      const pendingRatioRef = useRef(0)
+      const pendingLocatorRef = useRef('')
       const anchorRef = useRef('')
+      const targetAnnotationRef = useRef(null)
       const chapterRef = useRef(0)
       const restoringRef = useRef(false)
-      const scrollBindingRef = useRef(null)
-      const frameTokenRef = useRef(0)
+      const frameCleanupRef = useRef(null)
       const layoutGenerationRef = useRef(0)
       const speechRangeRef = useRef(null)
       // Annotation ranges are cached per chapter document: the stored anchors
@@ -5320,7 +5322,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const laidOutPagesRef = useRef(1)
       const pageColumnsRef = useRef(1)
       const pageAnchorRef = useRef(null)
-      const previousModeRef = useRef(settings.pageMode)
       const turnPageRef = useRef(() => {})
       const themeTick = useThemeTick()
       const settingsRef = useRef(settings)
@@ -5328,7 +5329,7 @@ html.bb-paged body table tr{break-inside:avoid}
       // must not replace the reader settings object identity, or the paged
       // layout effect would reflow the chapter on every input event.
       const annotationStyleRef = useRef(annotationStyle)
-      const palette = useMemo(() => readingPalette(settings), [settings, themeTick])
+      const palette = useMemo(() => readingPalette(), [themeTick])
 
       // ----- [frame:highlights] -----
       // Read-aloud paints the spoken sentence as a true colour inversion and
@@ -5389,7 +5390,7 @@ html.bb-paged body table tr{break-inside:avoid}
           return null
         }
         const plan = highlights.buildHighlightPlan({
-          palette: readingPalette(settingsRef.current),
+          palette: readingPalette(),
           readAloud: spoken,
           annotations: resolved,
           chapterIndex: chapter,
@@ -5456,11 +5457,21 @@ html.bb-paged body table tr{break-inside:avoid}
         }))
       }, [data, t])
 
+      const sectionsByChapter = useMemo(() => {
+        const grouped = new Map()
+        for (const entry of toc) {
+          if (!grouped.has(entry.chapterIndex)) grouped.set(entry.chapterIndex, [])
+          grouped.get(entry.chapterIndex).push(entry)
+        }
+        return grouped
+      }, [toc])
+
       const saveEpubProgress = useCallback(
-        (index, ratio, immediate = false) => {
+        (index, ratio, immediate = false, position = ratio) => {
           if (data === null || !readerState.loaded) return
           const safeRatio = Math.min(1, Math.max(0, Number.isFinite(ratio) ? ratio : 0))
-          const progressKey = `${index}:${safeRatio.toFixed(5)}:${anchorRef.current || ''}`
+          const locator = encodePageLocator(pageAnchorRef.current, frameRef.current?.contentDocument?.body)
+          const progressKey = `${locator}:${index}:${safeRatio.toFixed(5)}:${position.toFixed(5)}:${anchorRef.current || ''}`
           if (!immediate && lastSavedProgressRef.current === progressKey) return
           lastSavedProgressRef.current = progressKey
           const percent = metrics.percentFor(index, safeRatio)
@@ -5470,7 +5481,8 @@ html.bb-paged body table tr{break-inside:avoid}
                 format: 'epub',
                 chapterIndex: index,
                 chapterPath: data.chapters[index] ? data.chapters[index].path : '',
-                scrollRatio: safeRatio,
+                scrollRatio: position,
+                ...(locator ? { pageLocator: locator, locatorRevision: data.sourceRevision } : {}),
                 percent,
                 anchor: anchorRef.current || '',
                 updatedAt: Date.now(),
@@ -5483,10 +5495,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       const exitReader = useCallback(
-        (percent) => {
-          readerState.flush(true)
-          onBack(typeof percent === 'number' ? percent : null)
-        },
+        (percent) => onBack(typeof percent === 'number' ? percent : null, readerState.flush),
         [onBack, readerState.flush],
       )
 
@@ -5507,29 +5516,43 @@ html.bb-paged body table tr{break-inside:avoid}
         if (!documentNode || !documentNode.body || !windowNode) return
         const info = pagedMetrics(documentNode, windowNode)
         if (info === null) return
-        const x = info.padLeft + 3
-        const y = info.padTop + 3
-        let range = null
-        try {
-          if (typeof documentNode.caretRangeFromPoint === 'function') {
-            range = documentNode.caretRangeFromPoint(x, y)
-          } else if (typeof documentNode.caretPositionFromPoint === 'function') {
-            const position = documentNode.caretPositionFromPoint(x, y)
-            if (position && position.offsetNode) {
-              range = documentNode.createRange()
-              range.setStart(position.offsetNode, position.offset)
-              range.collapse(true)
+        function visibleTextAt(x, y) {
+          let node, offset
+          if (documentNode.caretRangeFromPoint) {
+            const caret = documentNode.caretRangeFromPoint(x, y)
+            node = caret?.startContainer
+            offset = caret?.startOffset
+          } else {
+            const caret = documentNode.caretPositionFromPoint?.(x, y)
+            node = caret?.offsetNode
+            offset = caret?.offset
+          }
+          if (node?.nodeType !== 3 || !node.length) return null
+          const anchor = { node, offset: Math.min(offset, node.length - 1) }
+          const rect = pageAnchorRect(documentNode, anchor)
+          return rect && rect.width > 0 && rect.height > 0 &&
+            rect.left >= -1 && rect.right <= windowNode.innerWidth + 1 &&
+            rect.top >= -1 && rect.bottom <= windowNode.innerHeight + 1 ? anchor : null
+        }
+        let anchor = visibleTextAt(info.padLeft + 3, info.padTop + 3)
+        // At a column break, hit-testing the margin can return a caret on the
+        // preceding page. Use the first visible line of the current fragment.
+        if (!anchor) {
+          const walker = documentNode.createTreeWalker(documentNode.body, NodeFilter.SHOW_TEXT)
+          const range = documentNode.createRange()
+          while (!anchor && walker.nextNode()) {
+            range.selectNodeContents(walker.currentNode)
+            for (const line of range.getClientRects()) {
+              if (line.width < 1 || line.left < 0 || line.left >= windowNode.innerWidth ||
+                  line.top < 0 || line.bottom > windowNode.innerHeight + 1) continue
+              anchor = visibleTextAt(line.left + Math.min(1, line.width / 2), line.top + line.height / 2)
+              if (anchor) break
             }
           }
-        } catch {
-          range = null
         }
-        if (range && range.startContainer) {
-          const rect = range.getBoundingClientRect()
-          if (rect.width > 0 || rect.height > 0) {
-            pageAnchorRef.current = { node: range.startContainer, offset: range.startOffset }
-            return
-          }
+        if (anchor) {
+          pageAnchorRef.current = anchor
+          return
         }
         const nodes = documentNode.body.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li,blockquote,pre,figure,img,table')
         for (const node of nodes) {
@@ -5547,22 +5570,8 @@ html.bb-paged body table tr{break-inside:avoid}
         const body = documentNode.body
         const previous = body.scrollLeft
         body.scrollLeft = 0
-        let rect = null
-        try {
-          if (anchorValue.node && (anchorValue.node.isConnected || documentNode.contains(anchorValue.node))) {
-            const node = anchorValue.node
-            const limit = node.nodeType === 3 ? node.length : node.childNodes ? node.childNodes.length : 0
-            const range = documentNode.createRange()
-            range.setStart(node, Math.min(Math.max(0, anchorValue.offset || 0), limit))
-            range.collapse(true)
-            rect = range.getBoundingClientRect()
-          } else if (anchorValue.element && (anchorValue.element.isConnected || documentNode.contains(anchorValue.element))) {
-            rect = anchorValue.element.getBoundingClientRect()
-          }
-        } catch {
-          rect = null
-        }
-        if (rect === null || (rect.width === 0 && rect.height === 0)) {
+        const rect = pageAnchorRect(documentNode, anchorValue)
+        if (!rect || (rect.width === 0 && rect.height === 0)) {
           body.scrollLeft = previous
           pageAnchorRef.current = null
           return null
@@ -5591,7 +5600,17 @@ html.bb-paged body table tr{break-inside:avoid}
           let page = pageIndexRef.current
           let resolvedAnchor = null
           const targetAnchor = typeof options.targetAnchor === 'string' ? options.targetAnchor : ''
-          if (targetAnchor !== '') {
+          const annotation = options.annotation
+          const match = annotation && resolveAnnotationRanges(documentNode, [annotation], chapterRef.current)[0]
+          const savedAnchor = decodePageLocator(options.locator, body)
+          if (savedAnchor) {
+            pageAnchorRef.current = savedAnchor
+            resolvedAnchor = savedAnchor
+            page = pageForAnchor(documentNode, windowNode, info) ?? Math.round((options.targetRatio || 0) * (info.pages - 1))
+          } else if (match) {
+            page = rangePage(documentNode, windowNode, match.range) ?? 0
+            resolvedAnchor = { node: match.range.startContainer, offset: match.range.startOffset }
+          } else if (targetAnchor !== '') {
             const target = documentNode.getElementById(decodeAnchor(targetAnchor))
             if (target !== null) {
               body.scrollLeft = 0
@@ -5609,7 +5628,7 @@ html.bb-paged body table tr{break-inside:avoid}
             // move the reader: a stale anchor from an earlier spread used to snap
             // the page back to the start.
             const spreadAt = (value) => Math.floor(value / info.columns)
-            if (laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
+            if (!options.fontReflow && laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
               page = pageIndexRef.current
             }
           } else if (Number.isFinite(options.targetRatio)) {
@@ -5620,6 +5639,19 @@ html.bb-paged body table tr{break-inside:avoid}
           page = Math.floor(Math.max(0, Math.min(info.pages - 1, page)) / info.columns) * info.columns
           if (info.columns === 2 && info.pages % 2 === 1) body.setAttribute('data-bb-pad-spread', '')
           body.scrollLeft = page * info.step
+          let currentSection = null
+          for (const entry of sectionsByChapter.get(chapterRef.current) || []) {
+            if (!entry.anchor) {
+              currentSection ??= entry
+              continue
+            }
+            const target = documentNode.getElementById(decodeAnchor(entry.anchor))
+            const rect = target?.getClientRects()[0]
+            if (!rect || rect.left >= body.clientWidth) continue
+            currentSection = entry
+            if (entry.anchor === targetAnchor && rect.right >= 0) break
+          }
+          setActiveSection(currentSection)
           setPageIndex(page)
           pageIndexRef.current = page
           setPageCount(info.pages)
@@ -5627,7 +5659,9 @@ html.bb-paged body table tr{break-inside:avoid}
           laidOutPagesRef.current = info.pages
           setPageColumns(info.columns)
           pageColumnsRef.current = info.columns
-          const ratio = info.pages <= 1 ? 0 : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
+          const ratio = info.pages <= 1 ? (chapterRef.current === data?.chapters.length - 1 ? 1 : 0) : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
+          // A one-page chapter starts at zero even when its last page counts as read.
+          positionRatioRef.current = info.pages > 1 ? ratio : 0
           scrollRatioRef.current = ratio
           setScrollRatio(ratio)
           // Keep the same reading anchor throughout successive reflows. Taking
@@ -5642,14 +5676,14 @@ html.bb-paged body table tr{break-inside:avoid}
             if (generation === layoutGenerationRef.current) capturePagedAnchor()
           }
           if (options.save && generation === layoutGenerationRef.current) {
-            saveEpubProgress(chapterRef.current, ratio)
+            saveEpubProgress(chapterRef.current, ratio, false, positionRatioRef.current)
           }
           // A reflow keeps the Range objects valid, but the overlay fallback
           // band is viewport-fixed and a repaint keeps both layers in step with
           // the new column geometry.
           if (generation === layoutGenerationRef.current) repaintHighlights(documentNode)
         },
-        [capturePagedAnchor, pageForAnchor, repaintHighlights, saveEpubProgress],
+        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress, sectionsByChapter],
       )
 
       useEffect(() => {
@@ -5661,12 +5695,13 @@ html.bb-paged body table tr{break-inside:avoid}
         let cancelled = false
         setStatus('loading')
         setError('')
+        let releaseFonts
+        pendingLocatorRef.current = ''
         setData(null)
         setEpubModule(null)
         setSnapshotModule(null)
         setSnapshotLoadError('')
         setChapter(0)
-        setAnchor('')
         setScrollRatio(0)
         setAsideTab('toc')
         setPageIndex(0)
@@ -5675,12 +5710,12 @@ html.bb-paged body table tr{break-inside:avoid}
         pageCountRef.current = 1
         pageAnchorRef.current = null
         scrollRatioRef.current = 0
-        pendingScrollRef.current = 0
+        pendingRatioRef.current = 0
         anchorRef.current = ''
+        targetAnnotationRef.current = null
         chapterRef.current = 0
         restoringRef.current = false
         imageCacheRef.current.clear()
-        frameTokenRef.current += 1
         ;(async () => {
           try {
             const [module, snapshotSupport] = await Promise.all([
@@ -5698,6 +5733,7 @@ html.bb-paged body table tr{break-inside:avoid}
             const bytes = new Uint8Array(await response.arrayBuffer())
             if (cancelled) return
             const parsed = module.parseEpub(bytes)
+            releaseFonts = () => module.releasePublicationFonts(parsed)
             parsed.sourceRevision = response.headers.get('X-Bookshelf-Source-Revision') || ''
             if (cancelled) return
             setSnapshotModule(snapshotSupport)
@@ -5718,7 +5754,6 @@ html.bb-paged body table tr{break-inside:avoid}
             if (typeof stored.pageMargin !== 'string' && typeof stored.readingWidth === 'string') {
               nextSettings.pageMargin = stored.readingWidth === 'wide' ? 'compact' : 'standard'
             }
-            if (nextSettings.theme === 'sepia') nextSettings.theme = 'auto'
             // The annotations module is preloaded by now, so the stored style is
             // normalised against DEFAULT_ANNOTATION_STYLE instead of trusting a
             // hand-edited state.json.
@@ -5727,8 +5762,6 @@ html.bb-paged body table tr{break-inside:avoid}
             annotationStyleRef.current = loadedAnnotationStyle
             setAnnotationStyle(loadedAnnotationStyle)
             settingsRef.current = nextSettings
-            // Loading stored settings is initialization, not a user mode switch.
-            previousModeRef.current = nextSettings.pageMode
             setSettings(nextSettings)
             const saved = readerState.stateRef.current && readerState.stateRef.current.progress
             const savedValid =
@@ -5742,6 +5775,9 @@ html.bb-paged body table tr{break-inside:avoid}
             let startScroll = 0
             if (savedValid) {
               startChapter = saved.chapterIndex
+              if (saved.chapterPath === parsed.chapters[startChapter].path && saved.locatorRevision === parsed.sourceRevision) {
+                pendingLocatorRef.current = saved.pageLocator || ''
+              }
               startAnchor = typeof saved.anchor === 'string' ? saved.anchor : ''
               startScroll = Math.min(1, Math.max(0, Number(saved.scrollRatio) || 0))
             } else if (!chapterHasVisibleContent(parsed.chapters[0] && parsed.chapters[0].html)) {
@@ -5756,11 +5792,10 @@ html.bb-paged body table tr{break-inside:avoid}
             }
             chapterRef.current = startChapter
             anchorRef.current = startAnchor
-            pendingScrollRef.current = startScroll
+            pendingRatioRef.current = startScroll
             scrollRatioRef.current = startScroll
             restoringRef.current = Boolean(savedValid) || startAnchor !== '' || startScroll > 0
             setChapter(startChapter)
-            setAnchor(startAnchor)
             setScrollRatio(startScroll)
             setEpubModule(module)
             setData(parsed)
@@ -5774,14 +5809,15 @@ html.bb-paged body table tr{break-inside:avoid}
         })()
         return () => {
           cancelled = true
+          releaseFonts?.()
         }
       }, [readerState.loaded, base, book.id, attempt, t])
 
-      useEffect(
+      useLayoutEffect(
         () => () => {
-          if (scrollBindingRef.current) {
-            scrollBindingRef.current()
-            scrollBindingRef.current = null
+          if (frameCleanupRef.current) {
+            frameCleanupRef.current()
+            frameCleanupRef.current = null
           }
           // Leaving the chapter (or the reader) must not leave the previous
           // document's highlight layers registered on its window.
@@ -5815,72 +5851,25 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [data, epubModule, chapter, resourceIndex, t])
 
       const goTo = useCallback(
-        (index, targetAnchor, targetRatio) => {
+        (index, targetAnchor, targetRatio, annotation = null) => {
           if (data === null) return
           const safeIndex = Math.min(data.chapters.length - 1, Math.max(0, Number(index) || 0))
           const nextAnchor = typeof targetAnchor === 'string' ? targetAnchor : ''
           const nextRatio = Math.min(1, Math.max(0, Number.isFinite(targetRatio) ? targetRatio : 0))
           anchorRef.current = nextAnchor
-          if (settingsRef.current.pageMode === 'paged') {
-            if (safeIndex === chapterRef.current && frameRef.current !== null) {
-              layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, save: true })
-              setAnchor(nextAnchor)
-              return
-            }
-            chapterRef.current = safeIndex
-            pendingScrollRef.current = nextRatio
-            restoringRef.current = false
-            pageAnchorRef.current = null
-            setPageIndex(0)
-            pageIndexRef.current = 0
-            setPageCount(1)
-            pageCountRef.current = 1
-            setAnchor(nextAnchor)
-            setChapter(safeIndex)
-            setScrollRatio(nextRatio)
-            scrollRatioRef.current = nextRatio
-            saveEpubProgress(safeIndex, nextRatio)
+          if (safeIndex === chapterRef.current && frameRef.current !== null) {
+            layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, annotation, save: true })
             return
           }
-          if (safeIndex === chapterRef.current) {
-            const frame = frameRef.current
-            const documentNode = frame && frame.contentDocument
-            const windowNode = frame && frame.contentWindow
-            if (documentNode && windowNode) {
-              restoringRef.current = true
-              if (nextAnchor !== '') {
-                const target = documentNode.getElementById(decodeAnchor(nextAnchor))
-                if (target) {
-                  try {
-                    target.scrollIntoView({ block: 'start' })
-                  } catch {
-                    // Detached by a later chapter change.
-                  }
-                }
-              } else {
-                const root = documentNode.scrollingElement || documentNode.documentElement
-                if (root) {
-                  const maximum = Math.max(0, root.scrollHeight - windowNode.innerHeight)
-                  windowNode.scrollTo(0, maximum * nextRatio)
-                }
-              }
-              setAnchor(nextAnchor)
-              setScrollRatio(nextRatio)
-              scrollRatioRef.current = nextRatio
-              requestAnimationFrame(() => {
-                const actual = frameScrollRatio(frame)
-                restoringRef.current = false
-                scrollRatioRef.current = actual
-                setScrollRatio(actual)
-                saveEpubProgress(safeIndex, actual)
-              })
-              return
-            }
-          }
+          targetAnnotationRef.current = annotation
           chapterRef.current = safeIndex
-          pendingScrollRef.current = nextRatio
-          restoringRef.current = true
-          setAnchor(nextAnchor)
+          pendingRatioRef.current = nextRatio
+          restoringRef.current = false
+          pageAnchorRef.current = null
+          setPageIndex(0)
+          pageIndexRef.current = 0
+          setPageCount(1)
+          pageCountRef.current = 1
           setChapter(safeIndex)
           setScrollRatio(nextRatio)
           scrollRatioRef.current = nextRatio
@@ -5891,7 +5880,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       const turnPage = useCallback(
         (direction) => {
-          if (settingsRef.current.pageMode !== 'paged' || data === null) return
+          if (data === null) return
           const frame = frameRef.current
           if (frame === null) return
           const page = pageIndexRef.current
@@ -5999,19 +5988,8 @@ html.bb-paged body table tr{break-inside:avoid}
             const hrefValue = link.getAttribute('href') || ''
             if (hrefValue.startsWith('#')) {
               event.preventDefault()
-              let id = hrefValue.slice(1)
-              try { id = decodeURIComponent(id) } catch { /* keep the literal id */ }
-              if (id === '') return
-              anchorRef.current = id
-              const currentFrame = frameRef.current
-              if (settingsRef.current.pageMode === 'paged' && currentFrame !== null) {
-                layoutPagedFrame(currentFrame, { targetAnchor: id, save: true })
-              } else {
-                const target = documentNode.getElementById(id)
-                if (target) {
-                  try { target.scrollIntoView({ block: 'start' }) } catch { /* detached */ }
-                }
-              }
+              const id = hrefValue.slice(1)
+              if (id) goTo(chapterRef.current, id, 0)
               return
             }
             if (link.getAttribute('data-bb-external') === 'true') {
@@ -6052,7 +6030,7 @@ html.bb-paged body table tr{break-inside:avoid}
           })
         }
         documentNode.addEventListener('keydown', (event) => {
-          if (settingsRef.current.pageMode !== 'paged' || event.defaultPrevented) return
+          if (event.defaultPrevented || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
           if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
             event.preventDefault()
             turnPageRef.current(-1)
@@ -6061,157 +6039,66 @@ html.bb-paged body table tr{break-inside:avoid}
             turnPageRef.current(1)
           }
         })
-        if (scrollBindingRef.current) {
-          scrollBindingRef.current()
-          scrollBindingRef.current = null
+        if (frameCleanupRef.current) {
+          frameCleanupRef.current()
+          frameCleanupRef.current = null
         }
-        const token = frameTokenRef.current
         const boundChapter = chapterRef.current
-        let lastRatio = scrollRatioRef.current
-        let frameRequest = 0
-        let saveTimer = 0
-        let glassTimer = 0
-        const onScroll = () => {
-          setSelectionMenu((current) => (current === null ? current : null))
-          if (restoringRef.current || settingsRef.current.pageMode === 'paged') return
-          anchorRef.current = ''
-          // The glass bands are viewport-fixed, so a manual scroll leaves them
-          // behind; follow the sentence once the scroll settles.
-          if (glassTimer !== 0) clearTimeout(glassTimer)
-          glassTimer = setTimeout(() => {
-            glassTimer = 0
-            const range = speechRangeRef.current
-            // Only the overlay fallback needs the fixed-position band; with the
-            // CSS Custom Highlight API the inversion follows the text natively.
-            if (highlightFallbackRef.current && range !== null && documentNode.contains(range.startContainer)) {
-              paintSpeechGlass(documentNode, range)
+        restoringRef.current = false
+        layoutPagedFrame(frame, {
+          locator: pendingLocatorRef.current,
+          annotation: targetAnnotationRef.current,
+          targetAnchor: anchorRef.current,
+          targetRatio: pendingRatioRef.current,
+          save: true,
+        })
+        pendingLocatorRef.current = ''
+        targetAnnotationRef.current = null
+        let disposed = false
+        const refresh = (fontReflow = false) => {
+          if (!disposed && frame.contentDocument === documentNode) {
+            layoutPagedFrame(frame, { restoreAnchor: true, fontReflow: fontReflow === true, save: true })
+            if (highlightFallbackRef.current) {
+              const range = speechRangeRef.current
+              if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
             }
-          }, 140)
-          if (frameRequest !== 0) return
-          frameRequest = requestAnimationFrame(() => {
-            frameRequest = 0
-            const ratio = frameScrollRatio(frame)
-            lastRatio = ratio
-            scrollRatioRef.current = ratio
-            setScrollRatio((value) => (Math.abs(value - ratio) < 0.002 ? value : ratio))
-            if (saveTimer !== 0) clearTimeout(saveTimer)
-            saveTimer = setTimeout(() => {
-              saveTimer = 0
-              saveEpubProgress(chapterRef.current, scrollRatioRef.current)
-            }, 650)
-          })
-        }
-        windowNode.addEventListener('scroll', onScroll, { passive: true })
-        scrollBindingRef.current = () => {
-          windowNode.removeEventListener('scroll', onScroll)
-          if (frameRequest !== 0) cancelAnimationFrame(frameRequest)
-          if (saveTimer !== 0) clearTimeout(saveTimer)
-          if (glassTimer !== 0) clearTimeout(glassTimer)
-          if (!restoringRef.current && chapterRef.current === boundChapter) {
-            saveEpubProgress(
-              boundChapter,
-              settingsRef.current.pageMode === 'paged' ? scrollRatioRef.current : lastRatio,
-              true,
-            )
           }
         }
-        if (settingsRef.current.pageMode === 'paged') {
-          restoringRef.current = false
-          layoutPagedFrame(frame, {
-            targetAnchor: anchorRef.current,
-            targetRatio: pendingScrollRef.current,
-            save: true,
-          })
-          const refresh = () => {
-            if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
+        const fontsSettled = () => refresh(true)
+        documentNode.fonts?.addEventListener('loadingdone', fontsSettled)
+        documentNode.fonts?.ready.then(() => refresh()).catch(() => undefined)
+        for (const image of documentNode.querySelectorAll('img')) {
+          if (!image.complete) image.addEventListener('load', refresh, { once: true })
+        }
+        const settleTimer = setTimeout(refresh, 280)
+        let pagedResizeTimer = 0
+        let pagedObserver = null
+        const schedulePagedResize = () => {
+          if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
+          pagedResizeTimer = setTimeout(() => {
+            pagedResizeTimer = 0
+            if (frame.contentDocument === documentNode) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-              if (highlightFallbackRef.current) {
-                const range = speechRangeRef.current
-                if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
-              }
             }
-          }
-          if (documentNode.fonts && documentNode.fonts.ready) {
-            documentNode.fonts.ready.then(refresh).catch(() => undefined)
-          }
-          for (const image of documentNode.querySelectorAll('img')) {
-            if (!image.complete) image.addEventListener('load', refresh, { once: true })
-          }
-          const settleTimer = setTimeout(refresh, 280)
-          let pagedResizeTimer = 0
-          let pagedObserver = null
-          const schedulePagedResize = () => {
-            if (settingsRef.current.pageMode !== 'paged') return
-            if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
-            pagedResizeTimer = setTimeout(() => {
-              pagedResizeTimer = 0
-              if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
-                layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-              }
-            }, 150)
-          }
-          if (typeof ResizeObserver !== 'undefined') {
-            pagedObserver = new ResizeObserver(schedulePagedResize)
-            pagedObserver.observe(documentNode.documentElement)
-          }
-          windowNode.addEventListener('resize', schedulePagedResize)
-          const previousBinding = scrollBindingRef.current
-          scrollBindingRef.current = () => {
-            previousBinding()
-            clearTimeout(settleTimer)
-            if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
-            if (pagedObserver !== null) pagedObserver.disconnect()
-            windowNode.removeEventListener('resize', schedulePagedResize)
-          }
-          return
+          }, 150)
         }
-        const targetAnchor = anchorRef.current
-        const targetRatio = pendingScrollRef.current
-        const apply = () => {
-          if (frameTokenRef.current !== token) return
-          const currentDocument = frame.contentDocument
-          const currentWindow = frame.contentWindow
-          if (!currentDocument || !currentWindow) return
-          if (targetAnchor !== '') {
-            const target = currentDocument.getElementById(decodeAnchor(targetAnchor))
-            if (target) {
-              try {
-                target.scrollIntoView({ block: 'start' })
-              } catch {
-                // The document changed again.
-              }
-            }
-          } else {
-            const root = currentDocument.scrollingElement || currentDocument.documentElement
-            if (root) {
-              const maximum = Math.max(0, root.scrollHeight - currentWindow.innerHeight)
-              currentWindow.scrollTo(0, maximum * targetRatio)
-            }
-          }
+        if (typeof ResizeObserver !== 'undefined') {
+          pagedObserver = new ResizeObserver(schedulePagedResize)
+          pagedObserver.observe(documentNode.documentElement)
         }
-        restoringRef.current = targetAnchor !== '' || targetRatio > 0
-        apply()
-        const retry = setTimeout(apply, 140)
-        const settle = setTimeout(() => {
-          if (frameTokenRef.current !== token) return
-          restoringRef.current = false
-          const ratio = frameScrollRatio(frame)
-          lastRatio = ratio
-          scrollRatioRef.current = ratio
-          setScrollRatio(ratio)
-          saveEpubProgress(chapterRef.current, ratio)
-        }, 380)
-        const previousBinding = scrollBindingRef.current
-        scrollBindingRef.current = () => {
-          previousBinding()
-          clearTimeout(retry)
-          clearTimeout(settle)
+        windowNode.addEventListener('resize', schedulePagedResize)
+        frameCleanupRef.current = () => {
+          disposed = true
+          documentNode.fonts?.removeEventListener('loadingdone', fontsSettled)
+          if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true, positionRatioRef.current)
+          clearTimeout(settleTimer)
+          if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
+          if (pagedObserver !== null) pagedObserver.disconnect()
+          windowNode.removeEventListener('resize', schedulePagedResize)
         }
       }, [clearDisplayedHighlights, goTo, layoutPagedFrame, repaintHighlights, saveEpubProgress])
 
       useEffect(() => {
-        const previousMode = previousModeRef.current
-        previousModeRef.current = settings.pageMode
         const frame = frameRef.current
         const documentNode = frame && frame.contentDocument
         if (!documentNode) return
@@ -6219,40 +6106,13 @@ html.bb-paged body table tr{break-inside:avoid}
         // A font, size or theme change moves the glyphs; the plan depends on the
         // palette, so both highlight layers are rebuilt here.
         repaintHighlights(documentNode)
-        if (settings.pageMode === 'paged') {
-          if (previousMode === 'paged') {
-            layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-          } else {
-            pageAnchorRef.current = null
-            layoutPagedFrame(frame, { targetRatio: scrollRatioRef.current, save: true })
-          }
-          let cancelled = false
-          if (documentNode.fonts?.ready) documentNode.fonts.ready.then(() => {
-            if (!cancelled && frame.contentDocument === documentNode && settingsRef.current.pageMode === 'paged') layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-          }).catch(() => undefined)
-          return () => { cancelled = true }
-        }
-        if (previousMode === 'paged') {
-          clearPagedLayout(documentNode)
-          if (documentNode.body) documentNode.body.scrollLeft = 0
-          const ratio = scrollRatioRef.current
-          const windowNode = frame.contentWindow
-          const root = documentNode.scrollingElement || documentNode.documentElement
-          if (windowNode && root) {
-            const maximum = Math.max(0, root.scrollHeight - windowNode.innerHeight)
-            windowNode.scrollTo(0, maximum * ratio)
-          }
-          pageAnchorRef.current = null
-          setPageIndex(0)
-          pageIndexRef.current = 0
-          setPageCount(1)
-          pageCountRef.current = 1
-          anchorRef.current = ''
-          scrollRatioRef.current = ratio
-          setScrollRatio(ratio)
-          saveEpubProgress(chapterRef.current, ratio)
-        }
-      }, [settings, themeTick, layoutPagedFrame, repaintHighlights, saveEpubProgress])
+        layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+        let cancelled = false
+        if (documentNode.fonts?.ready) documentNode.fonts.ready.then(() => {
+          if (!cancelled && frame.contentDocument === documentNode) layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+        }).catch(() => undefined)
+        return () => { cancelled = true }
+      }, [settings, themeTick, layoutPagedFrame, repaintHighlights])
 
       // Creating or deleting an annotation must repaint without a page turn.
       // The array identity only changes when the Host state actually stores a
@@ -6264,8 +6124,8 @@ html.bb-paged body table tr{break-inside:avoid}
         if (documentNode) repaintHighlights(documentNode)
       }, [annotationList, repaintHighlights])
 
-      useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+      useLayoutEffect(() => {
+        if (status !== 'ready') return undefined
         const node = frameWrapRef.current
         if (node === null || typeof ResizeObserver === 'undefined') return undefined
         let timer = 0
@@ -6274,7 +6134,7 @@ html.bb-paged body table tr{break-inside:avoid}
           timer = setTimeout(() => {
             timer = 0
             const frame = frameRef.current
-            if (frame !== null && settingsRef.current.pageMode === 'paged') {
+            if (frame !== null) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
             }
           }, 160)
@@ -6284,20 +6144,20 @@ html.bb-paged body table tr{break-inside:avoid}
           observer.disconnect()
           if (timer !== 0) clearTimeout(timer)
         }
-      }, [settings.pageMode, status, layoutPagedFrame])
+      }, [status, layoutPagedFrame])
 
       useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+        if (status !== 'ready') return undefined
         const timer = setTimeout(() => {
           const frame = frameRef.current
-          if (frame !== null && settingsRef.current.pageMode === 'paged') {
+          if (frame !== null) {
             layoutPagedFrame(frame, { restoreAnchor: true, save: true })
           }
         }, 180)
         return () => clearTimeout(timer)
-      }, [tocOpen, settings.pageMode, status, layoutPagedFrame])
+      }, [tocOpen, status, layoutPagedFrame])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready') return undefined
         const frame = frameRef.current
         if (frame === null) return undefined
@@ -6312,11 +6172,10 @@ html.bb-paged body table tr{break-inside:avoid}
         const observer = new ResizeObserver(measure)
         observer.observe(frame)
         return () => observer.disconnect()
-      }, [status, chapter, settings.pageMode])
+      }, [status, chapter])
 
       useEffect(() => {
         if (
-          settings.pageMode !== 'paged' ||
           status !== 'ready' ||
           data === null ||
           epubModule === null ||
@@ -6397,23 +6256,18 @@ html.bb-paged body table tr{break-inside:avoid}
       const percent = data === null ? 0 : metrics.percentFor(chapter, scrollRatio)
       const bookmarks = readerState.state && Array.isArray(readerState.state.bookmarks) ? readerState.state.bookmarks : []
       const annotations = readerState.state && Array.isArray(readerState.state.annotations) ? readerState.state.annotations : []
-      const currentRatio = scrollRatioRef.current
       const currentBookmark = bookmarks.find((bookmark) => {
         if (bookmark.format !== 'epub' || bookmark.chapterIndex !== chapter) return false
-        if (settings.pageMode !== 'paged') return Math.abs((Number(bookmark.scrollRatio) || 0) - currentRatio) < 0.02
         if (bookmark.anchor && bookmark.anchor === anchorRef.current) return true
         const target = Math.round(Math.min(1, Math.max(0, Number(bookmark.scrollRatio) || 0)) * (pageCount - 1))
         return Math.floor(target / pageColumns) * pageColumns === pageIndex
       })
-      const chapterTocLabel = (() => {
-        const entry = toc.find((item) => item.chapterIndex === chapter && !item.anchor) || toc.find((item) => item.chapterIndex === chapter)
-        return entry ? entry.label : chapterLabel(t, chapter)
-      })()
+      const chapterTocLabel = activeSection?.chapterIndex === chapter ? activeSection.label : chapterLabel(t, chapter)
 
       const toggleBookmark = useCallback(() => {
         if (status !== 'ready') return
         if (currentBookmark) {
-          readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== currentBookmark.id) }, true)
+          readerState.editMark('bookmarks', currentBookmark.id)
           return
         }
         const ratio = Math.min(1, Math.max(0, scrollRatioRef.current))
@@ -6424,14 +6278,14 @@ html.bb-paged body table tr{break-inside:avoid}
           label,
           format: 'epub',
           chapterIndex: chapter,
-          scrollRatio: ratio,
+          scrollRatio: positionRatioRef.current,
           anchor: anchorRef.current || '',
           percent: bookmarkPercent,
           createdAt: Date.now(),
         }
-        readerState.save({ bookmarks: [bookmark, ...bookmarks].slice(0, 500) }, true)
+        readerState.editMark('bookmarks', bookmark.id, bookmark)
         setAsideTab('bookmarks')
-      }, [bookmarks, chapter, chapterTocLabel, currentBookmark, metrics, readerState.save, status])
+      }, [chapter, chapterTocLabel, currentBookmark, metrics, readerState.editMark, status])
 
       // Style edits save the whole settings object (state.settings.annotationStyle
       // is additive on the Host) without replacing the reader settings state, so
@@ -6455,11 +6309,7 @@ html.bb-paged body table tr{break-inside:avoid}
         const style = { ...annotationStyleRef.current, mode: type }
         const annotation = module.fromSelection({ ...selectionMenu.anchor, style })
         if (annotation === null) return
-        const current = readerState.stateRef.current && Array.isArray(readerState.stateRef.current.annotations)
-          ? readerState.stateRef.current.annotations
-          : []
-        const next = [annotation, ...current.filter((item) => !module.hasSameAnchor(item, annotation))].slice(0, 1000)
-        readerState.save({ annotations: next }, true)
+        readerState.editMark('annotations', annotation.id, annotation)
       }, [readerState, selectionMenu])
 
       const onSeekProgress = useCallback(
@@ -6472,9 +6322,9 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+        if (status !== 'ready') return undefined
         const onKeyDown = (event) => {
-          if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+          if (event.defaultPrevented || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
           const target = event.target
           if (
             target &&
@@ -6493,12 +6343,10 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-      }, [settings.pageMode, status, turnPage])
+      }, [status, turnPage])
 
-      const paged = settings.pageMode === 'paged' && status === 'ready' && data !== null
       const currentPageLabel = (() => {
-        if (data === null) return ''
-        if (!paged) return t('chapterOf', { current: chapter + 1, total: data.chapters.length })
+        if (data === null || status !== 'ready') return ''
         const complete = Array.isArray(bookPageCounts) && bookPageCounts.length === data.chapters.length && bookPageCounts.every(value => Number.isInteger(value) && value > 0)
         const end = Math.min(pageIndex + pageColumns, pageCount)
         if (!complete) return end > pageIndex + 1
@@ -6529,7 +6377,7 @@ html.bb-paged body table tr{break-inside:avoid}
             book: { id: book.id, title: book.title || data.title || '', author: book.author || data.author || '' },
             chapter: { path: entry.path, label: entry.label || chapterLabel(t, chapter) },
             sourceRevision: data.sourceRevision,
-            pageMode: settings.pageMode,
+            pageMode: 'paged',
             pageLabel: currentPageLabel,
           }
           const snapshotId = crypto.randomUUID()
@@ -6564,22 +6412,24 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }
       const controls = []
-      controls.push(h('button', { key: 'discuss', type: 'button', className: 'bs-text-button', onClick: discussPage, disabled: status !== 'ready' || directBusy, title: t('discussPage'), 'aria-label': t('discussPage'), 'aria-haspopup': 'dialog' }, directBusy ? t('discussionCreating') : t('discussPage')))
-      controls.push(
-        h(
-          'button',
-          {
-            key: 'toc',
-            type: 'button',
-            className: 'bs-icon-button',
-            onClick: () => setTocOpen((value) => !value),
-            'aria-pressed': tocOpen,
-            title: t('toc'),
-            'aria-label': t('toc'),
-          },
-          h(ListIcon),
-        ),
-      )
+      controls.push(h('button', {
+        key: 'discuss', type: 'button', className: 'bs-icon-button', onClick: discussPage,
+        disabled: status !== 'ready' || directBusy, 'aria-busy': directBusy,
+        title: t('discussPage'), 'aria-label': t('discussPage'), 'aria-haspopup': 'dialog',
+      }, directBusy ? h(Spinner, { small: true }) : h('img', {
+        className: 'bs-discuss-glyph', src: resourceUrl(base, `${ASSET_ROOT}/discuss-page.png`),
+        alt: '', draggable: false, style: { filter: palette.scheme === 'dark' ? 'invert(1)' : undefined },
+      })))
+      const navigationToggle = h('button', {
+        type: 'button',
+        className: 'bs-icon-button',
+        onClick: () => setTocOpen(value => !value),
+        'aria-expanded': tocOpen,
+        'aria-controls': tocOpen ? 'bs-epub-navigation' : undefined,
+        'aria-pressed': tocOpen,
+        title: t('toc'),
+        'aria-label': t('toc'),
+      }, h(ListIcon, { size: 23 }))
       controls.push(
         h(
           'button',
@@ -6593,7 +6443,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: currentBookmark ? t('removeBookmark') : t('addBookmark'),
             'aria-label': currentBookmark ? t('removeBookmark') : t('addBookmark'),
           },
-          h(BookmarkIcon, { filled: Boolean(currentBookmark) }),
+          h(BookmarkIcon, { size: 21, filled: Boolean(currentBookmark) }),
         ),
       )
       // Annotation style button, directly right of the bookmark button (§5).
@@ -6615,7 +6465,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: t('annotationStyle'),
             'aria-label': t('annotationStyle'),
           },
-          h(MarkerIcon),
+          h(MarkerIcon, { size: 18 }),
         ),
       )
       controls.push(h('span', { key: 'div1', className: 'bs-divider' }))
@@ -6625,7 +6475,7 @@ html.bb-paged body table tr{break-inside:avoid}
           {
             key: 'settings',
             type: 'button',
-            className: 'bs-text-button',
+            className: 'bs-icon-button',
             onClick: () => {
               setAnnotationOpen(false)
               setSettingsOpen((value) => !value)
@@ -6635,7 +6485,10 @@ html.bb-paged body table tr{break-inside:avoid}
             title: t('readingSettings'),
             'aria-label': t('readingSettings'),
           },
-          'Aa',
+          svgIcon(20, [
+            h('path', { key: 'A', d: 'M2.5 18 7.4 5.5 12.3 18M4.2 13.7h6.4' }),
+            h('path', { key: 'a', d: 'M15 10.5c2.7-2.1 6.4-1.2 6.4 2v5.4m0-4.6c-2.8-.8-7.2-.3-7.1 2.4.1 3 4.7 3.6 7.1.4' }),
+          ]),
         ),
       )
       controls.push(h('span', { key: 'div2', className: 'bs-divider' }))
@@ -6646,13 +6499,13 @@ html.bb-paged body table tr{break-inside:avoid}
             key: 'prev',
             type: 'button',
             className: 'bs-icon-button',
-            onClick: () => (paged ? turnPage(-1) : goTo(chapter - 1, '', 0)),
-            disabled: paged ? pageIndex <= 0 && chapter <= 0 : data === null || chapter <= 0,
-            title: paged ? t('previousPage') : t('previousChapter'),
-            'aria-label': paged ? t('previousPage') : t('previousChapter'),
-            'aria-keyshortcuts': paged ? 'ArrowLeft PageUp' : undefined,
+            onClick: () => turnPage(-1),
+            disabled: data === null || (pageIndex <= 0 && chapter <= 0),
+            title: t('previousPage'),
+            'aria-label': t('previousPage'),
+            'aria-keyshortcuts': 'ArrowLeft PageUp',
           },
-          h(ChevronLeftIcon),
+          h(ChevronLeftIcon, { size: 25 }),
         ),
       )
       controls.push(
@@ -6669,22 +6522,20 @@ html.bb-paged body table tr{break-inside:avoid}
             key: 'next',
             type: 'button',
             className: 'bs-icon-button',
-            onClick: () => (paged ? turnPage(1) : goTo(chapter + 1, '', 0)),
-            disabled: paged
-              ? pageIndex + pageColumns >= pageCount && chapter >= data.chapters.length - 1
-              : data === null || chapter >= data.chapters.length - 1,
-            title: paged ? t('nextPage') : t('nextChapter'),
-            'aria-label': paged ? t('nextPage') : t('nextChapter'),
-            'aria-keyshortcuts': paged ? 'ArrowRight PageDown' : undefined,
+            onClick: () => turnPage(1),
+            disabled: data === null || (pageIndex + pageColumns >= pageCount && chapter >= data.chapters.length - 1),
+            title: t('nextPage'),
+            'aria-label': t('nextPage'),
+            'aria-keyshortcuts': 'ArrowRight PageDown',
           },
-          h(ChevronRightIcon),
+          h(ChevronRightIcon, { size: 25 }),
         ),
       )
 
       const sub =
         data === null || status !== 'ready'
           ? undefined
-          : `${data.author || t('unknownAuthor')} · ${t('chapterOf', { current: chapter + 1, total: data.chapters.length })}`
+          : `${data.author || t('unknownAuthor')} · ${(sectionsByChapter.get(chapter)?.length > 1 ? chapterTocLabel : t('chapterOf', { current: chapter + 1, total: data.chapters.length }))}`
 
       const speechLanguage = useMemo(() => epubSpeechLanguage(data), [data])
       const readAloud = useReadAloud({ base, t, language: speechLanguage })
@@ -6719,24 +6570,12 @@ html.bb-paged body table tr{break-inside:avoid}
           if (!windowNode) return []
           const sentences = module.splitSentences(documentNode.body.innerText || '')
           const entries = textIndex.buildSpeechBatches(documentNode, sentences)
-          const paged = settingsRef.current.pageMode === 'paged'
           const startPage = pageIndexRef.current
-          let start = 0
-          if (paged) {
-            const found = entries.findIndex((entry) => {
-              const page = rangePage(documentNode, windowNode, entry.range)
-              return page !== null && page >= startPage
-            })
-            if (found > 0) start = found
-          } else {
-            const found = entries.findIndex((entry) => {
-              if (entry.range === null) return false
-              const rect = entry.range.getBoundingClientRect()
-              return rect.bottom > 0 && rect.top < windowNode.innerHeight
-            })
-            if (found > 0) start = found
-          }
-          return entries.slice(start).map((entry) => ({
+          const start = entries.findIndex((entry) => {
+            const page = rangePage(documentNode, windowNode, entry.range)
+            return page !== null && page >= startPage
+          })
+          return entries.slice(Math.max(0, start)).map((entry) => ({
             text: entry.text,
             enter: async () => {
               if (entry.range === null) return
@@ -6744,25 +6583,16 @@ html.bb-paged body table tr{break-inside:avoid}
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
               speechRangeRef.current = entry.range
-              // Paint after the page turn or scroll settles so the inversion (or
+              // Paint after the page turn settles so the inversion (or
               // the fallback marker band) matches the final line boxes.
               const paint = () => {
                 const live = frameRef.current
                 if (!live || live.contentDocument !== documentNode) return
                 repaintHighlights(documentNode)
               }
-              if (paged) {
-                const page = rangePage(documentNode, windowNode, entry.range)
-                if (page !== null && page > pageIndexRef.current) {
-                  layoutPagedFrame(frameNode, { targetPage: page, save: true })
-                }
-                windowNode.requestAnimationFrame(paint)
-                return
-              }
-              const rect = entry.range.getBoundingClientRect()
-              if (rect.top < 0 || rect.bottom > windowNode.innerHeight) {
-                const element = entry.range.startContainer.parentElement || documentNode.body
-                if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
+              const page = rangePage(documentNode, windowNode, entry.range)
+              if (page !== null && page > pageIndexRef.current) {
+                layoutPagedFrame(frameNode, { targetPage: page, save: true })
               }
               windowNode.requestAnimationFrame(paint)
             },
@@ -6773,13 +6603,8 @@ html.bb-paged body table tr{break-inside:avoid}
               const frameNode = frameRef.current
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
-              if (paged) {
-                const page = rangePage(documentNode, windowNode, entry.range)
-                if (page === null || page !== pageIndexRef.current) return
-              } else {
-                const rect = entry.range.getBoundingClientRect()
-                if (rect.bottom <= 0 || rect.top >= windowNode.innerHeight) return
-              }
+              const page = rangePage(documentNode, windowNode, entry.range)
+              if (page === null || page !== pageIndexRef.current) return
               speechRangeRef.current = entry.range
               windowNode.requestAnimationFrame(() => {
                 const live = frameRef.current
@@ -6819,12 +6644,49 @@ html.bb-paged body table tr{break-inside:avoid}
       // the panel falls back to the plain bookmark list only if that load failed.
       const readingListLib = clientLib('reading-list')
       const chapterLabels = useMemo(() => {
-        const labels = new Map()
-        for (const entry of toc) {
-          if (!labels.has(entry.chapterIndex)) labels.set(entry.chapterIndex, entry.label || chapterLabel(t, entry.chapterIndex))
+        const boundaries = new Map()
+        return (index, mark) => {
+          const entries = sectionsByChapter.get(index)
+          if (!entries?.length) return ''
+          if (entries.length === 1) return entries[0].label
+          const generic = entries.find(entry => !entry.anchor)?.label || chapterLabel(t, index)
+          if (!Number.isInteger(mark?.start)) {
+            return entries.find(entry => entry.anchor && entry.anchor === mark?.anchor)?.label || generic
+          }
+          // Old and new highlights use the same offsets into the rendered text.
+          // Index only chapters with both a saved mark and multiple TOC entries.
+          if (!boundaries.has(index)) {
+            let html
+            try {
+              html = epubModule.renderChapterHtml({
+                data, chapterIndex: index, resourceIndex, imageCache: imageCacheRef.current,
+                readingCss: '', tooLargeText: t('chapterTooLarge'),
+              })
+            } catch {
+              // An unreadable chapter must not prevent the rest of the mark list from opening.
+              boundaries.set(index, [])
+              return generic
+            }
+            const doc = new DOMParser().parseFromString(html, 'text/html')
+            const points = clientLib('text-index')?.buildSpeechIndex(doc).entries || []
+            const starts = []
+            for (const entry of entries) {
+              const target = entry.anchor && doc.getElementById(decodeAnchor(entry.anchor))
+              if (!target) continue
+              let low = 0
+              let high = points.length
+              while (low < high) {
+                const mid = Math.floor((low + high) / 2)
+                if (target.compareDocumentPosition(points[mid].node) & Node.DOCUMENT_POSITION_FOLLOWING) high = mid
+                else low = mid + 1
+              }
+              starts.push({ offset: low, label: entry.label })
+            }
+            boundaries.set(index, starts.sort((a, b) => a.offset - b.offset))
+          }
+          return boundaries.get(index).findLast(entry => entry.offset <= mark.start)?.label || generic
         }
-        return labels
-      }, [toc, t])
+      }, [sectionsByChapter, data, epubModule, resourceIndex, t])
       const readingMerged = useMemo(() => {
         if (readingListLib === null) return []
         return readingListLib.mergeReadingItems({
@@ -6851,6 +6713,8 @@ html.bb-paged body table tr{break-inside:avoid}
           base,
           book,
           onBack: exitReader,
+          readerState,
+          navigationToggle,
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
@@ -6874,7 +6738,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 tocOpen
                   ? h(
                       'aside',
-                      { className: 'bs-epub-toc', 'aria-label': t('asideLabel') },
+                      { id: 'bs-epub-navigation', className: 'bs-epub-toc', 'aria-label': t('asideLabel') },
                       h(
                         'div',
                         { className: 'bs-aside-tabs', role: 'tablist' },
@@ -6898,7 +6762,7 @@ html.bb-paged body table tr{break-inside:avoid}
                             'aria-selected': asideTab === 'bookmarks',
                             onClick: () => setAsideTab('bookmarks'),
                           },
-                          `${t('bookmarksTab')} (${readingTabCount})`,
+                          `${t('bookmarksAnnotationsTab')} (${readingTabCount})`,
                         ),
                       ),
                       h(
@@ -6913,7 +6777,7 @@ html.bb-paged body table tr{break-inside:avoid}
                                 type: 'button',
                                 className: 'bs-toc-label',
                                 style: { paddingLeft: `${8 + Math.min(5, entry.depth) * 12}px` },
-                                'aria-current': entry.chapterIndex === chapter ? 'true' : undefined,
+                                'aria-current': entry === activeSection ? 'true' : undefined,
                                 onClick: () => goTo(entry.chapterIndex, entry.anchor, 0),
                                 title: entry.label,
                               },
@@ -6956,22 +6820,22 @@ html.bb-paged body table tr{break-inside:avoid}
                                   onSelect: (item) => {
                                     const source = item.source || {}
                                     const ratio = item.kind === 'bookmark' ? Number(source.scrollRatio) || 0 : 0
-                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio)
+                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio, item.kind === 'bookmark' ? null : source)
                                   },
                                   onDelete: (item) => {
                                     const source = item.source || {}
                                     if (item.kind === 'bookmark') {
-                                      readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== source.id) }, true)
+                                      readerState.editMark('bookmarks', source.id)
                                       return
                                     }
-                                    readerState.save({ annotations: annotations.filter((annotation) => annotation.id !== source.id) }, true)
+                                    readerState.editMark('annotations', source.id)
                                   },
                                 })
                               : h(BookmarksList, {
                                   t,
                                   bookmarks,
                                   onSelect: (bookmark) => goTo(bookmark.chapterIndex || 0, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0),
-                                  onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
+                                  onDelete: (bookmark) => readerState.editMark('bookmarks', bookmark.id),
                                 }),
                           ),
                       ),
@@ -7783,7 +7647,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const [speed, setSpeed] = useState(1)
       const [job, setJob] = useState(null)
       const [error, setError] = useState('')
+      const [updatingEstimate, setUpdatingEstimate] = useState(false)
+      const [estimateReady, setEstimateReady] = useState(false)
+      const [starting, setStarting] = useState(false)
       const aliveRef = useRef(true)
+      const actionRef = useRef(false)
 
       useEffect(() => {
         const onKeyDown = (event) => {
@@ -7817,10 +7685,11 @@ html.bb-paged body table tr{break-inside:avoid}
             })
             if (cancelled) return
             setPlan(payload.plan)
+            setEstimateReady(true)
             const current = await requestJson(base, `/books/${book.id}/audio`)
             if (cancelled) return
             setJob(current.state)
-            setPhase(current.state.status === 'done' ? 'done' : current.state.status === 'running' ? 'running' : 'ready')
+            setPhase(current.state.status === 'done' ? 'done' : ['running', 'cancelling'].includes(current.state.status) ? 'running' : 'ready')
           } catch (failure) {
             if (cancelled) return
             setError(failure instanceof Error ? failure.message : String(failure))
@@ -7853,6 +7722,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [phase, base, book.id, t])
 
       const replan = async (nextProvider, nextVoice, nextSpeed) => {
+        if (actionRef.current) return
+        actionRef.current = true
+        setUpdatingEstimate(true)
+        setEstimateReady(false)
         setProvider(nextProvider)
         setVoice(nextVoice)
         setSpeed(nextSpeed)
@@ -7862,25 +7735,44 @@ html.bb-paged body table tr{break-inside:avoid}
             method: 'POST',
             body: JSON.stringify({ provider: nextProvider, voice: nextVoice, speed: nextSpeed }),
           })
-          if (aliveRef.current) setPlan(payload.plan)
+          if (aliveRef.current) {
+            setPlan(payload.plan)
+            setEstimateReady(true)
+          }
         } catch (failure) {
           if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
+        } finally {
+          actionRef.current = false
+          if (aliveRef.current) setUpdatingEstimate(false)
         }
       }
 
       const start = async () => {
+        if (actionRef.current || !estimateReady || !plan?.id) return
+        actionRef.current = true
+        setStarting(true)
         setError('')
-        setPhase('running')
         try {
           const payload = await requestJson(base, `/books/${book.id}/audio/start`, {
             method: 'POST',
-            body: JSON.stringify({ provider, voice, speed }),
+            body: JSON.stringify({ planId: plan.id }),
           })
-          if (aliveRef.current) setJob(payload.state)
+          if (!aliveRef.current) return
+          setJob(payload.state)
+          if (payload.state.status === 'failed') {
+            setError(payload.state.error || t('audiobookFailed'))
+            setPhase('error')
+          } else {
+            setPhase(payload.state.status === 'done' ? 'done' : payload.state.status === 'cancelled' ? 'ready' : 'running')
+          }
         } catch (failure) {
           if (!aliveRef.current) return
           setError(failure instanceof Error ? failure.message : String(failure))
+          setEstimateReady(false)
           setPhase('error')
+        } finally {
+          actionRef.current = false
+          if (aliveRef.current) setStarting(false)
         }
       }
 
@@ -7889,7 +7781,6 @@ html.bb-paged body table tr{break-inside:avoid}
           const payload = await requestJson(base, `/books/${book.id}/audio/cancel`, { method: 'POST', body: '{}' })
           if (!aliveRef.current) return
           setJob(payload.state)
-          setPhase('ready')
         } catch (failure) {
           if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
         }
@@ -7912,7 +7803,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const estimate = plan
       const percent = job && job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0
       const downloadUrl = resourceUrl(base, `${API_ROOT}/books/${book.id}/audio/file`)
-      const busy = phase === 'extracting' || phase === 'running'
+      const busy = phase === 'extracting' || phase === 'running' || updatingEstimate || starting
+      const needsEstimate = estimate !== null && (!estimateReady || (phase === 'done' && job?.plan?.id === estimate.id))
       const downloadExt = (job && job.audio && job.audio.ext) || (estimate && estimate.format === 'mp3' ? '.mp3' : '.wav')
       // Only DeepSeek has a published per-character price; other services keep
       // the estimate free of cost and billed-character rows.
@@ -7960,6 +7852,9 @@ html.bb-paged body table tr{break-inside:avoid}
             { className: 'bs-audiobook-body' },
             phase === 'extracting'
               ? h('p', { className: 'bs-audiobook-hint' }, h(Spinner, { small: true }), ' ', t('audiobookParsing'))
+              : null,
+            updatingEstimate
+              ? h('p', { className: 'bs-audiobook-hint', role: 'status' }, t('audiobookEstimating'))
               : null,
             error !== ''
               ? h('p', { className: 'bs-rename-error', role: 'alert' }, error)
@@ -8013,7 +7908,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     { className: 'bs-audiobook-hint' },
                     h('button', { type: 'button', className: 'bs-audiobook-link', onClick: onOpenSettings }, t('audiobookSettingsLink')),
                   ),
-                  h(
+                  estimateReady && !updatingEstimate ? h(
                     'div',
                     { className: 'bs-audiobook-grid' },
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookCharacters')), h('span', { className: 'bs-audiobook-value' }, estimate.characters.toLocaleString())),
@@ -8021,7 +7916,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookDuration')), h('span', { className: 'bs-audiobook-value' }, `≈ ${formatDuration(estimate.durationSeconds)}`)),
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSize')), h('span', { className: 'bs-audiobook-value' }, formatBytes(estimate.bytes))),
                     ...costItems,
-                  ),
+                  ) : null,
                   h('p', { className: 'bs-audiobook-hint' }, t('audiobookHint')),
                   estimate.priced ? null : h('p', { className: 'bs-audiobook-hint' }, t('audiobookUnpricedHint')),
                 )
@@ -8056,16 +7951,16 @@ html.bb-paged body table tr{break-inside:avoid}
             { className: 'bs-apple-foot' },
             h('button', { type: 'button', className: 'bs-button', onClick: onClose }, phase === 'done' ? t('dismiss') : t('cancel')),
             phase === 'running'
-              ? h('button', { type: 'button', className: 'bs-button', onClick: () => { void cancel() } }, t('audiobookCancel'))
+              ? h('button', { type: 'button', className: 'bs-button', disabled: job?.status === 'cancelling', onClick: () => { void cancel() } }, t('audiobookCancel'))
               : h(
                   'button',
                   {
                     type: 'button',
                     className: 'bs-button bs-button-primary',
-                    onClick: () => { void start() },
-                    disabled: estimate === null || phase === 'extracting',
+                    onClick: needsEstimate ? () => { void replan(provider, voice, speed) } : () => { void start() },
+                    disabled: estimate === null || busy,
                   },
-                  phase === 'done' ? t('audiobookRegenerate') : t('audiobookStart'),
+                  needsEstimate ? t('audiobookReestimate') : phase === 'done' ? t('audiobookRegenerate') : t('audiobookStart'),
                 ),
           ),
         ),
@@ -8078,8 +7973,8 @@ html.bb-paged body table tr{break-inside:avoid}
       // percent-derived "continue reading".
       const percent = bookPercent(book)
       const status = bookStatus(book)
-      const finished = status === 'finished'
-      const subParts = bookSubParts(book, t)
+      const subtitle = shelfSubtitle(book, t)
+      const title = shelfTitle(book, t)
       const coverSrc = bookCoverUrl(book, base)
       const [loadedCover, setLoadedCover] = useState('')
       const [failedCover, setFailedCover] = useState('')
@@ -8111,8 +8006,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const cover = h(
         'span',
         { className: 'bs-cover-frame' },
-        h('span', { className: 'bs-cover-title' }, book.title || t('untitled')),
-        h('span', { className: 'bs-cover-author' }, book.author || t('unknownAuthor')),
+        h('span', { className: 'bs-cover-title' }, title),
+        h('span', { className: 'bs-cover-author' }, book.author?.trim() || t('unnamedAuthor')),
         coverSrc !== '' && !coverFailed
           ? h('img', {
               className: 'bs-cover-img',
@@ -8125,7 +8020,6 @@ html.bb-paged body table tr{break-inside:avoid}
               onError: () => setFailedCover(coverSrc),
             })
           : null,
-        h('span', { className: 'bs-cover-format' }, String(book.format || '').toUpperCase()),
       )
       const interactive = confirming
         ? h(
@@ -8135,7 +8029,7 @@ html.bb-paged body table tr{break-inside:avoid}
             h(
               'div',
               { className: 'bs-confirm' },
-              h('p', { className: 'bs-confirm-title' }, t('deleteBody', { title: book.title })),
+              h('p', { className: 'bs-confirm-title' }, t('deleteBody', { title })),
               h(
                 'div',
                 { className: 'bs-confirm-actions' },
@@ -8159,7 +8053,7 @@ html.bb-paged body table tr{break-inside:avoid}
               className: 'bs-cover',
               style: coverStyle(book),
               onClick: () => onOpen(book),
-              'aria-label': t('openBook', { title: book.title || t('untitled') }),
+              'aria-label': t('openBook', { title }),
             },
             cover,
           )
@@ -8183,7 +8077,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     onAskDelete(book)
                   },
                   title: t('delete'),
-                  'aria-label': t('deleteBook', { title: book.title || t('untitled') }),
+                  'aria-label': t('deleteBook', { title }),
                 },
                 h(TrashIcon),
               ),
@@ -8248,13 +8142,13 @@ html.bb-paged body table tr{break-inside:avoid}
         h(
           'div',
           { className: 'bs-meta' },
-          h('div', { className: 'bs-book-title', title: book.title }, book.title || t('untitled')),
+          h('div', { className: 'bs-book-title', title }, title),
           h(
             'div',
-            { className: 'bs-book-sub', title: subParts.filter(Boolean).join(' · ') },
-            subParts.filter(Boolean).join(' · '),
+            { className: 'bs-book-sub', title: subtitle },
+            subtitle,
           ),
-          percent > 0 && !finished
+          status === 'reading'
             ? h(
                 'div',
                 {
@@ -8264,7 +8158,6 @@ html.bb-paged body table tr{break-inside:avoid}
                   'aria-valuemin': 0,
                   'aria-valuemax': 100,
                   'aria-valuenow': Math.round(percent * 100),
-                  'data-finished': finished ? 'true' : undefined,
                 },
                 h('div', { className: 'bs-card-progress-fill', style: { width: `${percent * 100}%` } }),
               )
@@ -8275,8 +8168,9 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function BookRow({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags, onGenerateAudio }) {
       const percent = bookPercent(book)
-      const finished = bookStatus(book) === 'finished'
-      const subParts = bookSubParts(book, t)
+      const status = bookStatus(book)
+      const subtitle = shelfSubtitle(book, t)
+      const title = shelfTitle(book, t)
       const coverSrc = bookCoverUrl(book, base)
       const [coverFailed, setCoverFailed] = useState(false)
       const [menuOpen, setMenuOpen] = useState(false)
@@ -8316,7 +8210,6 @@ html.bb-paged body table tr{break-inside:avoid}
               onError: () => setCoverFailed(true),
             })
           : null,
-        h('span', { className: 'bs-row-format' }, String(book.format || '').toUpperCase()),
       )
 
       if (confirming) {
@@ -8328,7 +8221,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'div',
             { className: 'bs-row-text' },
             h('span', { className: 'bs-row-title' }, t('deleteTitle')),
-            h('span', { className: 'bs-row-sub', title: t('deleteBody', { title: book.title }) }, t('deleteBody', { title: book.title })),
+            h('span', { className: 'bs-row-sub', title: t('deleteBody', { title }) }, t('deleteBody', { title })),
           ),
           h(
             'div',
@@ -8345,26 +8238,26 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return h(
         'article',
-        { className: 'bs-row', role: 'listitem', 'data-finished': finished ? 'true' : undefined },
+        { className: 'bs-row', role: 'listitem', 'data-finished': status === 'finished' ? 'true' : undefined },
         h(
           'button',
           {
             type: 'button',
             className: 'bs-row-open',
             onClick: () => onOpen(book),
-            'aria-label': t('openBook', { title: book.title || t('untitled') }),
+            'aria-label': t('openBook', { title }),
           },
           thumb,
           h(
             'span',
             { className: 'bs-row-text' },
-            h('span', { className: 'bs-row-title', title: book.title }, book.title || t('untitled')),
+            h('span', { className: 'bs-row-title', title }, title),
             h(
               'span',
-              { className: 'bs-row-sub', title: subParts.filter(Boolean).join(' · ') },
-              subParts.filter(Boolean).join(' · '),
+              { className: 'bs-row-sub', title: subtitle },
+              subtitle,
             ),
-            percent > 0 && !finished
+            status === 'reading'
               ? h(
                   'span',
                   {
@@ -8466,7 +8359,7 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     function sortBookList(list, mode) {
-      const titleOf = (book) => String(book && book.title ? book.title : '')
+      const titleOf = (book) => book.title?.trim() || book.name?.trim() || ''
       const authorOf = (book) => String(book && book.author ? book.author : '').trim()
       const compareTitle = (left, right) => titleOf(left).localeCompare(titleOf(right), undefined, { numeric: true, sensitivity: 'base' })
       return list.slice().sort((left, right) => {
@@ -9147,8 +9040,16 @@ html.bb-paged body table tr{break-inside:avoid}
       const base = useMemo(() => transportBase(), [])
       const effectiveDefaults = defaultReadingSettings || DEFAULT_READING_SETTINGS
       const closeReader = useCallback(
-        async (percent) => {
+        async (percent, flush) => {
           const book = open
+          // Preserve the Back intent if DSH switches panels while the save is
+          // still pending. Keep the mounted reader available on a failed save.
+          viewState.openBookId = null
+          if (flush && !(await flush())) {
+            if (viewState.openBookId === null) viewState.openBookId = book?.id ?? null
+            return
+          }
+          if (viewState.openBookId !== null) return
           setOpen(null)
           if (book === null) {
             setReload((value) => value + 1)
@@ -9165,7 +9066,7 @@ html.bb-paged body table tr{break-inside:avoid}
             setFinishPrompt(book)
           }
         },
-        [base, open, setOpen],
+        [base, open, setOpen, viewState],
       )
 
       useEffect(() => {
@@ -9467,7 +9368,7 @@ html.bb-paged body table tr{break-inside:avoid}
               if (format === null) throw new Error(t('unsupportedFile', { name: file.name }))
               if (file.size > MAX_IMPORT_BYTES) throw new Error(t('tooLarge', { name: file.name }))
               const bytes = new Uint8Array(await file.arrayBuffer())
-              let title = String(file.name || '').replace(/\.[^.]+$/, '')
+              let title = file.name || ''
               let author = ''
               let epubModule = null
               if (format === 'epub') {
@@ -10167,16 +10068,16 @@ html.bb-paged body table tr{break-inside:avoid}
       dismiss: 'Dismiss',
       untitled: 'Untitled',
       unknownAuthor: 'Unknown author',
+      unnamedAuthor: 'Unnamed author',
+      bookmarksAnnotationsTab: 'Bookmarks & annotations',
       back: 'Back to bookshelf',
       readingProgress: 'Reading progress',
-      continueReading: 'Continue reading',
       finishedReading: 'Finished',
       statusLabel: 'Status',
       statusAuto: 'Follow progress',
       statusUnread: 'Unread',
       statusReading: 'Reading',
       statusFinished: 'Finished',
-      finishedPercent: 'Finished {percent}%',
       finishPromptTitle: 'Mark as finished?',
       finishPromptBody: 'You reached the last page of “{title}”. Mark this book as finished?',
       finishPromptConfirm: 'Mark as finished',
@@ -10236,16 +10137,16 @@ html.bb-paged body table tr{break-inside:avoid}
       dismiss: '关闭',
       untitled: '无标题',
       unknownAuthor: '未知作者',
+      unnamedAuthor: '未命名作者',
+      bookmarksAnnotationsTab: '书签与标注',
       back: '返回书架',
       readingProgress: '阅读进度',
-      continueReading: '继续阅读',
       finishedReading: '已读完',
       statusLabel: '状态',
       statusAuto: '跟随阅读进度',
       statusUnread: '未读',
       statusReading: '正在阅读',
       statusFinished: '已读完',
-      finishedPercent: '已读完 {percent}%',
       finishPromptTitle: '标记为已读完？',
       finishPromptBody: '《{title}》已经读到最后一页，要标记为已读完吗？',
       finishPromptConfirm: '标记为已读完',

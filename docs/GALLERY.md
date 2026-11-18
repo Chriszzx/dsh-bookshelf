@@ -1,8 +1,8 @@
 # Screenshots / 截图
 
-These captures use a demo shelf of public-domain titles, a test DeepSeek key and a temporary read-aloud cache. No personal library, account or real API key appears in them.
+Captured with dsh-bookshelf 0.6.4 in an isolated local demo library. The reader shows the first three chapters of *Pride and Prejudice*. The Apple Books picker uses sample catalog records and the audio panels use the macOS system voice option.
 
-以下截图使用公版书演示书架、测试用 DeepSeek Key 和临时朗读缓存，不包含个人书库、账号或真实 API Key。
+截图来自 0.6.4 的独立本地演示书架。阅读器展示《傲慢与偏见》前三章，Apple Books 导入窗口使用示例条目，语音面板选用 macOS 系统音色。
 
 ## Shelf / 书架
 
@@ -18,13 +18,13 @@ The list view keeps the same search, sort and status rules, with progress and fi
 
 列表视图沿用搜索、排序与状态规则，进度和已读完状态显示在行内。
 
-## Read aloud and DeepSeek speech / 朗读与 DeepSeek 语音
+## Read aloud / 逐句朗读
 
-![Read aloud with DeepSeek speech](images/read-aloud.png)
+![Read aloud with a system voice](images/read-aloud.png)
 
-Opening the dock selects the current sentence immediately; the spoken sentence is inverted from the page palette, and the dock shows the active DeepSeek voice, speed and status.
+The dock highlights the selected sentence and shows its text, playback controls, speed and active voice.
 
-打开浮条会立即选中当前句；正在朗读的句子使用页面反色高亮，浮条显示当前 DeepSeek 音色、语速和状态。
+朗读浮条显示当前句、播放控件、语速与音色。页面上的反色高亮标出同一句正文。
 
 ![Speech settings](images/settings-speech.png)
 
@@ -36,9 +36,9 @@ The Read-aloud tab configures the backend, language-aware voice, speed, API fiel
 
 ![Whole-book audiobook dialog](images/audiobook.png)
 
-Generate audiobook estimates characters, sentences, duration, size and the DeepSeek bill before rendering the whole book on the Host.
+Review the character and sentence counts, estimated duration and file size before starting. The screenshot shows a local voice. Selecting DeepSeek adds its estimated cost.
 
-「生成整书语音」会先展示字数、句数、预计时长、体积和 DeepSeek 预估费用，再由 Host 在后台渲染整本书。
+开始生成前可查看字数、句数、预计时长和文件体积。图中选用了本机音色，选择 DeepSeek 时还会显示预计费用。
 
 ## Page discussion / 页面讨论
 
@@ -60,25 +60,15 @@ On macOS, import EPUB or PDF titles from the local Apple Books library. The shel
 
 ![Reader settings](images/reader-settings.png)
 
-Typography, margins, page mode and the reading palette follow the DSH theme; pinned Light and Dark use the same DSH palettes.
+In 0.6.4 the EPUB page follows the DSH theme. Open Aa to set the reading font, text size, margins and single-page or adaptive spread layout.
 
-排版、边距、阅读模式与阅读主题跟随 DSH 主题；固定的浅色/深色也使用 DSH 自己的配色。
+0.6.4 的 EPUB 页面跟随 DSH 主题。在工具栏点「Aa」可调整字体、字号和边距，并选择单页或自适应跨页。
 
 ## Demo covers / 演示封面
 
-The demo shelf uses real editions. English covers come from [Standard Ebooks](https://standardebooks.org/), whose cover art is in the public domain in the United States. The three Chinese covers are period scans from Wikimedia Commons:
+The covers and the Austen excerpt come from Standard Ebooks. The project publishes its editions and cover artwork for public-domain use in the United States. [Standard Ebooks](https://standardebooks.org/) · [Pride and Prejudice](https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice)
 
-演示书架使用真实书籍封面。英文封面来自 [Standard Ebooks](https://standardebooks.org/)，其封面艺术在美国属于公有领域。三本中文书的封面为 Wikimedia Commons 上的古籍扫描：
-
-| Book | Source | License |
-|---|---|---|
-| 唐诗三百首 | [Three Hundred Tang Poems (1).jpg](https://commons.wikimedia.org/wiki/File:Three_Hundred_Tang_Poems_%281%29.jpg) | Public domain |
-| 道德经 | [DaoDeJingWangBi.jpg](https://commons.wikimedia.org/wiki/File:DaoDeJingWangBi.jpg) | Public domain |
-| 宋词三百首 | [稿本宋词三百首封面題簽.png](https://commons.wikimedia.org/wiki/File:%E7%A8%BF%E6%9C%AC%E5%AE%8B%E8%AF%8D%E4%B8%89%E7%99%BE%E9%A6%96%E5%B0%81%E9%9D%A2%E9%A1%8C%E7%AD%BE.png) | CC BY-SA 4.0 (Wikimedia Commons contributor) |
-
-The Chinese scans are historical editions, so their title slips keep the original lettering. The shelf UI and book text shown in the screenshots use Simplified Chinese.
-
-中文封面为古籍扫描，书名签保留原刻字形；截图中的书架界面与正文均为简体中文。
+本组封面与《傲慢与偏见》节选取自 Standard Ebooks 的公版版本。[Standard Ebooks 公版说明](https://standardebooks.org/about)
 
 ## Social preview / 社交预览
 

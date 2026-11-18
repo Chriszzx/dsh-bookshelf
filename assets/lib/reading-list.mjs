@@ -80,9 +80,9 @@ function chapterEntryLabel(entry) {
 // `chapterLabels` may be a plain object/Map keyed by chapter index, an array
 // (either indexed by chapter index or a TOC-like list of `{ chapterIndex,
 // label }` entries) or a function used as a lazy localised formatter.
-function chapterNameFor(chapterLabels, chapterIndex) {
+function chapterNameFor(chapterLabels, chapterIndex, mark) {
   if (chapterIndex === undefined) return ''
-  if (typeof chapterLabels === 'function') return text(chapterLabels(chapterIndex))
+  if (typeof chapterLabels === 'function') return text(chapterLabels(chapterIndex, mark))
   if (Array.isArray(chapterLabels)) {
     const direct = chapterEntryLabel(chapterLabels[chapterIndex])
     if (direct !== '') return direct
@@ -166,7 +166,7 @@ export function readingKind(item) {
 
 function mergeBookmark(bookmark, index, chapterLabels, pageLabel) {
   const chapterIndex = nonNegativeInteger(bookmark.chapterIndex)
-  const chapterName = chapterNameFor(chapterLabels, chapterIndex)
+  const chapterName = chapterNameFor(chapterLabels, chapterIndex, bookmark)
   const createdAt = finiteNumber(bookmark.createdAt)
   return {
     id: itemId('bookmark', bookmark.id, index),
@@ -186,7 +186,7 @@ function mergeAnnotation(annotation, index, chapterLabels) {
   // the two annotation types it can render.
   if (kind !== 'highlight' && kind !== 'underline') return null
   const chapterIndex = nonNegativeInteger(annotation.chapterIndex)
-  const chapterName = chapterNameFor(chapterLabels, chapterIndex)
+  const chapterName = chapterNameFor(chapterLabels, chapterIndex, annotation)
   const createdAt = finiteNumber(annotation.createdAt)
   const detailParts = []
   if (chapterName !== '') detailParts.push(chapterName)

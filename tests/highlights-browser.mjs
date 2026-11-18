@@ -9,7 +9,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -17,7 +17,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-highlights-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 
 function makeRun() {
@@ -122,12 +122,11 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
   const api = `${origin}/bookshelf/api`
 
-  // A pinned light palette and scroll mode make every colour assertion
-  // deterministic (no DSH token stylesheet is loaded in this fixture page).
+  // A retained light preference from an older release must yield to the host theme.
   const preferenceResponse = await fetch(`${api}/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ theme: 'light', pageMode: 'scroll' }),
+    body: JSON.stringify({ theme: 'light' }),
   })
   assert.equal(preferenceResponse.status, 200)
 
@@ -200,10 +199,11 @@ try {
     await until(()=>document.querySelectorAll('.bs-card').length===1);
     await openBook('Annotated');
     await until(()=>chapterText().includes('第二句话'),'chapter one renders');
+    await until(()=>frameDocument()?.documentElement.style.getPropertyValue('--bb-fg'),'reader applies its palette to the chapter');
     const doc=frameDocument();
     const rootStyle=doc.documentElement.style;
-    check(rootStyle.getPropertyValue('--bb-fg')==='#0f1115','pinned light fg: '+rootStyle.getPropertyValue('--bb-fg'));
-    check(rootStyle.getPropertyValue('--bb-bg')==='#ffffff','pinned light bg: '+rootStyle.getPropertyValue('--bb-bg'));
+    check(rootStyle.getPropertyValue('--bb-fg')==='#0f1115','light host foreground: '+rootStyle.getPropertyValue('--bb-fg'));
+    check(rootStyle.getPropertyValue('--bb-bg')==='#ffffff','light host background: '+rootStyle.getPropertyValue('--bb-bg'));
     // Annotation anchors are chapter-text offsets: compute them with the same
     // module the reader resolves ranges with.
     const textIndex=await import('/bookshelf/assets/lib/text-index.mjs');
@@ -299,8 +299,7 @@ try {
     check(normalizedText(highlightText('bb-ra'))==='第二句话。','read-aloud layer still covers the sentence');
     check(highlightNames().includes('bb-an-an_g2hl01'),'annotation layer survives a font change');
     // A theme change must invert with the new palette.
-    const option=(label)=>{const node=[...document.querySelectorAll('.bs-reader-settings button')].find(item=>item.textContent===label);check(!!node,'theme option '+label);node.click()};
-    option('themeDark');
+    document.body.setAttribute('data-ds-dark-theme','');
     await until(()=>frameDocument().documentElement.style.getPropertyValue('--bb-scheme')==='dark','dark palette applied');
     await until(()=>highlightRules().includes('color: #151517;'),'dark inversion: '+highlightRules());
     check(highlightRules().includes('background-color: #f9fafb;'),'dark band is the dark palette.fg: '+highlightRules());
@@ -309,7 +308,7 @@ try {
     await until(()=>!document.querySelector('.bs-reader-settings'),'settings closed');
     // Chapter switch: every layer of the old document is cleared and the new
     // chapter (which has no annotations) starts clean.
-    const nextChapter=document.querySelector('button[title="nextChapter"]');
+    const nextChapter=document.querySelectorAll('.bs-toc-label')[1];
     check(!!nextChapter,'next chapter button');
     nextChapter.click();
     await until(()=>chapterText().includes('第二章第一句话'),'chapter two renders');

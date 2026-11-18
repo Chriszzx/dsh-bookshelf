@@ -9,7 +9,7 @@ import { createServer } from 'node:http'
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -17,7 +17,7 @@ import { zipSync, strToU8 } from '../assets/fflate.mjs'
 const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-annotations-panel-'))
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 
 apply({
@@ -94,7 +94,7 @@ try {
     method: 'POST',
     body: epubBytes('Panel', [
       ['第一章的正文足够长，方便把高亮锚点放在章节开头之后的位置。', '第一章的第二段让滚动位置更自然。'],
-      ['第二章的正文同样保留为下划线锚点所在的位置。', '第二章的第二段收尾。'],
+      [...Array(240).fill('第二章的正文同样保留为下划线锚点所在的位置。'), '第二章的第二段收尾。'],
     ]),
   })
   assert.equal(epubResponse.status, 201)
@@ -112,7 +112,7 @@ try {
       quote: '高亮引用文字', color: '#ffd23f', strength: 0.35, thickness: 2, underlineStyle: 'solid', createdAt: 2000,
     },
     {
-      id: 'an_underline', type: 'underline', chapterIndex: 1, start: 120, end: 130,
+      id: 'an_underline', type: 'underline', chapterIndex: 1, start: 3100, end: 3110,
       quote: '下划线引用', color: '#112233', strength: 0.5, thickness: 4, underlineStyle: 'wavy', createdAt: 4000,
     },
   ]
@@ -127,7 +127,7 @@ try {
   assert.equal(seeded.bookmarks.length, 2)
 
   chrome = spawn(chromePath, [
-    ...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
+    ...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--disable-popup-blocking', '--no-first-run', '--disable-background-networking',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0',
     '--window-size=1400,1000', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
@@ -184,7 +184,7 @@ try {
     // Both tabs carry their entry count; the merged panel counts bookmarks and
     // annotations together (2 bookmarks + 2 annotations = 4).
     check(asideTabs()[0].textContent==='tocTab (2)','toc tab count: '+asideTabs()[0].textContent);
-    check(asideTabs()[1].textContent==='bookmarksTab (4)','bookmark tab count: '+asideTabs()[1].textContent);
+    check(asideTabs()[1].textContent==='bookmarksAnnotationsTab (4)','bookmark tab count: '+asideTabs()[1].textContent);
     check(!document.querySelector('.bs-reading-tools'),'tool row belongs to the bookmarks tab');
     asideTabs()[1].click();
     await until(()=>document.querySelector('.bs-reading-tools'));
@@ -207,6 +207,16 @@ try {
     check(annotationRow.querySelector('.bs-reading-detail').textContent.includes(' · '),'annotation detail carries chapter and time: '+annotationRow.querySelector('.bs-reading-detail').textContent);
     // Position sort is chapter-major: bookmark then annotation inside each chapter.
     check(kinds().join(',')==='bookmark,highlight,bookmark,underline','position order: '+kinds().join(','));
+    // Jump directly from chapter one to a mark several pages into chapter two.
+    const underline=document.querySelector('.bs-reading-row[data-kind="underline"] .bs-reading-main');
+    underline.click();
+    await until(()=>{
+      const frame=document.querySelector('.bs-epub-frame'), win=frame?.contentWindow;
+      const mark=win?.CSS.highlights.get('bb-an-an_underline');
+      if(!mark || !frame.contentDocument.body.scrollLeft) return false;
+      const rect=[...mark][0].getClientRects()[0];
+      return rect.left>=0 && rect.left<win.innerWidth;
+    });
     // Time sort is newest first.
     setSelect(sortSelect,'recent');
     await until(()=>kinds().join(',')==='underline,bookmark,highlight,bookmark');
@@ -229,7 +239,7 @@ try {
     // Deleting an annotation writes only the annotations collection back.
     document.querySelector('.bs-reading-row[data-kind="highlight"] .bs-reading-delete').click();
     await until(()=>rows().length===3);
-    check(asideTabs()[1].textContent==='bookmarksTab (3)','tab count follows the delete: '+asideTabs()[1].textContent);
+    check(asideTabs()[1].textContent==='bookmarksAnnotationsTab (3)','tab count follows the delete: '+asideTabs()[1].textContent);
     await untilAsync(async()=>{
       const {state}=await stateFor('Panel');
       return state.annotations.length===1&&state.annotations[0].type==='underline'&&state.bookmarks.length===2;
@@ -249,6 +259,72 @@ try {
     return true;
   })()`), true)
 
+  const imported = await fetch(api + '/books?name=windows.epub&title=Windows&format=epub', {
+    method: 'POST', body: epubBytes('Windows', [['Alpha paragraph'], ['Bravo paragraph']]),
+  })
+  assert.equal(imported.status, 201)
+  const { book: otherBook } = await imported.json()
+  const path = api + '/books/' + otherBook.id + '/state'
+  const seededMarks = await fetch(path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bookmarks, annotations }) })
+  assert.equal(seededMarks.status, 200)
+  await evaluate(`(async()=>{
+    document.querySelector('button[title="back"]').click()
+    await until(()=>document.querySelectorAll('.bs-card').length===2)
+    const other=window.open('/test.html','mark-editor')
+    try {
+      await until(()=>other?.document.querySelectorAll('.bs-card').length===2)
+      await Promise.all([openBook('Windows'),other.openBook('Windows')])
+      await Promise.all([window,other].map(w=>w.until(()=>w.document.querySelectorAll('.bs-toc-label').length===2)))
+      other.document.querySelectorAll('.bs-toc-label')[1].click()
+      await other.until(()=>other.document.querySelector('.bs-epub-frame').contentDocument.body.textContent.includes('Bravo'))
+      async function edit(w, bookmarkLabel, annotationLabel, kind) {
+        const doc=w.document
+        w.asideTabs()[1].click()
+        await w.until(()=>w.rows().length===4)
+        function remove(label) {
+          const row=w.rows().find(n=>n.querySelector('.bs-reading-label').textContent===label)
+          row.querySelector('.bs-reading-delete').click()
+        }
+        remove(bookmarkLabel)
+        remove(annotationLabel)
+        await w.until(()=>doc.querySelector('button[title="addBookmark"]'))
+        doc.querySelector('button[title="addBookmark"]').click()
+        const chapter=doc.querySelector('.bs-epub-frame').contentDocument
+        const para=chapter.querySelector('p'), range=chapter.createRange()
+        range.selectNodeContents(para)
+        const selection=chapter.defaultView.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(range)
+        para.dispatchEvent(new w.MouseEvent('contextmenu',{bubbles:true,cancelable:true}))
+        await w.until(()=>doc.querySelector('.bs-selection-menu'))
+        Array.from(doc.querySelectorAll('.bs-selection-item')).find(n=>n.textContent===kind).click()
+      }
+      await Promise.all([
+        edit(window,'第一章书签','高亮引用文字','selectionHighlight'),
+        edit(other,'第二章书签','下划线引用','selectionUnderline'),
+      ])
+      await untilAsync(async()=>{
+        const {state}=await stateFor('Windows')
+        return state.bookmarks.length===2 && state.bookmarks.every(b=>!['bm_first','bm_second'].includes(b.id)) &&
+          state.annotations.map(a=>a.quote).sort().join('|')==='Alpha paragraph|Bravo paragraph'
+      })
+      await Promise.all([window,other].map(async w=>{
+        w.document.querySelector('button[title="back"]').click()
+        await w.until(()=>w.document.querySelectorAll('.bs-card').length===2)
+        await w.openBook('Windows')
+        w.asideTabs()[1].click()
+        await w.until(()=>w.rows().length===4)
+        const labels=w.rows().map(row=>row.querySelector('.bs-reading-label').textContent)
+        check(labels.includes('Alpha paragraph')&&labels.includes('Bravo paragraph'),'reopened marks: '+labels)
+        check(w.kinds().filter(kind=>kind==='bookmark').length===2,'both bookmarks survive reopening')
+      }))
+      check(!other.errors.length,'second window errors: '+other.errors)
+    } finally { other?.close() }
+  })()`)
+  const { state: merged } = await (await fetch(path)).json()
+  assert.deepEqual(merged.bookmarks.map(mark => mark.chapterIndex).sort(), [0, 1])
+  assert.deepEqual(merged.annotations.map(mark => mark.type).sort(), ['highlight', 'underline'])
+  console.log('Two reader windows added and deleted independent bookmarks and annotations')
   assert.deepEqual(await evaluate('window.errors'), [])
   console.log('bookmarks / annotations panel: counts, kind icons, sort, search, delete and chapter jump')
 } finally {

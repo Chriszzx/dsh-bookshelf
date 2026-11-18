@@ -26,9 +26,7 @@ export function createAudiobookRoutes({ http, audiobooks, findBook } = {}) {
     const body = await readJsonBody(request, 16 * 1024)
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'invalid audiobook request')
     const state = await audiobooks.start(record.id, {
-      voice: cleanText(body.voice, '', 64),
-      provider: cleanText(body.provider, '', 20),
-      speed: body.speed,
+      planId: cleanText(body.planId, '', 36),
     })
     sendJson(request, response, 200, { state })
   }

@@ -3,7 +3,7 @@
 // BOOKSHELF_TEST_FIXTURES can override the generated fixtures.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,7 +15,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-tab-test-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route
 apply({ effect: fn => fn(), webServer: { port: 0, register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 let chrome, socket, server
@@ -44,6 +44,9 @@ mount();
 </script></body></html>`
 let delayWrites = false
 let delayDefaults = false
+let failWrites = false
+let failReads = false
+let writesDuringFailedRead = 0
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
   server = createServer(async (req, res) => {
@@ -53,6 +56,20 @@ try {
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
       if (delayDefaults && req.method === 'GET' && path.endsWith('/settings')) await new Promise(r => setTimeout(r, 3500))
+      if (failReads && path.endsWith('/state')) {
+        if (req.method === 'GET') {
+          res.writeHead(503, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ error: 'simulated read failure' }))
+          return
+        }
+        writesDuringFailedRead++
+      }
+      if (failWrites && ['PUT', 'PATCH'].includes(req.method) && path.endsWith('/state')) {
+        req.resume()
+        res.writeHead(503, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: 'simulated write failure' }))
+        return
+      }
       if (delayWrites && req.method === 'PUT' && path.endsWith('/state')) await new Promise(r => setTimeout(r, 800))
       await route.handler(req, res)
     } catch (error) { res.writeHead(500); res.end(String(error)) }
@@ -71,6 +88,16 @@ try {
   const pdfId = await importBook('PDF', 'pdf', 'mixed.pdf', { pdfView: 'single', pdfFit: 'page' }, { format: 'pdf', page: 2, percent: .4 })
   await importBook('Fresh', 'epub', 'paged-long.epub', undefined, undefined)
   assert.equal((await fetch(`${origin}/bookshelf/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ settings: { fontSize: 20, pageMode: 'paged', pageMargin: 'fill' } }) })).status, 200)
+  // Seed genuine pre-upgrade files, bypassing the current settings sanitizer.
+  const statePath = join(process.env.DSH_HOME, 'bookshelf', 'state.json')
+  const legacy = JSON.parse(await readFile(statePath, 'utf8'))
+  legacy.books[epubId].settings.pageMode = 'scroll'
+  legacy.books[epubId].bookmarks = [{ id: 'legacy', label: 'Legacy bookmark', format: 'epub', chapterIndex: 0, scrollRatio: .4 }]
+  await writeFile(statePath, JSON.stringify(legacy))
+  const defaultsPath = join(process.env.DSH_HOME, 'bookshelf', 'defaults.json')
+  const defaults = JSON.parse(await readFile(defaultsPath, 'utf8'))
+  defaults.settings.pageMode = 'scroll'
+  await writeFile(defaultsPath, JSON.stringify(defaults))
   chrome = spawn(chromePath, [...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking', `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0', '--window-size=1400,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] })
   const browserUrl = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Chrome startup timeout')), 10000)
@@ -110,8 +137,31 @@ try {
     assert.ok(Date.now() - startup < 10000, 'test page initialized')
     await new Promise(r => setTimeout(r, 100))
   }
-  const epub = await evaluate(`(async()=>{await until(()=>window.openBook);await openBook('EPUB');await until(()=>labels());await wait(1700);const before=labels();await roundTrip();check(labels()===before,'EPUB page changed: '+before+' -> '+labels());click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'EPUB immediate switch lost page');return {before,after:labels()}})()`)
-  console.log('EPUB paged', epub)
+  failReads = true
+  await evaluate(`(async()=>{
+    await openBook('EPUB')
+    await until(()=>document.querySelector('.bs-reader-state-error')?.textContent.includes('readingLoadFailed'))
+    check(!document.querySelector('.bs-epub-frame'),'failed load must not start a new book')
+    await wait(850)
+  })()`)
+  assert.equal(writesDuringFailedRead, 0)
+  const afterFailure = JSON.parse(await readFile(statePath, 'utf8')).books[epubId]
+  assert.deepEqual(afterFailure, legacy.books[epubId], 'failure leaves all saved fields untouched')
+  failReads = false
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-reader-state-error button').click()
+    await until(()=>labels())
+    document.querySelectorAll('.bs-aside-tab')[1].click()
+    await until(()=>document.querySelector('.bs-reading-label')?.textContent==='Legacy bookmark')
+  })()`)
+  const epub = await evaluate(`(async()=>{await until(()=>labels());await wait(1700);const before=labels();await roundTrip();check(labels()===before,'EPUB page changed: '+before+' -> '+labels());click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'EPUB immediate switch lost page');return {before,after:labels()}})()`)
+  const migrated = (await (await fetch(`${origin}/bookshelf/api/books/${epubId}/state`)).json()).state
+  assert.equal(migrated.settings.pageMode, 'paged')
+  assert.equal(migrated.bookmarks[0].id, 'legacy')
+  const initialPage = Number(epub.before.match(/current=(\d+)/)[1])
+  const totalPages = Number(epub.before.match(/total=(\d+)/)[1])
+  assert.ok(Math.abs(initialPage - (1 + .4 * (totalPages - 1))) <= 2, 'legacy 40% position restores within one spread')
+  console.log('EPUB legacy position restored in paged layout', epub)
   delayWrites = true
   const pdf = await evaluate(`(async()=>{click('back');await openBook('PDF');await until(()=>document.querySelector('.bs-pdf-page'));await wait(1500);const before=labels();await roundTrip();check(labels()===before,'PDF initial page changed');click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'PDF immediate switch lost page: '+turned+' -> '+labels());return {before,after:labels()}})()`)
   console.log('PDF single + delayed writes', pdf)
@@ -121,8 +171,15 @@ try {
   delayDefaults = true
   console.log('PDF independent of EPUB defaults', await evaluate(`(async()=>{unmount();await wait(25);const start=performance.now();mount();await until(()=>document.querySelector('.bs-pdf-page'));const elapsed=performance.now()-start;check(elapsed<2500,'PDF blocked by unrelated defaults GET');await wait(3600);return {elapsedMs:Math.round(elapsed)}})()`))
   delayDefaults = false
-  const scrolling = await evaluate(`(async()=>{click('back');await openBook('EPUB');await until(()=>labels());await wait(1300);click('readingSettings');const mode=[...document.querySelectorAll('.bs-segment')].find(b=>b.textContent==='modeScroll');mode.click();await wait(700);const frame=document.querySelector('.bs-epub-frame');frame.contentWindow.scrollTo(0,1800);await wait(120);const before=frame.contentWindow.scrollY;await roundTrip();const after=document.querySelector('.bs-epub-frame').contentWindow.scrollY;check(Math.abs(before-after)<5,'EPUB scroll changed: '+before+' -> '+after);click('back');unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-book-title'));check(!document.querySelector('.bs-reader'),'explicit back reopened book');check(!!document.querySelector('.bs-shelf'),'explicit back did not retain shelf');return {before,after}})()`)
-  console.log('EPUB scroll + explicit back', scrolling)
+  await evaluate(`(async()=>{
+    click('back');await openBook('EPUB');await until(()=>labels());await wait(700);
+    click('readingSettings');
+    const choices=[...document.querySelectorAll('.bs-segment')].map(node=>node.textContent);
+    check(!choices.includes('modeScroll')&&!choices.includes('modePaged'),'obsolete mode selector');
+    check(choices.includes('spreadSingle')&&choices.includes('spreadAuto'),'missing paged layout choices');
+    click('back');unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-book-title'));
+    check(!document.querySelector('.bs-reader')&&!!document.querySelector('.bs-shelf'),'explicit back did not retain shelf');
+  })()`)
   const shelf = await evaluate(`(async()=>{const input=document.querySelector('.bs-search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'EPUB');input.dispatchEvent(new Event('input',{bubbles:true}));const select=document.querySelector('.bs-sort-select');select.value='title';select.dispatchEvent(new Event('change',{bubbles:true}));await wait(80);unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-search-input'));check(document.querySelector('.bs-search-input').value==='EPUB','query lost');check(document.querySelector('.bs-sort-select').value==='title','sort lost');return {query:document.querySelector('.bs-search-input').value,sort:document.querySelector('.bs-sort-select').value}})()`)
   console.log('Shelf', shelf)
   console.log('Shelf scroll', await evaluate(`(async()=>{document.getElementById('root').style.height='260px';await wait(80);document.querySelector('.bs-scroll').scrollTop=120;await wait(80);const before=document.querySelector('.bs-scroll').scrollTop;check(before>0,'shelf must scroll');unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-book-title'));await wait(80);const after=document.querySelector('.bs-scroll').scrollTop;check(before===after,'shelf scroll lost');document.getElementById('root').style.height='100%';return {before,after}})()`))
@@ -131,6 +188,26 @@ try {
   assert.equal(savedPdf.state.progress.page, 3)
   const savedEpub = await (await fetch(`${origin}/bookshelf/api/books/${epubId}/state`)).json()
   assert.ok(savedEpub.state.progress.scrollRatio > 0)
+  await evaluate(`(async()=>{
+    const input=document.querySelector('.bs-search-input');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    await openBook('PDF');await until(()=>document.querySelector('.bs-pdf-page'));await wait(800);
+  })()`)
+  failWrites = true
+  await evaluate(`(async()=>{
+    click('addBookmark');
+    await until(()=>document.querySelector('.bs-banner-error')?.textContent.includes('readingSaveFailed'));
+    check(!!document.querySelector('.bs-reader'),'save failure dismissed the reader');
+  })()`)
+  failWrites = false
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-banner-error button').click();
+    await until(()=>!document.querySelector('.bs-banner-error'));
+    click('back');await until(()=>document.querySelector('.bs-shelf'));
+  })()`)
+  const retriedPdf = await (await fetch(`${origin}/bookshelf/api/books/${pdfId}/state`)).json()
+  assert.equal(retriedPdf.state.bookmarks.length, 1, 'retry persists the original bookmark')
   delayDefaults = true
   console.log('EPUB waits for Host defaults', await evaluate(`(async()=>{const input=document.querySelector('.bs-search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));await wait(80);unmount();await wait(25);mount();await openBook('Fresh');await wait(300);check(!document.querySelector('.bs-epub-frame'),'EPUB mounted with fallback defaults');await until(()=>document.querySelector('.bs-epub-frame'));await wait(900);const font=()=>document.querySelector('.bs-epub-frame').contentDocument.documentElement.style.getPropertyValue('--bb-font-size');check(font()==='20px','Host default font not applied: '+font());check(!!labels(),'Host default paged mode not applied');unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900);check(font()==='20px','default font lost on remount');click('back');return {font:'20px',mode:'paged'}})()`))
   delayDefaults = false
@@ -138,7 +215,7 @@ try {
   await new Promise(r => setTimeout(r, 700))
   assert.equal((await fetch(`${origin}/bookshelf/api/books/${epubId}`, { method: 'DELETE' })).status, 200)
   await evaluate(`(async()=>{mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted book must not reopen');check(!document.querySelector('.bs-reader-state-error'),'deleted book caused reader error');unmount();mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted selection not cleared')})()`)
-  assert.deepEqual(await evaluate('window.errors'), [])
+  assert.deepEqual(await evaluate('window.errors'), ['bookshelf: could not load reading state Error: simulated read failure', 'bookshelf: could not save reading state Error: simulated write failure'])
   console.log('PASS: durable state, deleted-book recovery and console checks')
 } finally {
   socket?.close()

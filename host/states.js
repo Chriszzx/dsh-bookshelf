@@ -10,7 +10,6 @@ import { sanitizeFontSettings } from '../assets/reading-fonts.mjs'
 
 const SETTING_THEMES = new Set(['auto', 'light', 'dark'])
 const SETTING_PAGE_MARGINS = new Set(['standard', 'compact', 'fill'])
-const SETTING_PAGE_MODES = new Set(['scroll', 'paged'])
 const SETTING_PDF_FITS = new Set(['page', 'width', 'custom'])
 const SETTING_PDF_VIEWS = new Set(['continuous', 'single'])
 
@@ -43,6 +42,11 @@ function sanitizeProgress(value, format) {
   const percent = clampNumber(value.percent, 0, 1)
   if (percent !== undefined) progress.percent = percent
   if (typeof value.anchor === 'string') progress.anchor = value.anchor.slice(0, 300)
+  if (progress.format === 'epub' && typeof value.pageLocator === 'string' && value.pageLocator.length <= 512 &&
+      /^\d+(?:\.\d+)*:\d+$/.test(value.pageLocator)) {
+    progress.pageLocator = value.pageLocator
+    if (typeof value.locatorRevision === 'string' && value.locatorRevision.length <= 100) progress.locatorRevision = value.locatorRevision
+  }
   if (typeof value.chapterPath === 'string') progress.chapterPath = value.chapterPath.slice(0, 500)
   const updatedAt = clampNumber(value.updatedAt, 0, Number.MAX_SAFE_INTEGER)
   progress.updatedAt = updatedAt === undefined ? Date.now() : updatedAt
@@ -87,7 +91,7 @@ function sanitizeSettings(value) {
   if (lineHeight !== undefined) settings.lineHeight = Math.round(lineHeight * 100) / 100
   if (SETTING_PAGE_MARGINS.has(value.pageMargin)) settings.pageMargin = value.pageMargin
   if (SETTING_THEMES.has(value.theme)) settings.theme = value.theme
-  if (SETTING_PAGE_MODES.has(value.pageMode)) settings.pageMode = value.pageMode
+  if (value.pageMode === 'paged' || value.pageMode === 'scroll') settings.pageMode = 'paged'
   if (value.pageSpread === 'auto' || value.pageSpread === 'single') settings.pageSpread = value.pageSpread
   if (SETTING_PDF_FITS.has(value.pdfFit)) settings.pdfFit = value.pdfFit
   const pdfZoom = clampNumber(value.pdfZoom, 0.5, 3)

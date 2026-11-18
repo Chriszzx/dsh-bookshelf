@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
 import { DEEPSEEK_TTS_URL } from '../tts.js'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 function makeWav(samples = 6) {
   const data = Buffer.alloc(samples * 2)
@@ -131,11 +131,22 @@ test('audiobook routes plan, render, download and delete with a stubbed provider
   assert.equal(unpriced.payload.plan.cost, null)
   assert.equal(unpriced.payload.plan.format, 'wav')
 
-  assert.equal((await json(`/books/${book.id}/audio/start`, {
+  const start = (planId) => json(`/books/${book.id}/audio/start`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ planId }),
+  })
+  assert.equal((await start(planned.payload.plan.id)).status, 409, 'stale estimate must not start')
+  assert.equal((await start()).status, 409, 'a confirmed estimate is required')
+  assert.equal(calls.length, 0)
+  const confirmed = await json(`/books/${book.id}/audio/plan`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ voice: 'tide', speed: 1 }),
-  })).status, 200)
+  })
+  const starts = await Promise.all([start(confirmed.payload.plan.id), start(confirmed.payload.plan.id)])
+  assert.deepEqual(starts.map(result => result.status), [200, 200])
+  assert.deepEqual(starts.map(result => result.payload.state.plan.id), [confirmed.payload.plan.id, confirmed.payload.plan.id])
 
   let state
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -148,6 +159,10 @@ test('audiobook routes plan, render, download and delete with a stubbed provider
   assert.equal(calls.length, 2)
   assert.equal(calls[0].url, DEEPSEEK_TTS_URL)
   assert.equal(calls[0].body.voice_id, 'tide')
+  const replayed = await start(confirmed.payload.plan.id)
+  assert.equal(replayed.status, 200)
+  assert.equal(replayed.payload.state.status, 'done')
+  assert.equal(calls.length, 2, 'retrying a completed start must not synthesize again')
 
   const download = await fetch(`${origin}/books/${book.id}/audio/file`)
   assert.equal(download.status, 200)

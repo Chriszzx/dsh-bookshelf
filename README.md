@@ -9,7 +9,7 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
 ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.2%20%3C0.3.0-4f46e5)
 ![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24.0-339933)
 
-![Bookshelf cover grid](docs/images/shelf.png)
+![0.6.4 cover view showing unread, in-progress and finished books / 0.6.4 书架与阅读状态](docs/images/shelf.png)
 
 ## Overview / 概览
 
@@ -19,14 +19,14 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
   **页面级 AI 讨论**：将当前可见页面快照保存至工作区，并附带 `@file` 引用直接发起原生对话。
 - **Non-Destructive Library**: Import files, link local folders, or link macOS Apple Books libraries without altering original files.
   **无损书库管理**：支持文件导入、文件夹链接及 macOS Apple Books 书库链接，绝不修改原始文件。
-- **Native Reading Experience**: Adapts to DSH light, dark, and custom themes with paged/scroll layouts, TOC, bookmarks, and per-book highlight/underline styles.
-  **原生阅读体验**：自适应 DSH 浅色、深色与自定义主题，提供分页/滚动布局、目录、书签及按书记忆的高亮与下划线样式。
+- **Native Reading Experience**: Adapts to DSH light, dark, and custom themes with paginated EPUBs and single-page or continuous PDF views, TOC, bookmarks, and per-book highlight/underline styles.
+  **原生阅读体验**：自适应 DSH 浅色、深色与自定义主题，提供 EPUB 分页、PDF 单页与连续视图、目录、书签及按书记忆的高亮与下划线样式。
 
 ## Screenshots / 截图
 
 | | |
 |---|---|
-| [![Read aloud with DeepSeek speech](docs/images/read-aloud.png)](docs/GALLERY.md) | [![Whole-book audiobook estimate](docs/images/audiobook.png)](docs/GALLERY.md) |
+| [![Read aloud with a local system voice](docs/images/read-aloud.png)](docs/GALLERY.md) | [![Whole-book audiobook estimate](docs/images/audiobook.png)](docs/GALLERY.md) |
 | [![Discuss this page](docs/images/discussion.png)](docs/GALLERY.md) | [![Apple Books import](docs/images/apple-books.png)](docs/GALLERY.md) |
 
 See [docs/GALLERY.md](docs/GALLERY.md) for all views and [docs/DEMO.md](docs/DEMO.md) for the 60-second walkthrough script.
@@ -50,27 +50,31 @@ Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified C
 
 ## Core Capabilities / 核心功能
 
-**Shelf & Organization.** Import via file picker, drag-and-drop, or folder links. Manage titles with search, sorting, custom tags, and reading statuses (`Unread`, `Reading`, `Finished`), switching freely between a responsive cover grid and list view.
+**Shelf & Organization.** Import via file picker, drag-and-drop, or folder links. Manage titles with search, sorting, custom tags, and reading statuses (`Unread`, `Reading`, `Finished`), in either cover or list view. Each entry shows the title, author and status, with a percentage while reading. Both views use the filename for a missing title and “Unnamed author” for a missing author.
 
-**书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在响应式封面网格与列表视图间自由切换。
+**书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在封面与列表间切换。两种视图均显示书名、作者和阅读状态，在读时显示百分比。书架以文件名补全缺失的书名，以「未命名作者」补全缺失的作者。
 
-**Reader & Annotations.** Supports PDF and EPUB with zoom, paged/scroll modes, TOC, bookmarks, and automatic progress restore. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
+**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. EPUB typography follows the publication, including unencrypted, unobfuscated regular, bold and italic faces. Missing faces fall back automatically. Changing the text size preserves heading and quotation hierarchy. Choose a reading font or switch back to the publisher’s font in reading settings. PDFs support zoom and single-page or continuous views. A failed state load offers a retry that restores the saved position and bookmarks. Separate windows can add or remove bookmarks and annotations independently. Select text to copy with citation, read aloud, or apply custom highlights and underlines; bookmarks and annotations share a searchable, sortable sidebar.
 
-**阅读与标注。** 支持 PDF 与 EPUB 缩放、分页/滚动、目录、书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
+**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，默认采用原书字体与排版层级，支持原书中未经加密或混淆的常规、粗体和斜体字面。缺失字面时自动回退，调字号后仍保留标题与引文层级，可在阅读设置中更换正文字体或恢复原书字体。PDF 支持缩放、单页和连续视图。读取记录失败时可重试找回进度与书签。在两个窗口中分别增删书签和标注，也会保留各自的修改。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
 
 **Live Read-Aloud.** Floating frosted-glass controls for play/pause, sentence stepping, speed, and voice selection. Supports offline system voices (`say` on macOS, SAPI on Windows), Edge TTS (keyless), DeepSeek TTS, and OpenAI-compatible endpoints, with automatic language matching by default.
 
 **实时朗读。** 底部毛玻璃控制栏提供播放/暂停、上下句切换、语速与音色选择。支持离线系统音色（macOS `say`、Windows SAPI）、Edge 语音（免 Key）、DeepSeek 语音及 OpenAI 兼容接口，默认按书籍语言自动匹配音色。
 
-**Whole-Book Audio.** Render an entire book into a single audio file (`WAV` or `MP3`) in the background via the book's `More` menu. Previews character count, duration, file size, and DeepSeek billing estimates before generation.
+**Whole-Book Audio.** Render an entire book into a single audio file (`WAV` or `MP3`) in the background via the book's `More` menu. Review the character count, duration and file size before confirming. DeepSeek also shows estimated cost. Repeating the same confirmed request reuses the existing task.
 
-**整书语音合成。** 通过书籍「更多」菜单在后台将整书合成为单个音频文件（`WAV` 或 `MP3`）。生成前直观预览字数、预计时长、文件体积及 DeepSeek 计费预估。
+**整书语音合成。** 通过书籍「更多」菜单在后台将整书合成为单个音频文件（`WAV` 或 `MP3`）。确认前可预览字数、时长与体积，选择 DeepSeek 时还会显示预计费用。重复启动同一次已确认的估算会复用已有任务。
 
-**Page Discussion & Apple Books.** `Discuss this page` captures visible text into your target workspace and opens a native DSH chat pre-filled with `@file`. On macOS, `Apple Books` links local EPUB and PDF assets directly into the shelf.
+**Page Discussion & Apple Books.** The folded-page discussion button captures visible text into your target workspace and opens a native DSH chat pre-filled with `@file`. On macOS, `Apple Books` links local EPUB and PDF assets directly into the shelf.
 
-**页面讨论与 Apple Books。** 「讨论此页」将当前可见文本保存至目标工作区，并打开预填 `@file` 的原生对话。在 macOS 上可通过「Apple Books」直接将本地书库中的 EPUB 与 PDF 链接至书架。
+**页面讨论与 Apple Books。** 点击工具栏的折角书页图标即可「讨论此页」，将当前可见文本保存至目标工作区，并打开预填 `@file` 的原生对话。在 macOS 上可通过「Apple Books」直接将本地书库中的 EPUB 与 PDF 链接至书架。
 
 ## Data & Privacy / 数据与隐私
+
+Since 0.6.4, bookshelf HTTP routes require DSH Connection to admit the caller before any operation. This protects book files, reading state, and configured speech services with DSH's Host/Origin and authentication checks.
+
+从 0.6.4 起，书架的 HTTP 路由在处理请求前统一通过 DSH Connection 准入，使用 DSH 的 Host、Origin 和身份检查保护书籍文件、阅读状态与已配置的语音服务。
 
 All state resides under `$DSH_HOME/bookshelf`: `library.json`, `state.json` (progress, bookmarks, annotations), `tags.json`, `tts.json`, `tts-secrets.json` (mode `0600`, write-only to UI), `tts-cache/` (512 MB LRU), and `tts-scratch/` (10-minute TTL for uncached selections). API keys may also be supplied via `DEEPSEEK_API_KEY` or `BOOKSHELF_TTS_OPENAI_KEY`.
 

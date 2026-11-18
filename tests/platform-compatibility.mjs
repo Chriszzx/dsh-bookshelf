@@ -16,7 +16,7 @@ test('capabilities declare the running platform and Apple Books availability', a
   })
   process.env.DSH_HOME = home
   let route
-  const { apply } = await import('../index.js')
+  const { applyTestHost: apply } = await import('./helpers/host-context.mjs')
   apply({
     effect: fn => fn(),
     webServer: { register(value) { route = value; return () => {} } },

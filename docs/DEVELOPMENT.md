@@ -7,6 +7,10 @@
 
 0.6.3 调整阅读体验与宣传素材：封面网格按行宽计算列数（20px 间距、164–196px 封面、末行靠左）；目录/书签标签固定在栏顶；关闭朗读同步清掉字幕与高亮，工具栏按钮成为一致的开关；设置弹窗改用 DSH 原生模态/菜单配色，表单控件与下拉箭头对齐 DSH；标注预览跟随阅读字体并使用 Lorem ipsum 示例；新增 README 截图、`docs/GALLERY.md` 与 `docs/DEMO.md`。
 
+0.6.4 在 `/bookshelf` 分发入口启用 DSH Connection 准入，覆盖 API 与阅读器资源。Host 在同一个写入队列内合并按书状态，读取失败时阅读器暂停打开正文和写入，重试成功后从原进度恢复。书签和标注按条目 ID 更新，在同一写入队列中合并；Host 保留每本书最近 2048 个编辑令牌，用于识别响应丢失后的重试。保存失败时阅读器保留更改并提供重试。整书语音启动需要用户确认的估算 ID，同一次估算的重复启动会复用正在运行或已完成的任务。
+
+0.6.4 的 EPUB 使用单页或自适应跨页。阅读器保留原书的标题、正文、引文和注释层级，支持未经混淆或加密的内嵌字体。字体加载后按正文锚点重新分页，目录跳转和标注支持同一文件内的不同小节。工具栏左侧为返回与目录开关，右侧的折角书页图标打开「讨论此页」。
+
 ## 开发安装
 
 在 DSH 当前 profile 的「插件」中，选择本仓库的绝对目录进行本地安装，例如：
@@ -89,6 +93,7 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
 | `assets/lib/annotations.mjs` | 标注模型：id、锚点清洗、样式规范、`fromSelection`、同锚点判定 | 阅读器打开前预加载；Host 静态 import |
 | `assets/lib/highlights.mjs` | 渲染计划：朗读反色层、标注层与优先级、`CSS.highlights` 应用/清理、回退判定 | 阅读器打开前预加载 |
 | `assets/lib/selection-speech.mjs` | 选区切句、末尾句锚点、重定位下标与「不缓存」策略 | 阅读器打开前预加载 |
+| `assets/lib/reading-marks.mjs` | 按条目 ID 应用书签和标注增删 | Host 写入队列与阅读器乐观更新共用 |
 | `assets/lib/reading-list.mjs` | 书签+标注合并列表、排序、搜索、计数 | 阅读器打开前预加载 |
 | `assets/lib/audiobook-audio.mjs`、`assets/lib/audiobook-pricing.mjs` | 整书语音的 WAV/MP3 合并与计费（纯函数） | Host 静态 import（客户端不要动态导入） |
 | `assets/locales/<domain>.mjs` | 按领域拆分的 `en`/`zh` 词条：`import`、`apple-books`、`audiobook`、`speech`、`selection`、`reader`、`tags`、`settings`、`discussion`、`sidebar` | `apply` 后异步加载 |
@@ -100,7 +105,7 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
 | `index.js` | 只做 imports、`apply()`、路由表装配与依赖注入 |
 | `host/http.js` | `HttpError`、请求体读取、JSON 响应、MIME 与体积上限 |
 | `host/store.js` | `library.json` / `state.json` / `tags.json` 的读写、原子替换与锁 |
-| `host/library.js` | 书籍导入/删除/重命名/封面，`PUT /books/:id/state`（进度、书签、标注、设置） |
+| `host/library.js` | 书籍导入/删除/重命名/封面，`PUT /books/:id/state`（进度、设置和兼容整列写入），`PATCH /books/:id/state`（按 ID 增删书签和标注） |
 | `host/states.js` | 每本书 state 的清洗（progress / bookmarks / annotations / settings） |
 | `host/assets-route.js`、`host/tts-routes.js`、`host/audiobook-routes.js`、`host/apple-books-routes.js`、`host/link-routes.js`、`host/discussion-routes.js`、`host/routes.js` | 各路由族与分发表 |
 | `tts/settings.js`、`tts/cache.js`、`tts/providers.js`、`tts/service.js` | 朗读设置、磁盘缓存（含 `tts-scratch/` 不缓存路径）、provider 与合成服务；`tts.js` 只是 re-export 门面 |
@@ -184,8 +189,8 @@ Host 侧的标签规则与 HTTP 契约由 `tests/tags.mjs`、`tests/tags-api.mjs
 ## 读完确认回归
 
 `finish-prompt` 用一份五页 PDF 验证：停在最后一页退出时出现「标记为已读完？」弹窗；确认后
-书架卡片显示「已读完 100%」且不再显示进度条；已标记的书再次在最后一页退出不会重复询问；
-之后以更低进度重新阅读时，卡片回到「继续阅读 x%」，Host 同时清除 `status`。未读到最后一页
+书架卡片显示「已读完」且不再显示进度条；已标记的书再次在最后一页退出不会重复询问；
+之后以更低进度重新阅读时，卡片回到「正在阅读 x%」，Host 同时清除 `status`。未读到最后一页
 的书退出时任何情况下都不弹窗。
 
 ## 书架排列回归
@@ -280,7 +285,7 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 
 ## 字体与布局回归
 
-`layout-fonts` 保持窗口宽度不变，改变主面板宽度来模拟侧栏开合，验证卡片尺寸、左对齐与窄面板布局；同时检查 Windows／macOS 顶部安全区和设置弹窗位置。字体访问使用受控的成功／拒绝响应，验证点击手势、原生字重／斜体元数据、默认设置与单书设置隔离、重新打开后的恢复，以及换字体后的分页锚点。测试不授予真实系统字体访问权限；真实授权弹窗和字体渲染效果需要在现有 GUI 中人工验收。
+`layout-fonts` 保持窗口宽度不变，改变主面板宽度来模拟侧栏开合，验证卡片尺寸、左对齐与窄面板布局；同时检查 Windows／macOS 顶部安全区、设置弹窗位置，以及阅读工具栏按钮的中心线、点击区域和图标实际可见尺寸。字体访问使用受控的成功／拒绝响应，验证点击手势、原生字重／斜体元数据、默认设置与单书设置隔离、重新打开后的恢复，以及换字体后的分页锚点。测试不授予真实系统字体访问权限；真实授权弹窗和字体渲染效果需要在现有 GUI 中人工验收。
 
 ## 提交前检查
 
@@ -290,7 +295,7 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`host/**`、`tts/**`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs`、`assets/locales/*.mjs`、`docs/GALLERY.md`、`docs/DEMO.md` 与 `docs/images/**`，且不含 `tests/` 和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
    `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts/providers.js` 中出现。
-4. 文档版本号与 `package.json` 一致（当前 `0.6.3`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
+4. 文档版本号与 `package.json` 一致（当前 `0.6.4`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
 5. 需要真实 Edge `say` 冒烟时手动执行，失败不阻塞提交；DSH 重启后再做一次人工验收（朗读入口、设置窗口、自动音色）。
 6. 未经确认不要推送到远端，也不要改动版本号。
 

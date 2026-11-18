@@ -73,6 +73,10 @@ export function createStore({ rootDir, tagStore, logger } = {}) {
     if (!parsed || typeof parsed.books !== 'object' || parsed.books === null || Array.isArray(parsed.books)) {
       throw new HttpError(500, 'bookshelf state.json has no books map')
     }
+    // Old EPUB records share the chapter ratio and anchors with paged reading.
+    for (const state of Object.values(parsed.books)) {
+      if (state?.settings?.pageMode === 'scroll') state.settings.pageMode = 'paged'
+    }
     return { version: 1, books: parsed.books }
   }
 

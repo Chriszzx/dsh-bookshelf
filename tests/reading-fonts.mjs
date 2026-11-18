@@ -5,7 +5,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sanitizeFontSettings, fontStack, readFontMetadata } from '../assets/reading-fonts.mjs'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 export function fontBlob({ weight = 400, italic = false, axes = [] } = {}) {
   const tables = [{ tag: 'OS/2', bytes: Buffer.alloc(64) }]

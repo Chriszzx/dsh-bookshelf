@@ -23,16 +23,17 @@ import { createTtsService } from './tts.js'
  * The Host half owns the durable library: imported files live under
  * `$DSH_HOME/bookshelf/books`, metadata lives in `$DSH_HOME/bookshelf/library.json`,
  * and a small HTTP surface under `/bookshelf` serves the shelf and the file
- * bytes the browser readers need. The browser route is local-only: the web
- * carrier binds loopback, and every response reflects a loopback Origin only.
+ * bytes the browser readers need. Admission is delegated to DSH Connection
+ * before any of the bookshelf handlers run.
  *
  * This entry point only composes the pieces: `host/**` holds the requests and
  * durable stores, `tts.js` and `audiobook.js` hold the speech services.
  */
 
-export const inject = ['webServer', 'directoryPickerController', 'commands', 'sessionProjections']
+export const inject = ['webServer', 'connection', 'directoryPickerController', 'commands', 'sessionProjections']
 
 export function apply(ctx, options = {}) {
+  const connection = ctx.connection
   const home = process.env.DSH_HOME || join(homedir(), '.dsh')
   const rootDir = join(home, 'bookshelf')
   const assetsDir = fileURLToPath(new URL('./assets', import.meta.url))
@@ -67,7 +68,7 @@ export function apply(ctx, options = {}) {
     ...library.routes,
     ...createAssetRoutes({ http, assetsDir }),
   ]
-  const handler = createRouteHandler({ http, routes, logger: ctx.logger })
+  const handler = createRouteHandler({ http, routes, logger: ctx.logger, connection })
 
   // The Host composition injects both services. Tests that mount only the HTTP
   // shelf pass a minimal context, so keep the sidebar capability optional there.

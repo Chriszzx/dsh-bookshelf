@@ -31,6 +31,7 @@ const ASSET_TYPES = new Map([
   ['.mjs', 'text/javascript; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
   ['.json', 'application/json; charset=utf-8'],
+  ['.png', 'image/png'],
   ['.bcmap', 'application/octet-stream'],
   ['.wasm', 'application/wasm'],
   ['.ttf', 'font/ttf'],
