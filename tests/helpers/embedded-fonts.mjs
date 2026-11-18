@@ -121,15 +121,29 @@ export async function verifyEmbeddedFonts({ evaluate, command, fixture, state })
       if(range.getClientRects().length) candidates.push({range,page:pageOf(range)})
     }
     const sheet=[...doc.styleSheets].find(s=>[...s.cssRules].some(r=>r.type===CSSRule.FONT_FACE_RULE))
-    for (const rule of [...sheet.cssRules].filter(r=>r.type===CSSRule.FONT_FACE_RULE)) {
+    const faces=[...sheet.cssRules].filter(r=>r.type===CSSRule.FONT_FACE_RULE)
+    // Use the sample's own regular face at deliberately different metrics as
+    // fallback. Installed fonts on some runners yield identical page breaks.
+    const regular=faces.find(r=>!['bold','700'].includes(r.style.fontWeight) && r.style.fontStyle!=='italic')
+    const FontFace=doc.defaultView.FontFace
+    const fallback=new FontFace('FixtureFallback',regular.style.getPropertyValue('src'),{sizeAdjust:'175%'})
+    await fallback.load()
+    doc.fonts.add(fallback)
+    for (const rule of faces) {
       const style=rule.style, face=style.fontStyle==='italic'?'Italic':style.fontWeight==='bold'||style.fontWeight==='700'?'Bold':'Regular'
-      style.setProperty('src','url("'+location.origin+'/test-font/'+face+'")')
+      const delayed=new FontFace('DelayedPublisher','url("'+location.origin+'/test-font/'+face+'")',{
+        weight:style.fontWeight||'normal',style:style.fontStyle||'normal',display:'swap',
+      })
+      doc.fonts.add(delayed)
     }
+    const style=doc.createElement('style')
+    style.textContent='body, body * { font-family: DelayedPublisher, FixtureFallback !important }'
+    doc.head.append(style)
     await until(()=>doc.fonts.status==='loading')
-    // Choose a noninitial passage that actually crosses a column boundary
-    // on this machine. System fallback metrics vary by OS and browser.
-    const candidate=candidates.find(c=>c.page>2 && c.page!==pageOf(c.range))
-    if(!candidate) throw Error('No passage changed pages in the fallback layout')
+    // Wait for the fallback layout to be painted while the WOFF responses are held.
+    const moved=()=>candidates.find(c=>c.page>2 && c.page!==pageOf(c.range))
+    await until(moved)
+    const candidate=moved()
     const range=candidate.range
     const passage=range.startContainer.parentElement
     const selection=doc.getSelection()
