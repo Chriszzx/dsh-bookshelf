@@ -69,11 +69,3 @@ In 0.6.4 the EPUB page follows the DSH theme. Open Aa to set the reading font, t
 The covers and the Austen excerpt come from Standard Ebooks. The project publishes its editions and cover artwork for public-domain use in the United States. [Standard Ebooks](https://standardebooks.org/) · [Pride and Prejudice](https://standardebooks.org/ebooks/jane-austen/pride-and-prejudice)
 
 本组封面与《傲慢与偏见》节选取自 Standard Ebooks 的公版版本。[Standard Ebooks 公版说明](https://standardebooks.org/about)
-
-## Social preview / 社交预览
-
-![Social preview](images/social-preview.png)
-
-`images/social-preview.png` is sized for GitHub's repository social preview (1280×640); upload it under the repository settings.
-
-`images/social-preview.png` 是 GitHub 仓库社交预览尺寸（1280×640），可在仓库设置中上传。

@@ -86,6 +86,7 @@ try {
   }
   const epubId = await importBook('EPUB', 'epub', 'paged-long.epub', { pageMode: 'paged', pageMargin: 'compact' }, { format: 'epub', chapterIndex: 0, scrollRatio: .4, percent: .4 })
   const pdfId = await importBook('PDF', 'pdf', 'mixed.pdf', { pdfView: 'single', pdfFit: 'page' }, { format: 'pdf', page: 2, percent: .4 })
+  await importBook('FreshPDF', 'pdf', 'mixed.pdf', undefined, undefined)
   await importBook('Fresh', 'epub', 'paged-long.epub', undefined, undefined)
   assert.equal((await fetch(`${origin}/bookshelf/api/settings`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ settings: { fontSize: 20, pageMode: 'paged', pageMargin: 'fill' } }) })).status, 200)
   // Seed genuine pre-upgrade files, bypassing the current settings sanitizer.
@@ -167,6 +168,20 @@ try {
   console.log('PDF single + delayed writes', pdf)
   const continuous = await evaluate(`(async()=>{const before=labels();click('pdfViewMode');const scroller=document.querySelector('.bs-pdf-scroll');scroller.scrollTop=0;scroller.dispatchEvent(new Event('scroll'));await wait(600);check(labels()===before,'PDF mode switch lost current page: '+before+' -> '+labels());await roundTrip();check(labels()===before,'PDF continuous page changed');check(document.querySelectorAll('.bs-pdf-page').length>1,'PDF view lost');return labels()})()`)
   console.log('PDF continuous', continuous)
+  await evaluate(`(async()=>{
+    click('back')
+    await openBook('FreshPDF')
+    await until(()=>document.querySelector('button[title="nextPage"]:enabled'))
+    document.querySelector('button[title="nextPage"]').click()
+    const chosen='pageOf(current=2,total=5)'
+    await wait(500)
+    check(labels()===chosen,'initial PDF restore overwrote an early page turn: '+chosen+' -> '+labels())
+    await roundTrip()
+    check(labels()===chosen,'the early page turn must survive reopening')
+    click('back')
+    await openBook('PDF')
+    await until(()=>labels()==='pageOf(current=3,total=5)')
+  })()`)
   delayWrites = false
   delayDefaults = true
   console.log('PDF independent of EPUB defaults', await evaluate(`(async()=>{unmount();await wait(25);const start=performance.now();mount();await until(()=>document.querySelector('.bs-pdf-page'));const elapsed=performance.now()-start;check(elapsed<2500,'PDF blocked by unrelated defaults GET');await wait(3600);return {elapsedMs:Math.round(elapsed)}})()`))

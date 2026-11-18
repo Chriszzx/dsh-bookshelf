@@ -1,6 +1,6 @@
 {
   "name": "dsh-bookshelf",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "A local PDF and EPUB bookshelf for the DSH Web GUI with built-in readers and a shelf-owned Books sidebar.",
   "type": "module",
   "icon": "icon.svg",
@@ -34,7 +34,8 @@
     "test": "node scripts/run-checks.mjs unit",
     "test:syntax": "node scripts/check-syntax.mjs",
     "test:browser": "node tests/run-browser.mjs",
-    "test:all": "node scripts/run-checks.mjs all"
+    "test:all": "node scripts/run-checks.mjs all",
+    "pack:release": "node scripts/pack-release.mjs"
   },
   "main": "index.js",
   "exports": {
@@ -61,11 +62,8 @@
     "icon.svg",
     "assets/**",
     "README.md",
-    "docs/DEVELOPMENT.md",
-    "LICENSE",
-    "docs/GALLERY.md",
-    "docs/DEMO.md",
-    "docs/images/**"
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "dsh": {
     "manifestVersion": 1,

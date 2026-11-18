@@ -29,9 +29,9 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
 | [![Read aloud with a local system voice](docs/images/read-aloud.png)](docs/GALLERY.md) | [![Whole-book audiobook estimate](docs/images/audiobook.png)](docs/GALLERY.md) |
 | [![Discuss this page](docs/images/discussion.png)](docs/GALLERY.md) | [![Apple Books import](docs/images/apple-books.png)](docs/GALLERY.md) |
 
-See [docs/GALLERY.md](docs/GALLERY.md) for all views and [docs/DEMO.md](docs/DEMO.md) for the 60-second walkthrough script.
+See the [gallery](docs/GALLERY.md) for more screenshots.
 
-更多视图见 [docs/GALLERY.md](docs/GALLERY.md)，60 秒演示脚本见 [docs/DEMO.md](docs/DEMO.md)。
+更多截图见[图集](docs/GALLERY.md)。
 
 ## Install / 安装
 
@@ -41,12 +41,15 @@ Requires DSH `>=0.2.0-rc.2 <0.3.0` and Node `^22.19.0 || >=24.0.0` on macOS or W
 
 ```sh
 dsh plugin --profile web add github:Chriszzx/dsh-bookshelf
-dsh plugin --profile web add /absolute/path/to/dsh-bookshelf   # local checkout
 ```
 
-Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified Chinese / English).
+DSH installs the plugin directly from GitHub. Restart the profile to open Bookshelf in the sidebar. To install a specific release, append its tag to the repository spec, for example `github:Chriszzx/dsh-bookshelf#v0.6.4`.
 
-在侧栏注册 `ui-bookshelf`，界面语言自动跟随 DSH（简体中文 / 英文）。
+DSH 直接从 GitHub 安装插件。重启该 profile 后，从侧栏打开书架。要安装指定版本，可在仓库地址后加标签，例如 `github:Chriszzx/dsh-bookshelf#v0.6.4`。
+
+Releases also provide a `.tgz` and SHA-256 checksum. Install a downloaded package with `dsh plugin --profile web add ./dsh-bookshelf-X.Y.Z.tgz`. [Releases](https://github.com/Chriszzx/dsh-bookshelf/releases) · [Changelog](CHANGELOG.md)
+
+也可下载 Release 中的 `.tgz` 和 SHA-256 校验文件，使用 `dsh plugin --profile web add ./dsh-bookshelf-X.Y.Z.tgz` 安装下载的包。[版本发布](https://github.com/Chriszzx/dsh-bookshelf/releases) · [变更记录](CHANGELOG.md)
 
 ## Core Capabilities / 核心功能
 
@@ -91,9 +94,9 @@ node scripts/run-checks.mjs all     # syntax + unit/API + browser regressions
 node tests/run-browser.mjs tts-playback
 ```
 
-Requires Chrome and local React UMD fixtures; automated tests never contact external TTS endpoints. Architecture, protocols, and release checklists are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+Requires Chrome and local React UMD fixtures; automated tests never contact external TTS endpoints. See the [development guide](docs/DEVELOPMENT.md) for local installation, validation, and releases.
 
-测试需 Chrome 与本地 React UMD 依赖，自动化测试不请求外部语音服务。架构细节、协议与发布检查清单见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+测试需 Chrome 与本地 React UMD 依赖，自动化测试不请求外部语音服务。本地安装、验收和发布流程见[开发文档](docs/DEVELOPMENT.md)。
 
 ## License / 许可
 

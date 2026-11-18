@@ -7,3 +7,13 @@ coverage/
 .cache/
 .env
 .env.*
+
+# Local maintainer notes, agent instructions and scratch files
+/docs/local/
+/.local/
+AGENTS.md
+AGENTS.local.md
+
+# Local package artifacts
+*.tgz
+*.tgz.sha256

@@ -4395,7 +4395,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const pdfDocumentRef = useRef(null)
       const restoringRef = useRef(true)
       const pdfReadyRef = useRef(false)
-      const settleTimerRef = useRef(0)
+      const restoreTimerRef = useRef(0)
       const jumpTimerRef = useRef(0)
 
       useEffect(() => {
@@ -4657,17 +4657,18 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         clearTimeout(jumpTimerRef.current)
         jumpTimerRef.current = 0
-        const timer = setTimeout(() => {
+        restoreTimerRef.current = setTimeout(() => {
           scrollToPage(target)
-          settleTimerRef.current = setTimeout(() => {
+          restoreTimerRef.current = setTimeout(() => {
+            restoreTimerRef.current = 0
             scrollToPage(target)
             restoringRef.current = false
             savePdfProgress(target)
           }, 180)
         }, 100)
         return () => {
-          clearTimeout(timer)
-          clearTimeout(settleTimerRef.current)
+          clearTimeout(restoreTimerRef.current)
+          restoreTimerRef.current = 0
         }
       }, [effectiveZoom, fitMode, viewMode, width, height, status, pdfDocument, scrollToPage, savePdfProgress])
 
@@ -4694,7 +4695,7 @@ html.bb-paged body table tr{break-inside:avoid}
       useEffect(
         () => () => {
           if (frameRef.current !== 0) cancelAnimationFrame(frameRef.current)
-          clearTimeout(settleTimerRef.current)
+          clearTimeout(restoreTimerRef.current)
           clearTimeout(jumpTimerRef.current)
           jumpTimerRef.current = 0
         },
@@ -4728,16 +4729,19 @@ html.bb-paged body table tr{break-inside:avoid}
           const document = pdfDocumentRef.current
           if (document === null) return
           const safePage = Math.min(document.numPages, Math.max(1, page))
+          // A page chosen by the reader supersedes an in-flight layout restore.
+          clearTimeout(restoreTimerRef.current)
+          restoreTimerRef.current = 0
           restoringRef.current = true
           currentPageRef.current = safePage
           setCurrentPage(safePage)
+          savePdfProgress(safePage)
           requestAnimationFrame(() => {
             scrollToPage(safePage)
             if (jumpTimerRef.current !== 0) clearTimeout(jumpTimerRef.current)
             jumpTimerRef.current = setTimeout(() => {
               jumpTimerRef.current = 0
               restoringRef.current = false
-              savePdfProgress(safePage)
             }, 120)
           })
         },
