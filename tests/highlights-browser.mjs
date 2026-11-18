@@ -199,10 +199,11 @@ try {
     await until(()=>document.querySelectorAll('.bs-card').length===1);
     await openBook('Annotated');
     await until(()=>chapterText().includes('第二句话'),'chapter one renders');
+    await until(()=>frameDocument()?.documentElement.style.getPropertyValue('--bb-fg'),'reader applies its palette to the chapter');
     const doc=frameDocument();
     const rootStyle=doc.documentElement.style;
-    check(rootStyle.getPropertyValue('--bb-fg')==='#0f1115','pinned light fg: '+rootStyle.getPropertyValue('--bb-fg'));
-    check(rootStyle.getPropertyValue('--bb-bg')==='#ffffff','pinned light bg: '+rootStyle.getPropertyValue('--bb-bg'));
+    check(rootStyle.getPropertyValue('--bb-fg')==='#0f1115','light host foreground: '+rootStyle.getPropertyValue('--bb-fg'));
+    check(rootStyle.getPropertyValue('--bb-bg')==='#ffffff','light host background: '+rootStyle.getPropertyValue('--bb-bg'));
     // Annotation anchors are chapter-text offsets: compute them with the same
     // module the reader resolves ranges with.
     const textIndex=await import('/bookshelf/assets/lib/text-index.mjs');
