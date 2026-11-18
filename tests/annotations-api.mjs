@@ -233,3 +233,32 @@ test('annotation lists are capped at 1000 entries per book', async t => {
   const onDisk = JSON.parse(await readFile(join(home, 'bookshelf', 'state.json'), 'utf8'))
   assert.equal(onDisk.books[book.id].annotations.length, 1000)
 })
+
+test('a retried mark addition cannot restore a mark deleted after the first response', async t => {
+  const { send, json, statePath } = await startHost(t)
+  const item = annotation()
+  const edit = { collection: 'annotations', id: item.id, token: 'first-add', value: item }
+  const patch = markEdits => send('PATCH', statePath, { markEdits })
+  assert.equal((await patch([edit])).status, 200)
+  assert.equal((await patch([{ ...edit, token: 'peer-remove', value: null }])).status, 200)
+  assert.equal((await patch([edit])).status, 200)
+  assert.deepEqual((await json(statePath)).payload.state.annotations, [])
+  const invalid = await patch([edit, { ...edit, id: 'other', token: 'mismatched' }])
+  assert.equal(invalid.status, 400)
+  assert.deepEqual((await json(statePath)).payload.state.annotations, [])
+})
+
+test('mark capacity rejects the whole write and a reader can remove an item and retry', async t => {
+  const { send, json, statePath } = await startHost(t)
+  const bookmarks = Array.from({ length: 500 }, (_, i) => ({ id: 'b' + i, label: String(i) }))
+  await send('PUT', statePath, { bookmarks })
+  const add = { collection: 'bookmarks', id: 'extra', token: 'add-extra', value: { id: 'extra' } }
+  const remove = { collection: 'bookmarks', id: 'b1', token: 'remove-b1', value: null }
+  assert.equal((await send('PATCH', statePath, { markEdits: [add] })).status, 409)
+  assert.deepEqual((await json(statePath)).payload.state.bookmarks.map(b => b.id), bookmarks.map(b => b.id))
+  const retried = await send('PATCH', statePath, { markEdits: [add, remove] })
+  assert.equal(retried.status, 200)
+  assert.equal(retried.payload.state.bookmarks.length, 500)
+  assert.equal(retried.payload.state.bookmarks[0].id, 'extra')
+  assert.ok(!retried.payload.state.bookmarks.some(b => b.id === 'b1'))
+})

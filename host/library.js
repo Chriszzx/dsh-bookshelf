@@ -3,6 +3,7 @@ import { createReadStream, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 
 import { AppleBooksImportError, packEpubDirectory } from '../apple-books.js'
+import { applyMarkEdits } from '../assets/lib/reading-marks.mjs'
 import { sourceRevision } from '../source-revision.js'
 import { FINISHED_PERCENT, isTagId, READING_STATUSES, readingStatusOf, TAG_LIMITS } from '../tags.js'
 
@@ -12,6 +13,29 @@ import { cleanText, sanitizeAnnotations, sanitizeBookmarks, sanitizeProgress, sa
 
 // Book records: import, metadata, covers, file serving and per-book state
 // routes. Helpers shared with the link and Apple Books routes are exported.
+
+function publicReadingState(state) {
+  if (!state) return null
+  const { recentMarkEdits, ...visible } = state
+  return visible
+}
+
+function validatedMarkEdits(payload) {
+  const edits = payload.markEdits
+  if (!Array.isArray(edits) || !edits.length || edits.length > 2000 ||
+      'bookmarks' in payload || 'annotations' in payload) throw new HttpError(400, 'invalid reading mark patch')
+  const validId = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value)
+  return edits.map(edit => {
+    if (!edit || !validId(edit.id) || !validId(edit.token) ||
+        !['bookmarks', 'annotations'].includes(edit.collection)) throw new HttpError(400, 'invalid reading mark edit')
+    if (edit.value === null) return edit
+    if (edit.value?.id !== edit.id) throw new HttpError(400, 'reading mark ID mismatch')
+    const sanitize = edit.collection === 'annotations' ? sanitizeAnnotations : sanitizeBookmarks
+    const [value] = sanitize([edit.value])
+    if (!value) throw new HttpError(400, 'invalid reading mark')
+    return { ...edit, value }
+  })
+}
 
 function normalizedBookText(value) {
   return String(value || '')
@@ -85,7 +109,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     const record = library.books.find((book) => book.id === id)
     if (record === undefined) throw new HttpError(404, 'book not found')
     const states = await readStates()
-    sendJson(request, response, 200, { state: states.books[id] || null })
+    sendJson(request, response, 200, { state: publicReadingState(states.books[id]) })
   }
 
   async function putBookState(request, response, id) {
@@ -118,11 +142,27 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
       }
       patch.settings = sanitizeSettings(payload.settings) || {}
     }
+    const edits = request.method === 'PATCH' ? validatedMarkEdits(payload) : []
     let next
     await updateStates((books) => {
       const previous = books[id]
       const current = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {}
       next = { ...current, ...patch }
+      if (edits.length) {
+        // The previous response may have been lost after the atomic write.
+        // Replaying an acknowledged add must not resurrect another reader's deletion.
+        const seen = new Set(current.recentMarkEdits || [])
+        const fresh = edits.filter(edit => {
+          if (seen.has(edit.token)) return false
+          seen.add(edit.token)
+          return true
+        })
+        next = applyMarkEdits(next, fresh)
+        if (next.bookmarks?.length > 500 || next.annotations?.length > 1000) {
+          throw new HttpError(409, 'reading mark limit reached')
+        }
+        next.recentMarkEdits = Array.from(seen).slice(-2048)
+      }
       return { ...books, [id]: next }
     })
     // Reading a finished book again drops the finished override as soon as the
@@ -143,7 +183,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
         }),
       )
     }
-    sendJson(request, response, 200, { state: next })
+    sendJson(request, response, 200, { state: publicReadingState(next) })
   }
 
   async function sendCover(request, response, id) {
@@ -423,6 +463,7 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     }),
     regexRoute(new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/state$`), {
       GET: (request, response, context) => getBookState(request, response, context.params[1]),
+      PATCH: (request, response, context) => putBookState(request, response, context.params[1]),
       PUT: (request, response, context) => putBookState(request, response, context.params[1]),
     }),
     regexRoute(new RegExp(`^${API_PREFIX}/books/([0-9a-f-]{36})/cover$`), {

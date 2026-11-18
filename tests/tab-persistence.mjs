@@ -45,6 +45,8 @@ mount();
 let delayWrites = false
 let delayDefaults = false
 let failWrites = false
+let failReads = false
+let writesDuringFailedRead = 0
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
   server = createServer(async (req, res) => {
@@ -54,7 +56,15 @@ try {
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
       if (delayDefaults && req.method === 'GET' && path.endsWith('/settings')) await new Promise(r => setTimeout(r, 3500))
-      if (failWrites && req.method === 'PUT' && path.endsWith('/state')) {
+      if (failReads && path.endsWith('/state')) {
+        if (req.method === 'GET') {
+          res.writeHead(503, { 'content-type': 'application/json' })
+          res.end(JSON.stringify({ error: 'simulated read failure' }))
+          return
+        }
+        writesDuringFailedRead++
+      }
+      if (failWrites && ['PUT', 'PATCH'].includes(req.method) && path.endsWith('/state')) {
         req.resume()
         res.writeHead(503, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ error: 'simulated write failure' }))
@@ -127,7 +137,24 @@ try {
     assert.ok(Date.now() - startup < 10000, 'test page initialized')
     await new Promise(r => setTimeout(r, 100))
   }
-  const epub = await evaluate(`(async()=>{await until(()=>window.openBook);await openBook('EPUB');await until(()=>labels());await wait(1700);const before=labels();await roundTrip();check(labels()===before,'EPUB page changed: '+before+' -> '+labels());click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'EPUB immediate switch lost page');return {before,after:labels()}})()`)
+  failReads = true
+  await evaluate(`(async()=>{
+    await openBook('EPUB')
+    await until(()=>document.querySelector('.bs-reader-state-error')?.textContent.includes('readingLoadFailed'))
+    check(!document.querySelector('.bs-epub-frame'),'failed load must not start a new book')
+    await wait(850)
+  })()`)
+  assert.equal(writesDuringFailedRead, 0)
+  const afterFailure = JSON.parse(await readFile(statePath, 'utf8')).books[epubId]
+  assert.deepEqual(afterFailure, legacy.books[epubId], 'failure leaves all saved fields untouched')
+  failReads = false
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-reader-state-error button').click()
+    await until(()=>labels())
+    document.querySelectorAll('.bs-aside-tab')[1].click()
+    await until(()=>document.querySelector('.bs-reading-label')?.textContent==='Legacy bookmark')
+  })()`)
+  const epub = await evaluate(`(async()=>{await until(()=>labels());await wait(1700);const before=labels();await roundTrip();check(labels()===before,'EPUB page changed: '+before+' -> '+labels());click('nextPage');const turned=labels();await roundTrip();check(labels()===turned,'EPUB immediate switch lost page');return {before,after:labels()}})()`)
   const migrated = (await (await fetch(`${origin}/bookshelf/api/books/${epubId}/state`)).json()).state
   assert.equal(migrated.settings.pageMode, 'paged')
   assert.equal(migrated.bookmarks[0].id, 'legacy')
@@ -188,7 +215,7 @@ try {
   await new Promise(r => setTimeout(r, 700))
   assert.equal((await fetch(`${origin}/bookshelf/api/books/${epubId}`, { method: 'DELETE' })).status, 200)
   await evaluate(`(async()=>{mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted book must not reopen');check(!document.querySelector('.bs-reader-state-error'),'deleted book caused reader error');unmount();mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted selection not cleared')})()`)
-  assert.deepEqual(await evaluate('window.errors'), ['bookshelf: could not save reading state Error: simulated write failure'])
+  assert.deepEqual(await evaluate('window.errors'), ['bookshelf: could not load reading state Error: simulated read failure', 'bookshelf: could not save reading state Error: simulated write failure'])
   console.log('PASS: durable state, deleted-book recovery and console checks')
 } finally {
   socket?.close()

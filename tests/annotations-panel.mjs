@@ -127,7 +127,7 @@ try {
   assert.equal(seeded.bookmarks.length, 2)
 
   chrome = spawn(chromePath, [
-    ...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--no-first-run', '--disable-background-networking',
+    ...browserLaunchArgs(), '--headless=new', '--disable-gpu', '--disable-popup-blocking', '--no-first-run', '--disable-background-networking',
     `--user-data-dir=${join(temporary, 'chrome')}`, '--remote-debugging-port=0',
     '--window-size=1400,1000', 'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] })
@@ -249,6 +249,72 @@ try {
     return true;
   })()`), true)
 
+  const imported = await fetch(api + '/books?name=windows.epub&title=Windows&format=epub', {
+    method: 'POST', body: epubBytes('Windows', [['Alpha paragraph'], ['Bravo paragraph']]),
+  })
+  assert.equal(imported.status, 201)
+  const { book: otherBook } = await imported.json()
+  const path = api + '/books/' + otherBook.id + '/state'
+  const seededMarks = await fetch(path, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bookmarks, annotations }) })
+  assert.equal(seededMarks.status, 200)
+  await evaluate(`(async()=>{
+    document.querySelector('button[title="back"]').click()
+    await until(()=>document.querySelectorAll('.bs-card').length===2)
+    const other=window.open('/test.html','mark-editor')
+    try {
+      await until(()=>other?.document.querySelectorAll('.bs-card').length===2)
+      await Promise.all([openBook('Windows'),other.openBook('Windows')])
+      await Promise.all([window,other].map(w=>w.until(()=>w.document.querySelectorAll('.bs-toc-label').length===2)))
+      other.document.querySelectorAll('.bs-toc-label')[1].click()
+      await other.until(()=>other.document.querySelector('.bs-epub-frame').contentDocument.body.textContent.includes('Bravo'))
+      async function edit(w, bookmarkLabel, annotationLabel, kind) {
+        const doc=w.document
+        w.asideTabs()[1].click()
+        await w.until(()=>w.rows().length===4)
+        function remove(label) {
+          const row=w.rows().find(n=>n.querySelector('.bs-reading-label').textContent===label)
+          row.querySelector('.bs-reading-delete').click()
+        }
+        remove(bookmarkLabel)
+        remove(annotationLabel)
+        await w.until(()=>doc.querySelector('button[title="addBookmark"]'))
+        doc.querySelector('button[title="addBookmark"]').click()
+        const chapter=doc.querySelector('.bs-epub-frame').contentDocument
+        const para=chapter.querySelector('p'), range=chapter.createRange()
+        range.selectNodeContents(para)
+        const selection=chapter.defaultView.getSelection()
+        selection.removeAllRanges()
+        selection.addRange(range)
+        para.dispatchEvent(new w.MouseEvent('contextmenu',{bubbles:true,cancelable:true}))
+        await w.until(()=>doc.querySelector('.bs-selection-menu'))
+        Array.from(doc.querySelectorAll('.bs-selection-item')).find(n=>n.textContent===kind).click()
+      }
+      await Promise.all([
+        edit(window,'第一章书签','高亮引用文字','selectionHighlight'),
+        edit(other,'第二章书签','下划线引用','selectionUnderline'),
+      ])
+      await untilAsync(async()=>{
+        const {state}=await stateFor('Windows')
+        return state.bookmarks.length===2 && state.bookmarks.every(b=>!['bm_first','bm_second'].includes(b.id)) &&
+          state.annotations.map(a=>a.quote).sort().join('|')==='Alpha paragraph|Bravo paragraph'
+      })
+      await Promise.all([window,other].map(async w=>{
+        w.document.querySelector('button[title="back"]').click()
+        await w.until(()=>w.document.querySelectorAll('.bs-card').length===2)
+        await w.openBook('Windows')
+        w.asideTabs()[1].click()
+        await w.until(()=>w.rows().length===4)
+        const labels=w.rows().map(row=>row.querySelector('.bs-reading-label').textContent)
+        check(labels.includes('Alpha paragraph')&&labels.includes('Bravo paragraph'),'reopened marks: '+labels)
+        check(w.kinds().filter(kind=>kind==='bookmark').length===2,'both bookmarks survive reopening')
+      }))
+      check(!other.errors.length,'second window errors: '+other.errors)
+    } finally { other?.close() }
+  })()`)
+  const { state: merged } = await (await fetch(path)).json()
+  assert.deepEqual(merged.bookmarks.map(mark => mark.chapterIndex).sort(), [0, 1])
+  assert.deepEqual(merged.annotations.map(mark => mark.type).sort(), ['highlight', 'underline'])
+  console.log('Two reader windows added and deleted independent bookmarks and annotations')
   assert.deepEqual(await evaluate('window.errors'), [])
   console.log('bookmarks / annotations panel: counts, kind icons, sort, search, delete and chapter jump')
 } finally {

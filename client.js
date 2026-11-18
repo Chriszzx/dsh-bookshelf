@@ -872,7 +872,11 @@ html.bb-paged body table tr{break-inside:avoid}
       await stateWrites.get(url)
       const response = await fetch(url, { cache: 'no-store' })
       const payload = await parseResponse(response)
-      return payload && payload.state && typeof payload.state === 'object' && !Array.isArray(payload.state) ? payload.state : {}
+      if (payload?.state === null) return {}
+      if (!payload?.state || typeof payload.state !== 'object' || Array.isArray(payload.state)) {
+        throw new Error('Invalid reading state response')
+      }
+      return payload.state
     }
 
     async function readDefaults(base) {
@@ -896,12 +900,17 @@ html.bb-paged body table tr{break-inside:avoid}
       const body = JSON.stringify(patch)
       const pending = (stateWrites.get(url) || Promise.resolve()).then(async () => {
         const response = await fetch(url, {
-          method: 'PUT',
+          method: patch.markEdits ? 'PATCH' : 'PUT',
           headers: { 'content-type': 'application/json' },
           body,
           keepalive,
         })
-        await parseResponse(response)
+        const saved = (await parseResponse(response))?.state
+        if (!saved || typeof saved !== 'object' || Array.isArray(saved) ||
+            patch.markEdits?.some(edit => !Array.isArray(saved[edit.collection]))) {
+          throw new Error('Invalid reading state response')
+        }
+        return saved
       })
       // A failed request is reported by its caller, but must not block later saves.
       const settled = pending.catch(() => undefined)
@@ -1541,9 +1550,17 @@ html.bb-paged body table tr{break-inside:avoid}
     // ----- [hooks:state] -----
     // Per-book reader state: initial load, optimistic save queue, exit flush.
 
+    function mergeReadingPatches(older, newer) {
+      const patch = { ...older, ...newer }
+      if (older?.markEdits && newer?.markEdits) patch.markEdits = [...older.markEdits, ...newer.markEdits]
+      return patch
+    }
+
     function useReaderState(base, book) {
       const [state, setState] = useState(null)
-      const [saveFailed, setSaveFailed] = useState(false)
+      const [loadFailed, setLoadFailed] = useState(false)
+      const [loadAttempt, setLoadAttempt] = useState(0)
+      const [saveErrorKey, setSaveErrorKey] = useState('')
       const stateRef = useRef({})
       const loadedRef = useRef(false)
       const pendingRef = useRef(null)
@@ -1556,9 +1573,10 @@ html.bb-paged body table tr{break-inside:avoid}
         pendingRef.current = null
         loadedRef.current = false
         setState(null)
-        setSaveFailed(false)
-        readBookState(base, book.id)
-          .then((value) => {
+        setSaveErrorKey('')
+        setLoadFailed(false)
+        Promise.all([readBookState(base, book.id), loadClientLib(base, 'reading-marks')])
+          .then(([value]) => {
             if (cancelled) return
             stateRef.current = value
             loadedRef.current = true
@@ -1567,14 +1585,12 @@ html.bb-paged body table tr{break-inside:avoid}
           .catch((failure) => {
             if (cancelled) return
             console.error('bookshelf: could not load reading state', failure)
-            stateRef.current = {}
-            loadedRef.current = true
-            setState({})
+            setLoadFailed(true)
           })
         return () => {
           cancelled = true
         }
-      }, [base, book.id])
+      }, [base, book.id, loadAttempt])
 
       const flush = useCallback(
         function flushPending(keepalive = false) {
@@ -1585,15 +1601,21 @@ html.bb-paged body table tr{break-inside:avoid}
           if (patch === null || Object.keys(patch).length === 0) return Promise.resolve(true)
           pendingRef.current = null
           const request = writeBookState(base, book.id, patch, keepalive).then(
-            () => {
-              setSaveFailed(false)
+            (saved) => {
+              if (patch.markEdits) {
+                const marks = { bookmarks: saved.bookmarks || [], annotations: saved.annotations || [] }
+                const reconciled = clientLib('reading-marks').applyMarkEdits(marks, pendingRef.current?.markEdits || [])
+                stateRef.current = { ...stateRef.current, ...reconciled }
+                setState(stateRef.current)
+              }
+              setSaveErrorKey('')
               return true
             },
             (failure) => {
               // Newer edits take precedence when retrying a failed write.
-              pendingRef.current = { ...patch, ...pendingRef.current }
+              pendingRef.current = mergeReadingPatches(patch, pendingRef.current)
               console.error('bookshelf: could not save reading state', failure)
-              setSaveFailed(true)
+              setSaveErrorKey(failure.message === 'reading mark limit reached' ? 'readingMarkLimit' : 'readingSaveFailed')
               return false
             },
           ).finally(() => { inFlightRef.current = null })
@@ -1606,9 +1628,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const save = useCallback(
         (patch, immediate = false) => {
           if (!loadedRef.current) return
-          stateRef.current = { ...stateRef.current, ...patch }
+          stateRef.current = patch.markEdits
+            ? clientLib('reading-marks').applyMarkEdits(stateRef.current, patch.markEdits)
+            : { ...stateRef.current, ...patch }
           setState(stateRef.current)
-          pendingRef.current = { ...(pendingRef.current || {}), ...patch }
+          pendingRef.current = mergeReadingPatches(pendingRef.current, patch)
           if (timerRef.current !== 0) {
             clearTimeout(timerRef.current)
             timerRef.current = 0
@@ -1636,7 +1660,10 @@ html.bb-paged body table tr{break-inside:avoid}
         [flush],
       )
 
-      return { state, loaded: state !== null, stateRef, save, flush, saveFailed }
+      const editMark = useCallback((collection, id, value = null) => {
+        save({ markEdits: [{ collection, id, value, token: newBookmarkId() }] }, true)
+      }, [save])
+      return { state, editMark, loadFailed, retryLoad: () => setLoadAttempt(value => value + 1), loaded: state !== null, stateRef, save, flush, saveErrorKey }
     }
 
     // ----- [ui:reader] -----
@@ -3923,7 +3950,7 @@ html.bb-paged body table tr{break-inside:avoid}
         return () => window.removeEventListener('keydown', onKeyDown)
       }, [focusMode])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         const shell = shellRef.current, chrome = chromeRef.current
         if (!shell || !chrome) return undefined
         const measure = () => {
@@ -4040,12 +4067,14 @@ html.bb-paged body table tr{break-inside:avoid}
                 progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
               ),
             ),
-        readerState.saveFailed
+        readerState.saveErrorKey
           ? h('div', { className: 'bs-banner bs-banner-error', role: 'alert' },
-              h('span', null, t('readingSaveFailed')),
+              h('span', null, t(readerState.saveErrorKey)),
               h('button', { type: 'button', className: 'bs-button', onClick: () => { void readerState.flush() } }, t('retry')))
           : null,
-        children,
+        readerState.loadFailed
+          ? h(ReaderState, { error: true, message: t('readingLoadFailed'), onRetry: readerState.retryLoad, retryLabel: t('retry') })
+          : children,
         focusMode || !speech
           ? null
           : h(
@@ -4596,7 +4625,7 @@ html.bb-paged body table tr{break-inside:avoid}
         savePdfProgress(currentPage)
       }, [currentPage, status, pdfDocument, savePdfProgress])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready') return undefined
         const node = scrollRef.current
         if (node === null) return undefined
@@ -4708,7 +4737,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const toggleBookmark = useCallback(() => {
         if (pdfDocument === null) return
         if (currentBookmark) {
-          readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== currentBookmark.id) }, true)
+          readerState.editMark('bookmarks', currentBookmark.id)
           return
         }
         const bookmarkPercent = Math.min(1, Math.max(0, currentPage / pdfDocument.numPages))
@@ -4720,10 +4749,9 @@ html.bb-paged body table tr{break-inside:avoid}
           percent: bookmarkPercent,
           createdAt: Date.now(),
         }
-        const nextBookmarks = [bookmark, ...bookmarks.filter((item) => !(item.format === 'pdf' && item.page === currentPage))].slice(0, 500)
-        readerState.save({ bookmarks: nextBookmarks }, true)
+        readerState.editMark('bookmarks', bookmark.id, bookmark)
         setBookmarksOpen(true)
-      }, [bookmarks, currentBookmark, currentPage, pdfDocument, readerState.save, t])
+      }, [currentBookmark, currentPage, pdfDocument, readerState.editMark, t])
 
       const jumpToPage = useCallback(
         (page) => {
@@ -4948,7 +4976,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 setBookmarksOpen(false)
                 jumpToPage(bookmark.page || 1)
               },
-              onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
+              onDelete: (bookmark) => readerState.editMark('bookmarks', bookmark.id),
             }),
           )
         : null
@@ -5768,7 +5796,7 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }, [readerState.loaded, base, book.id, attempt, t])
 
-      useEffect(
+      useLayoutEffect(
         () => () => {
           if (frameCleanupRef.current) {
             frameCleanupRef.current()
@@ -6071,7 +6099,7 @@ html.bb-paged body table tr{break-inside:avoid}
         if (documentNode) repaintHighlights(documentNode)
       }, [annotationList, repaintHighlights])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready') return undefined
         const node = frameWrapRef.current
         if (node === null || typeof ResizeObserver === 'undefined') return undefined
@@ -6104,7 +6132,7 @@ html.bb-paged body table tr{break-inside:avoid}
         return () => clearTimeout(timer)
       }, [tocOpen, status, layoutPagedFrame])
 
-      useEffect(() => {
+      useLayoutEffect(() => {
         if (status !== 'ready') return undefined
         const frame = frameRef.current
         if (frame === null) return undefined
@@ -6217,7 +6245,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const toggleBookmark = useCallback(() => {
         if (status !== 'ready') return
         if (currentBookmark) {
-          readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== currentBookmark.id) }, true)
+          readerState.editMark('bookmarks', currentBookmark.id)
           return
         }
         const ratio = Math.min(1, Math.max(0, scrollRatioRef.current))
@@ -6233,9 +6261,9 @@ html.bb-paged body table tr{break-inside:avoid}
           percent: bookmarkPercent,
           createdAt: Date.now(),
         }
-        readerState.save({ bookmarks: [bookmark, ...bookmarks].slice(0, 500) }, true)
+        readerState.editMark('bookmarks', bookmark.id, bookmark)
         setAsideTab('bookmarks')
-      }, [bookmarks, chapter, chapterTocLabel, currentBookmark, metrics, readerState.save, status])
+      }, [chapter, chapterTocLabel, currentBookmark, metrics, readerState.editMark, status])
 
       // Style edits save the whole settings object (state.settings.annotationStyle
       // is additive on the Host) without replacing the reader settings state, so
@@ -6259,11 +6287,7 @@ html.bb-paged body table tr{break-inside:avoid}
         const style = { ...annotationStyleRef.current, mode: type }
         const annotation = module.fromSelection({ ...selectionMenu.anchor, style })
         if (annotation === null) return
-        const current = readerState.stateRef.current && Array.isArray(readerState.stateRef.current.annotations)
-          ? readerState.stateRef.current.annotations
-          : []
-        const next = [annotation, ...current.filter((item) => !module.hasSameAnchor(item, annotation))].slice(0, 1000)
-        readerState.save({ annotations: next }, true)
+        readerState.editMark('annotations', annotation.id, annotation)
       }, [readerState, selectionMenu])
 
       const onSeekProgress = useCallback(
@@ -6736,17 +6760,17 @@ html.bb-paged body table tr{break-inside:avoid}
                                   onDelete: (item) => {
                                     const source = item.source || {}
                                     if (item.kind === 'bookmark') {
-                                      readerState.save({ bookmarks: bookmarks.filter((bookmark) => bookmark.id !== source.id) }, true)
+                                      readerState.editMark('bookmarks', source.id)
                                       return
                                     }
-                                    readerState.save({ annotations: annotations.filter((annotation) => annotation.id !== source.id) }, true)
+                                    readerState.editMark('annotations', source.id)
                                   },
                                 })
                               : h(BookmarksList, {
                                   t,
                                   bookmarks,
                                   onSelect: (bookmark) => goTo(bookmark.chapterIndex || 0, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0),
-                                  onDelete: (bookmark) => readerState.save({ bookmarks: bookmarks.filter((item) => item.id !== bookmark.id) }, true),
+                                  onDelete: (bookmark) => readerState.editMark('bookmarks', bookmark.id),
                                 }),
                           ),
                       ),

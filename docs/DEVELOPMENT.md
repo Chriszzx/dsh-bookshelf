@@ -7,7 +7,7 @@
 
 0.6.3 调整阅读体验与宣传素材：封面网格按行宽计算列数（20px 间距、164–196px 封面、末行靠左）；目录/书签标签固定在栏顶；关闭朗读同步清掉字幕与高亮，工具栏按钮成为一致的开关；设置弹窗改用 DSH 原生模态/菜单配色，表单控件与下拉箭头对齐 DSH；标注预览跟随阅读字体并使用 Lorem ipsum 示例；新增 README 截图、`docs/GALLERY.md` 与 `docs/DEMO.md`。
 
-0.6.4 在 `/bookshelf` 分发入口启用 DSH Connection 准入，覆盖 API 与阅读器资源。Host 在同一个写入队列内合并按书状态，保存失败时阅读器保留更改并提供重试。整书语音启动需要用户确认的估算 ID，同一次估算的重复启动会复用正在运行或已完成的任务。
+0.6.4 在 `/bookshelf` 分发入口启用 DSH Connection 准入，覆盖 API 与阅读器资源。Host 在同一个写入队列内合并按书状态，读取失败时阅读器暂停打开正文和写入，重试成功后从原进度恢复。书签和标注按条目 ID 更新，在同一写入队列中合并；Host 保留每本书最近 2048 个编辑令牌，用于识别响应丢失后的重试。保存失败时阅读器保留更改并提供重试。整书语音启动需要用户确认的估算 ID，同一次估算的重复启动会复用正在运行或已完成的任务。
 
 ## 开发安装
 
@@ -91,6 +91,7 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
 | `assets/lib/annotations.mjs` | 标注模型：id、锚点清洗、样式规范、`fromSelection`、同锚点判定 | 阅读器打开前预加载；Host 静态 import |
 | `assets/lib/highlights.mjs` | 渲染计划：朗读反色层、标注层与优先级、`CSS.highlights` 应用/清理、回退判定 | 阅读器打开前预加载 |
 | `assets/lib/selection-speech.mjs` | 选区切句、末尾句锚点、重定位下标与「不缓存」策略 | 阅读器打开前预加载 |
+| `assets/lib/reading-marks.mjs` | 按条目 ID 应用书签和标注增删 | Host 写入队列与阅读器乐观更新共用 |
 | `assets/lib/reading-list.mjs` | 书签+标注合并列表、排序、搜索、计数 | 阅读器打开前预加载 |
 | `assets/lib/audiobook-audio.mjs`、`assets/lib/audiobook-pricing.mjs` | 整书语音的 WAV/MP3 合并与计费（纯函数） | Host 静态 import（客户端不要动态导入） |
 | `assets/locales/<domain>.mjs` | 按领域拆分的 `en`/`zh` 词条：`import`、`apple-books`、`audiobook`、`speech`、`selection`、`reader`、`tags`、`settings`、`discussion`、`sidebar` | `apply` 后异步加载 |
@@ -102,7 +103,7 @@ Host 的 `/bookshelf/assets/**` 路由同时服务浏览器和 Node 单测（`.m
 | `index.js` | 只做 imports、`apply()`、路由表装配与依赖注入 |
 | `host/http.js` | `HttpError`、请求体读取、JSON 响应、MIME 与体积上限 |
 | `host/store.js` | `library.json` / `state.json` / `tags.json` 的读写、原子替换与锁 |
-| `host/library.js` | 书籍导入/删除/重命名/封面，`PUT /books/:id/state`（进度、书签、标注、设置） |
+| `host/library.js` | 书籍导入/删除/重命名/封面，`PUT /books/:id/state`（进度、设置和兼容整列写入），`PATCH /books/:id/state`（按 ID 增删书签和标注） |
 | `host/states.js` | 每本书 state 的清洗（progress / bookmarks / annotations / settings） |
 | `host/assets-route.js`、`host/tts-routes.js`、`host/audiobook-routes.js`、`host/apple-books-routes.js`、`host/link-routes.js`、`host/discussion-routes.js`、`host/routes.js` | 各路由族与分发表 |
 | `tts/settings.js`、`tts/cache.js`、`tts/providers.js`、`tts/service.js` | 朗读设置、磁盘缓存（含 `tts-scratch/` 不缓存路径）、provider 与合成服务；`tts.js` 只是 re-export 门面 |
