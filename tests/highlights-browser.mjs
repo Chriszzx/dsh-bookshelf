@@ -122,8 +122,7 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
   const api = `${origin}/bookshelf/api`
 
-  // A pinned light palette makes every colour assertion
-  // deterministic (no DSH token stylesheet is loaded in this fixture page).
+  // A retained light preference from an older release must yield to the host theme.
   const preferenceResponse = await fetch(`${api}/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
@@ -299,8 +298,7 @@ try {
     check(normalizedText(highlightText('bb-ra'))==='第二句话。','read-aloud layer still covers the sentence');
     check(highlightNames().includes('bb-an-an_g2hl01'),'annotation layer survives a font change');
     // A theme change must invert with the new palette.
-    const option=(label)=>{const node=[...document.querySelectorAll('.bs-reader-settings button')].find(item=>item.textContent===label);check(!!node,'theme option '+label);node.click()};
-    option('themeDark');
+    document.body.setAttribute('data-ds-dark-theme','');
     await until(()=>frameDocument().documentElement.style.getPropertyValue('--bb-scheme')==='dark','dark palette applied');
     await until(()=>highlightRules().includes('color: #151517;'),'dark inversion: '+highlightRules());
     check(highlightRules().includes('background-color: #f9fafb;'),'dark band is the dark palette.fg: '+highlightRules());

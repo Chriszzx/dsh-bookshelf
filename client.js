@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '15'
+    const ASSET_VERSION = '16'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -247,6 +247,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 @media (prefers-reduced-motion: reduce){.bs-spinner{animation-duration:2.4s}button.bs-cover{transition:none}}
 .bs-reader{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base)}
 .bs-reader-bar{flex:none;display:flex;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-reader-navigation{align-self:flex-start;display:flex;align-items:center;gap:2px;flex:none;position:relative;top:-3px}
 .bs-reader-title-wrap{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;padding:0 4px}
 .bs-reader-title{font-size:14px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-sub{font-size:11.5px;line-height:1.35;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -702,87 +703,6 @@ html.bb-paged body table tr{break-inside:avoid}
       return false
     }
 
-    // DSH ships both base palettes in one stylesheet: `body{}` carries the light
-    // values and `body[data-ds-dark-theme]{}` the dark ones, with alias tokens
-    // pointing at the static palette through var(). Reading those rules lets a
-    // pinned page theme use the other scheme's exact DSH colors.
-    function dshSheetPalettes() {
-      const result = { light: new Map(), dark: new Map() }
-      if (typeof document === 'undefined' || !document.styleSheets) return result
-      const visit = (rules) => {
-        for (const rule of Array.from(rules || [])) {
-          if (rule.cssRules && rule.cssRules.length > 0) visit(rule.cssRules)
-          const selector = typeof rule.selectorText === 'string' ? rule.selectorText.trim() : ''
-          if (!/^(?:html)?body(?:\[[^\]]*\])?$/i.test(selector)) continue
-          const target = selector.includes('data-ds-dark-theme') ? result.dark : result.light
-          const style = rule.style
-          if (!style) continue
-          for (let index = 0; index < style.length; index += 1) {
-            const name = style.item(index)
-            if (!name.startsWith('--')) continue
-            const value = (style.getPropertyValue(name) || '').trim()
-            if (value !== '') target.set(name, value)
-          }
-        }
-      }
-      const sheets = []
-      for (const sheet of Array.from(document.styleSheets || [])) sheets.push(sheet)
-      for (const sheet of Array.from(document.adoptedStyleSheets || [])) sheets.push(sheet)
-      for (const sheet of sheets) {
-        let rules = null
-        try {
-          rules = sheet.cssRules
-        } catch {
-          rules = null
-        }
-        if (rules) visit(rules)
-      }
-      return result
-    }
-
-    function dshResolveToken(map, name, depth = 0) {
-      if (depth > 8) return ''
-      const raw = map.get(name)
-      if (raw === undefined) return ''
-      const single = /^var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)$/.exec(raw)
-      if (single) {
-        const inner = dshResolveToken(map, single[1], depth + 1)
-        if (inner !== '') return inner
-        return single[2] === undefined ? '' : single[2].trim()
-      }
-      if (!raw.includes('var(')) return raw
-      let failed = false
-      const expanded = raw.replace(/var\(\s*(--[^,)\s]+)\s*(?:,\s*([^)]*))?\)/g, (whole, reference, fallback) => {
-        const inner = dshResolveToken(map, reference, depth + 1)
-        if (inner !== '') return inner
-        if (fallback !== undefined) return fallback.trim()
-        failed = true
-        return ''
-      })
-      return failed ? '' : expanded
-    }
-
-    function dshSheetPalette(mode) {
-      const palettes = dshSheetPalettes()
-      const map = mode === 'dark' ? palettes.dark : palettes.light
-      if (map.size === 0) return null
-      const read = (name) => dshResolveToken(map, name)
-      const fg = read(DSH_ALIAS_PROBES.fg)
-      const bg = read(DSH_ALIAS_PROBES.bg)
-      if (fg === '' || bg === '') return null
-      const fallback = READING_THEMES[mode]
-      return {
-        mode,
-        fg,
-        bg,
-        muted: read(DSH_ALIAS_PROBES.muted) || fallback.muted,
-        border: read(DSH_ALIAS_PROBES.border) || fallback.border,
-        accent: read(DSH_ALIAS_PROBES.accent) || fallback.accent,
-        codeBg: read(DSH_ALIAS_PROBES.codeBg) || fallback.codeBg,
-        scheme: mode,
-      }
-    }
-
     // Live tokens cover the active scheme exactly, including user theme
     // overrides and custom registered themes.
     function dshLivePalette() {
@@ -807,13 +727,7 @@ html.bb-paged body table tr{break-inside:avoid}
       }
     }
 
-    function readingPalette(settings) {
-      const mode = settings && settings.theme
-      if (mode === 'light' || mode === 'dark') {
-        const exact = dshSheetPalette(mode)
-        if (exact !== null) return exact
-        return { ...READING_THEMES[mode], mode }
-      }
+    function readingPalette() {
       const live = dshLivePalette()
       if (live !== null) return live
       const dark = dshPrefersDark()
@@ -2076,6 +1990,7 @@ html.bb-paged body table tr{break-inside:avoid}
           setMessage(error.name === 'NotAllowedError' ? 'fontAccessDenied' : error.name === 'NotSupportedError' || error.name === 'SecurityError' ? 'fontAccessUnavailable' : 'fontScanFailed')
         }).finally(() => { if (mounted.current) setBusy(false) })
       }
+      const scanStatus = message || (catalog?.complete ? 'fontScanComplete' : '')
       const fonts = catalog?.fonts || []
       const selected = settings.fontName || ''
       const listed = fonts.some(font => font.family === selected)
@@ -2100,7 +2015,7 @@ html.bb-paged body table tr{break-inside:avoid}
         }),
         h('div', { className: 'bs-font-actions' },
           h('button', { type: 'button', className: 'bs-text-button', disabled: !module || busy, onClick: scan, 'aria-label': t('scanSystemFonts') }, busy ? t('fontScanning') : t('scanSystemFonts'))),
-        h('p', { className: 'bs-font-status', role: 'status' }, t(message || (catalog?.complete ? 'fontScanComplete' : 'fontCommonHint'))),
+        scanStatus ? h('p', { className: 'bs-font-status', role: 'status' }, t(scanStatus)) : null,
         selected && catalog?.complete && !listed ? h('p', { className: 'bs-font-status', role: 'status' }, t('fontMissingHint')) : null,
         h('div', { className: 'bs-settings-divider' }),
         h('h3', { className: 'bs-settings-section' }, t('typographySection')),
@@ -2234,16 +2149,6 @@ html.bb-paged body table tr{break-inside:avoid}
               { value: 'single', label: t('spreadSingle') },
             ],
             onChange: (value) => onChange({ pageSpread: value }),
-          }),
-          h(ReadingSegmented, {
-            label: t('readingTheme'),
-            value: settings.theme,
-            options: [
-              { value: 'auto', label: t('themeAuto') },
-              { value: 'light', label: t('themeLight') },
-              { value: 'dark', label: t('themeDark') },
-            ],
-            onChange: (value) => onChange({ theme: value }),
           }),
       )
     }
@@ -3922,7 +3827,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // Reader shell: top bar, aside, read-aloud dock, selection menu and the
     // overlay chrome they open.
 
-    function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech, readerState }) {
+    function ReaderShell({ t, base, book, onBack, navigationToggle, controls, children, state, progress, speech, readerState }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
@@ -4048,17 +3953,16 @@ html.bb-paged body table tr{break-inside:avoid}
           : h(
               'header',
               { className: 'bs-reader-bar', ref: chromeRef },
-              h(
-                'button',
-                {
+              h('div', { className: 'bs-reader-navigation' },
+                h('button', {
                   type: 'button',
                   className: 'bs-icon-button',
                   onClick: back,
                   title: t('back'),
                   'aria-label': t('back'),
                   autoFocus: true,
-                },
-                h(ArrowLeftIcon),
+                }, h(ArrowLeftIcon)),
+                navigationToggle,
               ),
               h(
                 'div',
@@ -4232,7 +4136,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function paintFrame(documentNode, settings) {
       if (!documentNode || !documentNode.documentElement) return
-      const palette = readingPalette(settings)
+      const palette = readingPalette()
       const margins = PAGE_MARGINS[settings.pageMargin] || PAGE_MARGINS.standard
       const root = documentNode.documentElement
       const body = documentNode.body
@@ -5418,7 +5322,7 @@ html.bb-paged body table tr{break-inside:avoid}
       // must not replace the reader settings object identity, or the paged
       // layout effect would reflow the chapter on every input event.
       const annotationStyleRef = useRef(annotationStyle)
-      const palette = useMemo(() => readingPalette(settings), [settings, themeTick])
+      const palette = useMemo(() => readingPalette(), [themeTick])
 
       // ----- [frame:highlights] -----
       // Read-aloud paints the spoken sentence as a true colour inversion and
@@ -5479,7 +5383,7 @@ html.bb-paged body table tr{break-inside:avoid}
           return null
         }
         const plan = highlights.buildHighlightPlan({
-          palette: readingPalette(settingsRef.current),
+          palette: readingPalette(),
           readAloud: spoken,
           annotations: resolved,
           chapterIndex: chapter,
@@ -5829,7 +5733,6 @@ html.bb-paged body table tr{break-inside:avoid}
             if (typeof stored.pageMargin !== 'string' && typeof stored.readingWidth === 'string') {
               nextSettings.pageMargin = stored.readingWidth === 'wide' ? 'compact' : 'standard'
             }
-            if (nextSettings.theme === 'sepia') nextSettings.theme = 'auto'
             // The annotations module is preloaded by now, so the stored style is
             // normalised against DEFAULT_ANNOTATION_STYLE instead of trusting a
             // hand-edited state.json.
@@ -6489,21 +6392,16 @@ html.bb-paged body table tr{break-inside:avoid}
       }
       const controls = []
       controls.push(h('button', { key: 'discuss', type: 'button', className: 'bs-text-button', onClick: discussPage, disabled: status !== 'ready' || directBusy, title: t('discussPage'), 'aria-label': t('discussPage'), 'aria-haspopup': 'dialog' }, directBusy ? t('discussionCreating') : t('discussPage')))
-      controls.push(
-        h(
-          'button',
-          {
-            key: 'toc',
-            type: 'button',
-            className: 'bs-icon-button',
-            onClick: () => setTocOpen((value) => !value),
-            'aria-pressed': tocOpen,
-            title: t('toc'),
-            'aria-label': t('toc'),
-          },
-          h(ListIcon),
-        ),
-      )
+      const navigationToggle = h('button', {
+        type: 'button',
+        className: 'bs-icon-button',
+        onClick: () => setTocOpen(value => !value),
+        'aria-expanded': tocOpen,
+        'aria-controls': tocOpen ? 'bs-epub-navigation' : undefined,
+        'aria-pressed': tocOpen,
+        title: t('toc'),
+        'aria-label': t('toc'),
+      }, h(ListIcon))
       controls.push(
         h(
           'button',
@@ -6785,6 +6683,7 @@ html.bb-paged body table tr{break-inside:avoid}
           book,
           onBack: exitReader,
           readerState,
+          navigationToggle,
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
@@ -6808,7 +6707,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 tocOpen
                   ? h(
                       'aside',
-                      { className: 'bs-epub-toc', 'aria-label': t('asideLabel') },
+                      { id: 'bs-epub-navigation', className: 'bs-epub-toc', 'aria-label': t('asideLabel') },
                       h(
                         'div',
                         { className: 'bs-aside-tabs', role: 'tablist' },

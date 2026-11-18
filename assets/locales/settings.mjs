@@ -34,7 +34,6 @@ export const en = {
   fontDefaultMono: 'System default · Monospace',
   scanSystemFonts: 'Detect system fonts',
   fontScanning: 'Detecting…',
-  fontCommonHint: 'Available common fonts are listed. Detect system fonts to include custom fonts; your browser may ask for access.',
   fontScanComplete: 'System fonts detected. The list stays on this device.',
   fontScanEmpty: 'No fonts were returned. Common fonts remain available.',
   fontAccessDenied: 'Font access was not granted. You can keep using common fonts or try again.',
@@ -60,7 +59,6 @@ export const en = {
   marginStandard: 'Standard',
   marginCompact: 'Compact',
   marginFill: 'Fill',
-  readingTheme: 'Page theme',
 }
 
 export const zh = {
@@ -95,7 +93,6 @@ export const zh = {
   fontDefaultMono: '系统默认 · 等宽',
   scanSystemFonts: '检测系统字体',
   fontScanning: '正在检测…',
-  fontCommonHint: '已列出可用的常见字体。检测系统字体可加入自装字体；浏览器可能请求字体访问授权。',
   fontScanComplete: '已读取系统字体，列表仅保留在当前设备。',
   fontScanEmpty: '未返回系统字体，仍可使用常见字体。',
   fontAccessDenied: '未获得字体访问授权，仍可使用常见字体，也可以重试。',
@@ -121,5 +118,4 @@ export const zh = {
   marginStandard: '标准',
   marginCompact: '紧凑',
   marginFill: '铺满',
-  readingTheme: '页面主题',
 }
