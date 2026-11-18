@@ -1,6 +1,7 @@
 // Functional browser regression of the installed reader's pagination geometry.
 // Uses an isolated Host and generated EPUB; does not inspect a personal browser
 // or claim to verify the live DSH shell. React fixtures come from pinned dev dependencies.
+import { installVisibleTextProbe } from './helpers/visible-text-probe.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
@@ -65,8 +66,7 @@ window.settled=async()=>{
  }
  throw Error('Paged layout did not settle: '+JSON.stringify(inspect()));
 };
-window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,s=w.getComputedStyle(d.body);const r=d.caretRangeFromPoint(parseFloat(s.paddingLeft)+3,parseFloat(s.paddingTop)+3);if(!r)throw Error('no anchor');window.anchor={node:r.startContainer,offset:r.startOffset};return {text:r.startContainer.textContent.slice(r.startOffset,r.startOffset+40)}};
-window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return {visible:q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1,left:q.left,top:q.top}};
+(${installVisibleTextProbe.toString()})();
 </script></body></html>`
 try {
  const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
@@ -95,6 +95,7 @@ try {
  let sequence=0
  async function command(method,params){const id=++sequence;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{socket.removeEventListener('message',listener);reject(Error('CDP timeout'))},45000);const listener=event=>{const m=JSON.parse(event.data);if(m.id!==id)return;clearTimeout(timer);socket.removeEventListener('message',listener);if(m.error||m.result?.exceptionDetails)reject(Error(JSON.stringify(m.error||m.result.exceptionDetails)));else resolve(m.result)};socket.addEventListener('message',listener);socket.send(JSON.stringify({id,method,params}))})}
  async function evaluate(expression){return (await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true}))?.result?.value}
+ await command('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false})
  const start=Date.now();while(true){try{if(await evaluate('Boolean(window.inspect)'))break}catch(e){if(!e.message.includes('Execution context was destroyed'))throw e}assert.ok(Date.now()-start<10000);await new Promise(r=>setTimeout(r,100))}
  await evaluate(`(async()=>{await until(()=>document.querySelector('.bs-cover'));document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(1000)})()`)
  const baseline=await evaluate('inspect()');console.log('Initial geometry',baseline)
@@ -131,15 +132,18 @@ try {
   await evaluate('document.activeElement?.blur();wait(200)')
   const before=await evaluate('inspect()')
   await evaluate('capture()')
+  const originalText = await evaluate('anchorVisible()')
+  assert.ok(originalText.visible, 'track a visible glyph before hover')
   const track=await evaluate(`(()=>{const p=document.querySelector('.bs-progress'),r=p.getBoundingClientRect(),shell=p.closest('.bs-reader').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2,bottom:r.bottom,shellBottom:shell.bottom}})()`)
   for(let i=0;i<3;i++){
    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:track.x,y:track.y})
    await evaluate('wait(180)')
+   assert.ok(await evaluate("document.querySelector('.bs-progress').matches(':hover')"), 'pointer reaches the progress control')
    const hovered=await evaluate('inspect()')
    assert.equal(hovered.height,before.height,'progress hover must not resize reading viewport')
    assert.equal(hovered.label,before.label,'progress hover must not change page counts or position')
    assert.equal(hovered.scroll,before.scroll,'progress hover must not shift displayed text')
-   assert.ok((await evaluate('anchorVisible()')).visible,'progress hover preserves the visible text')
+   assert.deepEqual(await evaluate('anchorVisible()'),originalText,'hover keeps the same glyph in the same place')
    await command('Input.dispatchMouseEvent',{type:'mouseMoved',x:2,y:2})
    await evaluate('wait(180)')
    assert.deepEqual(await evaluate('inspect()'),before,'leaving progress must preserve pagination')

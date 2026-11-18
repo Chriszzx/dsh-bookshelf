@@ -1,5 +1,6 @@
 // Real Host/Client functional regression in an owned browser profile. Font-access
 // responses are controlled fixtures; no personal font permission is granted.
+import { installVisibleTextProbe } from './helpers/visible-text-probe.mjs'
 import assert from 'node:assert/strict'
 import { embeddedFontFixtures, verifyEmbeddedFonts } from './helpers/embedded-fonts.mjs'
 import { createServer } from 'node:http'
@@ -40,8 +41,7 @@ window.queryLocalFonts=async()=>{
  return [['Georgia','Regular',400,false,false],['Georgia','Bold',700,false,false],['Georgia','Italic',400,true,false],['Georgia','Bold Italic',700,true,false],['Noto Serif SC','Regular',400,false,true],['Source Han Serif CN','Medium',500,false,false]].map(([family,style,weight,italic,variable])=>({family,style,blob:async()=>nativeFontBlob(weight,italic,variable)}));
 };
 window.fontQueryFixture=window.queryLocalFonts;
-window.capture=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,s=w.getComputedStyle(d.body),r=d.caretRangeFromPoint(parseFloat(s.paddingLeft)+3,parseFloat(s.paddingTop)+3);if(!r)throw Error('no anchor');window.anchor={node:r.startContainer,offset:r.startOffset};return true};
-window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.contentDocument,w=f.contentWindow,r=d.createRange();r.setStart(anchor.node,anchor.offset);r.setEnd(anchor.node,Math.min(anchor.offset+1,anchor.node.length));const q=r.getBoundingClientRect();return q.left>=-1&&q.right<=w.innerWidth+1&&q.top>=-1&&q.bottom<=w.innerHeight+1};
+(${installVisibleTextProbe.toString()})();
 </script></body></html>`
 
 try {
@@ -181,7 +181,7 @@ try {
     assert.ok(geometry.equalTargets, 'every reader icon has a 30px square hit area')
     assert.ok(geometry.glyphSpans.every(v=>v>=15 && v<=17.5), 'visible icon sizes: '+geometry.glyphSpans)
     assert.equal(geometry.width, 96, 'the selected discussion artwork loads')
-    assert.ok(geometry.spread <= 1, 'all toolbar buttons share a horizontal centerline')
+    assert.ok(geometry.spread <= 1, `toolbar centerlines differ by ${geometry.spread}px`)
   }
   await verifyToolbarAlignment()
   const winHeader = await evaluate(`(()=>{const b=document.querySelector('.bs-reader-bar'),r=b.getBoundingClientRect();return{height:r.height,padding:parseFloat(getComputedStyle(b).paddingTop),subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
@@ -190,7 +190,7 @@ try {
   assert.notEqual(winHeader.subtitle, 'none')
   assert.ok((await evaluate(`document.querySelector('.bs-epub-frame').contentWindow.getComputedStyle(document.querySelector('.bs-epub-frame').contentDocument.body).fontFamily`)).includes('Source Han Serif CN'))
   await evaluate(`(async()=>{click('nextPage');await wait(500);capture();click('readingSettings');await until(()=>[...document.querySelector('select[aria-label="fontFamily"]').options].some(o=>o.value==='font:Georgia'));choose('fontFamily','font:Georgia');await until(()=>[...document.querySelector('select[aria-label="fontWeight"]').options].some(o=>o.value==='700'));await wait(450);choose('fontWeight',700);await wait(450);choose('fontStyle','italic');await wait(600)})()`)
-  assert.ok(await evaluate('anchorVisible()'), 'font family, weight and italic changes retain the visible reading anchor')
+  assert.ok(await evaluate('anchorVisible().visible'), 'font family, weight and italic changes retain the visible reading anchor')
   const applied = await evaluate(`(()=>{const f=document.querySelector('.bs-epub-frame'),s=f.contentWindow.getComputedStyle(f.contentDocument.body);return{family:s.fontFamily,weight:s.fontWeight,style:s.fontStyle}})()`)
   assert.ok(applied.family.includes('Georgia'), JSON.stringify(applied))
   assert.equal(applied.weight, '700')
@@ -202,6 +202,10 @@ try {
   await evaluate(`(async()=>{document.documentElement.dataset.platform='win32';document.getElementById('root').style.width='480px';await wait(300)})()`)
   const narrow = await evaluate(`(()=>{const s=document.querySelector('.bs-reader').getBoundingClientRect(),p=document.querySelector('.bs-reader-settings').getBoundingClientRect();return{inside:p.left>=s.left&&p.right<=s.right+1&&p.bottom<=s.bottom+1,subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
   await verifyToolbarAlignment()
+  // Reserve the depth of a classic horizontal scrollbar even on overlay-scrollbar hosts.
+  await evaluate("document.querySelector('.bs-reader-controls').style.paddingBottom='12px'")
+  await verifyToolbarAlignment()
+  await evaluate("document.querySelector('.bs-reader-controls').style.removeProperty('padding-bottom')")
   assert.ok(narrow.inside, 'narrow settings stay inside the content panel')
   assert.notEqual(narrow.subtitle, 'none')
   await evaluate(`(async()=>{click('dismiss');click('back');await until(()=>document.querySelector('.bs-cover'));document.getElementById('root').style.width='1600px';document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900)})()`)

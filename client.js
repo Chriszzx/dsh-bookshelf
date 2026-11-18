@@ -399,7 +399,7 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-epub-toc{position:absolute;left:0;top:0;bottom:0;z-index:4;width:min(82vw,290px);background:var(--dsw-alias-bg-overlay);box-shadow:18px 0 40px -28px rgba(0,0,0,.8)}
   .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;grid-template-columns:auto minmax(0,1fr)}
   .bs-reader-title-wrap{grid-row:1;grid-column:1/-1;padding:0 2px}
-  .bs-reader-navigation,.bs-reader-controls{grid-row:2}
+  .bs-reader-navigation,.bs-reader-controls{grid-row:2;align-self:start}
   .bs-reader-controls{gap:2px;min-width:0;overflow-x:auto;justify-content:safe flex-end;scrollbar-width:thin}
   .bs-reader-controls>*{flex:none}
   .bs-reader-controls .bs-divider{margin:0 2px}
