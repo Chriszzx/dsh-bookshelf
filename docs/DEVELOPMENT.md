@@ -7,6 +7,8 @@
 
 0.6.3 调整阅读体验与宣传素材：封面网格按行宽计算列数（20px 间距、164–196px 封面、末行靠左）；目录/书签标签固定在栏顶；关闭朗读同步清掉字幕与高亮，工具栏按钮成为一致的开关；设置弹窗改用 DSH 原生模态/菜单配色，表单控件与下拉箭头对齐 DSH；标注预览跟随阅读字体并使用 Lorem ipsum 示例；新增 README 截图、`docs/GALLERY.md` 与 `docs/DEMO.md`。
 
+0.6.4 在 `/bookshelf` 分发入口启用 DSH Connection 准入，覆盖 API 与阅读器资源。Host 在同一个写入队列内合并按书状态，保存失败时阅读器保留更改并提供重试。整书语音启动需要用户确认的估算 ID，同一次估算的重复启动会复用正在运行或已完成的任务。
+
 ## 开发安装
 
 在 DSH 当前 profile 的「插件」中，选择本仓库的绝对目录进行本地安装，例如：
@@ -290,7 +292,7 @@ provider、缓存清理，以及让服务端故意不响应后 15 秒内出现�
 2. `npm pack --dry-run --json` 的文件列表包含 `tts.js`、`audiobook.js`、`host/**`、`tts/**`、`assets/tts-sentences.mjs`、`assets/lib/*.mjs`、`assets/locales/*.mjs`、`docs/GALLERY.md`、`docs/DEMO.md` 与 `docs/images/**`，且不含 `tests/` 和本机路径。
 3. 仓库内没有本机凭据：不提交 `.credentials*`、`tts-secrets.json`、`.env*`、API Key、绝对家目录路径；Edge 的
    `TRUSTED_CLIENT_TOKEN` 是公开客户端常量，但仍只在 `tts/providers.js` 中出现。
-4. 文档版本号与 `package.json` 一致（当前 `0.6.3`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
+4. 文档版本号与 `package.json` 一致（当前 `0.6.4`），README 中英两节同步描述 provider、自动音色、超时、整书语音、标注与平台差异。
 5. 需要真实 Edge `say` 冒烟时手动执行，失败不阻塞提交；DSH 重启后再做一次人工验收（朗读入口、设置窗口、自动音色）。
 6. 未经确认不要推送到远端，也不要改动版本号。
 

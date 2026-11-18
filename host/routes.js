@@ -105,8 +105,18 @@ export function createBookkeepingRoutes({ http, store } = {}) {
  * the ordered route table and turn every thrown error into the JSON error body
  * the browser expects.
  */
-export function createRouteHandler({ http, routes, logger } = {}) {
+export function createRouteHandler({ http, routes, logger, connection } = {}) {
   return async function handler(request, response) {
+    // Legacy DSH carriers dispatch custom routes directly. Check admission
+    // before parsing request bodies, serving assets or answering preflights.
+    const admission = connection.admit(request)
+    // Older releases only return the operator Peer and omit its principal.
+    const principal = admission.peer?.principal
+    if ('rejection' in admission || !admission.peer || (principal !== undefined && principal.kind !== 'owner')) {
+      response.writeHead(admission.rejection ?? 403, { 'Cache-Control': 'no-store' })
+      response.end()
+      return
+    }
     let url
     try {
       url = new URL(request.url ?? '/', 'http://bookshelf.invalid')

@@ -16,7 +16,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-geometry-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 apply({ effect: fn => fn(), webServer: { register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>html,body,#root{height:100%;margin:0}#root{width:1400px;height:900px}</style></head><body><div id="root"></div>

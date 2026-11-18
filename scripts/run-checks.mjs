@@ -11,7 +11,7 @@ const tasks = {
     'tests/reading-fonts.mjs', 'tests/atomic-file.mjs', 'tests/audiobook.mjs', 'tests/audiobook-api.mjs', 'tests/tags.mjs', 'tests/tags-api.mjs',
     'tests/tts-sentences.mjs', 'tests/tts-cache.mjs', 'tests/tts-providers.mjs', 'tests/tts-api.mjs',
     'tests/tts-native.mjs', 'tests/tts-no-cache.mjs',
-    'tests/annotations-model.mjs', 'tests/annotations-api.mjs', 'tests/highlights-plan.mjs',
+    'tests/annotations-model.mjs', 'tests/annotations-api.mjs', 'tests/route-admission.mjs', 'tests/highlights-plan.mjs',
     'tests/selection-speech.mjs', 'tests/reading-list.mjs',
   ],
   browser: ['tests/run-browser.mjs'],

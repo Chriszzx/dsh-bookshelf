@@ -95,41 +95,43 @@ export function createLibraryHandlers({ http, store, audiobooks, logger } = {}) 
     const body = await readJsonBody(request, MAX_STATE_BYTES)
     const payload = body && typeof body === 'object' && !Array.isArray(body) && body.state !== undefined ? body.state : body
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new HttpError(400, 'state must be an object')
-    const states = await readStates()
-    const current = states.books[id] && typeof states.books[id] === 'object' && !Array.isArray(states.books[id]) ? states.books[id] : {}
-    const next = { ...current }
+    const patch = {}
     if ('progress' in payload) {
       const progress = sanitizeProgress(payload.progress, record.format)
       if (progress === undefined) throw new HttpError(400, 'progress must be an object')
       progress.format = record.format
-      next.progress = progress
+      patch.progress = progress
     }
     if ('bookmarks' in payload) {
       if (!Array.isArray(payload.bookmarks)) throw new HttpError(400, 'bookmarks must be an array')
-      next.bookmarks = sanitizeBookmarks(payload.bookmarks)
+      patch.bookmarks = sanitizeBookmarks(payload.bookmarks)
     }
     // Annotations are stored next to bookmarks. The shared model drops malformed
     // entries one by one, so only a non-array request is a client error.
     if ('annotations' in payload) {
       if (!Array.isArray(payload.annotations)) throw new HttpError(400, 'annotations must be an array')
-      next.annotations = sanitizeAnnotations(payload.annotations)
+      patch.annotations = sanitizeAnnotations(payload.annotations)
     }
     if ('settings' in payload) {
       if (!payload.settings || typeof payload.settings !== 'object' || Array.isArray(payload.settings)) {
         throw new HttpError(400, 'settings must be an object')
       }
-      next.settings = sanitizeSettings(payload.settings) || {}
+      patch.settings = sanitizeSettings(payload.settings) || {}
     }
-    await updateStates((books) => ({ ...books, [id]: next }))
+    let next
+    await updateStates((books) => {
+      const previous = books[id]
+      const current = previous && typeof previous === 'object' && !Array.isArray(previous) ? previous : {}
+      next = { ...current, ...patch }
+      return { ...books, [id]: next }
+    })
     // Reading a finished book again drops the finished override as soon as the
     // saved progress falls below the last page, so the shelf returns to
     // "continue reading" without another manual step. Settings-only writes keep
     // the override, which is why this checks the incoming patch.
     if (
-      'progress' in payload &&
-      next.progress &&
-      typeof next.progress.percent === 'number' &&
-      next.progress.percent < FINISHED_PERCENT &&
+      typeof patch.progress?.percent === 'number' &&
+      patch.progress.percent < FINISHED_PERCENT &&
       record.status === 'finished'
     ) {
       await updateLibrary((books) =>

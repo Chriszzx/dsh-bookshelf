@@ -17,7 +17,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-handoff-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 apply({ effect: fn => fn(), webServer: { register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 

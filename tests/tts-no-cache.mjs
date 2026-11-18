@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, realpath, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 import { createTtsService } from '../tts.js'
 
 const TEN_MINUTES = 10 * 60 * 1000

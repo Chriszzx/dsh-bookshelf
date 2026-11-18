@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -15,7 +15,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-audiobook-playback-'))
 process.env.DSH_HOME = join(temporary, 'home')
 process.env.DEEPSEEK_API_KEY = 'test-key'
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 const providerCalls = []
 
@@ -126,14 +126,15 @@ try {
   const book = (await imported.json()).book
 
   // Pre-render the tiny book once; the reader then plays this file.
-  await fetch(`${api}/books/${book.id}/audio/plan`, {
+  const planned = await fetch(`${api}/books/${book.id}/audio/plan`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: '第一句话。第二句话。第三句话。', voice: 'stella', speed: 1 }),
   })
-  await fetch(`${api}/books/${book.id}/audio/start`, {
+  const started = await fetch(`${api}/books/${book.id}/audio/start`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ voice: 'stella', speed: 1 }),
+    body: JSON.stringify({ planId: (await planned.json()).plan.id }),
   })
+  assert.equal(started.status, 200)
   let state
   for (let attempt = 0; attempt < 200; attempt += 1) {
     state = (await (await fetch(`${api}/books/${book.id}/audio`)).json()).state

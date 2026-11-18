@@ -7,7 +7,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply } from '../index.js'
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 
 async function startHost(t) {
   const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-annotations-api-'))
@@ -71,6 +71,22 @@ function annotation(overrides = {}) {
     ...overrides,
   }
 }
+
+test('concurrent patches preserve progress, bookmarks, annotations and settings', async t => {
+  const { json, send, statePath } = await startHost(t)
+  const writes = await Promise.all([
+    send('PUT', statePath, { progress: { chapterIndex: 3, percent: 0.4 } }),
+    send('PUT', statePath, { bookmarks: [{ id: 'bm_race0001', label: 'Concurrent bookmark', chapterIndex: 1 }] }),
+    send('PUT', statePath, { annotations: [annotation()] }),
+    send('PUT', statePath, { settings: { fontSize: 21 } }),
+  ])
+  assert.deepEqual(writes.map(result => result.status), [200, 200, 200, 200])
+  const { state } = (await json(statePath)).payload
+  assert.equal(state.progress.chapterIndex, 3)
+  assert.equal(state.bookmarks[0].id, 'bm_race0001')
+  assert.equal(state.annotations[0].id, 'an_test0001')
+  assert.equal(state.settings.fontSize, 21)
+})
 
 test('annotation state round-trips without disturbing progress, bookmarks or settings', async t => {
   const { json, send, statePath, home, book } = await startHost(t)

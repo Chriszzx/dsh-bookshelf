@@ -5,6 +5,8 @@
 export const en = {
   audiobookTitle: 'Whole-book audio',
   audiobookMenu: 'Generate audiobook…',
+  audiobookReestimate: 'Refresh estimate',
+  audiobookEstimating: 'Updating estimate…',
   audiobookVoiceLabel: 'Voice',
   audiobookDefaultVoice: 'Default voice',
   audiobookProviderLabel: 'Speech service',
@@ -40,6 +42,8 @@ export const en = {
 export const zh = {
   audiobookTitle: '整书语音',
   audiobookMenu: '生成整书语音…',
+  audiobookReestimate: '重新估算',
+  audiobookEstimating: '正在更新估算…',
   audiobookVoiceLabel: '音色',
   audiobookDefaultVoice: '默认音色',
   audiobookProviderLabel: '语音服务',

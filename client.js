@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '10'
+    const ASSET_VERSION = '11'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -1543,9 +1543,11 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function useReaderState(base, book) {
       const [state, setState] = useState(null)
+      const [saveFailed, setSaveFailed] = useState(false)
       const stateRef = useRef({})
       const loadedRef = useRef(false)
       const pendingRef = useRef(null)
+      const inFlightRef = useRef(null)
       const timerRef = useRef(0)
 
       useEffect(() => {
@@ -1554,6 +1556,7 @@ html.bb-paged body table tr{break-inside:avoid}
         pendingRef.current = null
         loadedRef.current = false
         setState(null)
+        setSaveFailed(false)
         readBookState(base, book.id)
           .then((value) => {
             if (cancelled) return
@@ -1574,15 +1577,28 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [base, book.id])
 
       const flush = useCallback(
-        (keepalive = false) => {
+        function flushPending(keepalive = false) {
+          if (inFlightRef.current !== null) {
+            return inFlightRef.current.then((saved) => saved && flushPending(keepalive))
+          }
           const patch = pendingRef.current
+          if (patch === null || Object.keys(patch).length === 0) return Promise.resolve(true)
           pendingRef.current = null
-          if (patch === null || Object.keys(patch).length === 0) return Promise.resolve()
-          // Callers may await the write before leaving the reader, so the
-          // refreshed shelf already reflects the page the reader exited from.
-          return writeBookState(base, book.id, patch, keepalive).catch((failure) => {
-            console.error('bookshelf: could not save reading state', failure)
-          })
+          const request = writeBookState(base, book.id, patch, keepalive).then(
+            () => {
+              setSaveFailed(false)
+              return true
+            },
+            (failure) => {
+              // Newer edits take precedence when retrying a failed write.
+              pendingRef.current = { ...patch, ...pendingRef.current }
+              console.error('bookshelf: could not save reading state', failure)
+              setSaveFailed(true)
+              return false
+            },
+          ).finally(() => { inFlightRef.current = null })
+          inFlightRef.current = request
+          return request
         },
         [base, book.id],
       )
@@ -1620,7 +1636,7 @@ html.bb-paged body table tr{break-inside:avoid}
         [flush],
       )
 
-      return { state, loaded: state !== null, stateRef, save, flush }
+      return { state, loaded: state !== null, stateRef, save, flush, saveFailed }
     }
 
     // ----- [ui:reader] -----
@@ -3839,7 +3855,7 @@ html.bb-paged body table tr{break-inside:avoid}
     // Reader shell: top bar, aside, read-aloud dock, selection menu and the
     // overlay chrome they open.
 
-    function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech }) {
+    function ReaderShell({ t, base, book, onBack, controls, children, state, progress, speech, readerState }) {
       const shellRef = useRef(null)
       const chromeRef = useRef(null)
       const [focusMode, setFocusMode] = useState(false)
@@ -3940,6 +3956,17 @@ html.bb-paged body table tr{break-inside:avoid}
         if (typeof node.requestFullscreen === 'function') node.requestFullscreen().catch(() => undefined)
       }, [])
 
+      const leavingRef = useRef(false)
+      const back = async () => {
+        if (leavingRef.current) return
+        leavingRef.current = true
+        try {
+          await onBack(progress ? progress.percent : null)
+        } finally {
+          leavingRef.current = false
+        }
+      }
+
       return h(
         'section',
         {
@@ -3959,7 +3986,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: () => onBack(progress ? progress.percent : null),
+                  onClick: back,
                   title: t('back'),
                   'aria-label': t('back'),
                   autoFocus: true,
@@ -4022,6 +4049,11 @@ html.bb-paged body table tr{break-inside:avoid}
                 progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
               ),
             ),
+        readerState.saveFailed
+          ? h('div', { className: 'bs-banner bs-banner-error', role: 'alert' },
+              h('span', null, t('readingSaveFailed')),
+              h('button', { type: 'button', className: 'bs-button', onClick: () => { void readerState.flush() } }, t('retry')))
+          : null,
         children,
         focusMode || !speech
           ? null
@@ -4059,7 +4091,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 {
                   type: 'button',
                   className: 'bs-icon-button',
-                  onClick: () => onBack(progress ? progress.percent : null),
+                  onClick: back,
                   title: t('back'),
                   'aria-label': t('back'),
                 },
@@ -4412,12 +4444,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       const exitReader = useCallback(
-        (percent) => {
-          // Persist the page the reader left from before the shelf reloads, so
-          // the returned card already shows the exit progress.
-          readerState.flush(true)
-          onBack(typeof percent === 'number' ? percent : null)
-        },
+        (percent) => onBack(typeof percent === 'number' ? percent : null, readerState.flush),
         [onBack, readerState.flush],
       )
 
@@ -5010,6 +5037,7 @@ html.bb-paged body table tr{break-inside:avoid}
           base,
           book,
           onBack: exitReader,
+          readerState,
           controls,
           state: status === 'ready' && pdfDocument ? t('pdfPages', { total: pdfDocument.numPages }) : undefined,
           progress: status === 'ready' && pdfDocument ? { percent, onSeek: onSeekProgress } : undefined,
@@ -5483,10 +5511,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       const exitReader = useCallback(
-        (percent) => {
-          readerState.flush(true)
-          onBack(typeof percent === 'number' ? percent : null)
-        },
+        (percent) => onBack(typeof percent === 'number' ? percent : null, readerState.flush),
         [onBack, readerState.flush],
       )
 
@@ -6851,6 +6876,7 @@ html.bb-paged body table tr{break-inside:avoid}
           base,
           book,
           onBack: exitReader,
+          readerState,
           controls,
           state: sub,
           progress: status === 'ready' && data !== null ? { percent, onSeek: onSeekProgress } : undefined,
@@ -7783,7 +7809,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const [speed, setSpeed] = useState(1)
       const [job, setJob] = useState(null)
       const [error, setError] = useState('')
+      const [updatingEstimate, setUpdatingEstimate] = useState(false)
+      const [estimateReady, setEstimateReady] = useState(false)
+      const [starting, setStarting] = useState(false)
       const aliveRef = useRef(true)
+      const actionRef = useRef(false)
 
       useEffect(() => {
         const onKeyDown = (event) => {
@@ -7817,10 +7847,11 @@ html.bb-paged body table tr{break-inside:avoid}
             })
             if (cancelled) return
             setPlan(payload.plan)
+            setEstimateReady(true)
             const current = await requestJson(base, `/books/${book.id}/audio`)
             if (cancelled) return
             setJob(current.state)
-            setPhase(current.state.status === 'done' ? 'done' : current.state.status === 'running' ? 'running' : 'ready')
+            setPhase(current.state.status === 'done' ? 'done' : ['running', 'cancelling'].includes(current.state.status) ? 'running' : 'ready')
           } catch (failure) {
             if (cancelled) return
             setError(failure instanceof Error ? failure.message : String(failure))
@@ -7853,6 +7884,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [phase, base, book.id, t])
 
       const replan = async (nextProvider, nextVoice, nextSpeed) => {
+        if (actionRef.current) return
+        actionRef.current = true
+        setUpdatingEstimate(true)
+        setEstimateReady(false)
         setProvider(nextProvider)
         setVoice(nextVoice)
         setSpeed(nextSpeed)
@@ -7862,25 +7897,44 @@ html.bb-paged body table tr{break-inside:avoid}
             method: 'POST',
             body: JSON.stringify({ provider: nextProvider, voice: nextVoice, speed: nextSpeed }),
           })
-          if (aliveRef.current) setPlan(payload.plan)
+          if (aliveRef.current) {
+            setPlan(payload.plan)
+            setEstimateReady(true)
+          }
         } catch (failure) {
           if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
+        } finally {
+          actionRef.current = false
+          if (aliveRef.current) setUpdatingEstimate(false)
         }
       }
 
       const start = async () => {
+        if (actionRef.current || !estimateReady || !plan?.id) return
+        actionRef.current = true
+        setStarting(true)
         setError('')
-        setPhase('running')
         try {
           const payload = await requestJson(base, `/books/${book.id}/audio/start`, {
             method: 'POST',
-            body: JSON.stringify({ provider, voice, speed }),
+            body: JSON.stringify({ planId: plan.id }),
           })
-          if (aliveRef.current) setJob(payload.state)
+          if (!aliveRef.current) return
+          setJob(payload.state)
+          if (payload.state.status === 'failed') {
+            setError(payload.state.error || t('audiobookFailed'))
+            setPhase('error')
+          } else {
+            setPhase(payload.state.status === 'done' ? 'done' : payload.state.status === 'cancelled' ? 'ready' : 'running')
+          }
         } catch (failure) {
           if (!aliveRef.current) return
           setError(failure instanceof Error ? failure.message : String(failure))
+          setEstimateReady(false)
           setPhase('error')
+        } finally {
+          actionRef.current = false
+          if (aliveRef.current) setStarting(false)
         }
       }
 
@@ -7889,7 +7943,6 @@ html.bb-paged body table tr{break-inside:avoid}
           const payload = await requestJson(base, `/books/${book.id}/audio/cancel`, { method: 'POST', body: '{}' })
           if (!aliveRef.current) return
           setJob(payload.state)
-          setPhase('ready')
         } catch (failure) {
           if (aliveRef.current) setError(failure instanceof Error ? failure.message : String(failure))
         }
@@ -7912,7 +7965,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const estimate = plan
       const percent = job && job.total > 0 ? Math.min(100, Math.round((job.done / job.total) * 100)) : 0
       const downloadUrl = resourceUrl(base, `${API_ROOT}/books/${book.id}/audio/file`)
-      const busy = phase === 'extracting' || phase === 'running'
+      const busy = phase === 'extracting' || phase === 'running' || updatingEstimate || starting
+      const needsEstimate = estimate !== null && (!estimateReady || (phase === 'done' && job?.plan?.id === estimate.id))
       const downloadExt = (job && job.audio && job.audio.ext) || (estimate && estimate.format === 'mp3' ? '.mp3' : '.wav')
       // Only DeepSeek has a published per-character price; other services keep
       // the estimate free of cost and billed-character rows.
@@ -7960,6 +8014,9 @@ html.bb-paged body table tr{break-inside:avoid}
             { className: 'bs-audiobook-body' },
             phase === 'extracting'
               ? h('p', { className: 'bs-audiobook-hint' }, h(Spinner, { small: true }), ' ', t('audiobookParsing'))
+              : null,
+            updatingEstimate
+              ? h('p', { className: 'bs-audiobook-hint', role: 'status' }, t('audiobookEstimating'))
               : null,
             error !== ''
               ? h('p', { className: 'bs-rename-error', role: 'alert' }, error)
@@ -8013,7 +8070,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     { className: 'bs-audiobook-hint' },
                     h('button', { type: 'button', className: 'bs-audiobook-link', onClick: onOpenSettings }, t('audiobookSettingsLink')),
                   ),
-                  h(
+                  estimateReady && !updatingEstimate ? h(
                     'div',
                     { className: 'bs-audiobook-grid' },
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookCharacters')), h('span', { className: 'bs-audiobook-value' }, estimate.characters.toLocaleString())),
@@ -8021,7 +8078,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookDuration')), h('span', { className: 'bs-audiobook-value' }, `≈ ${formatDuration(estimate.durationSeconds)}`)),
                     h('div', { className: 'bs-audiobook-item' }, h('span', { className: 'bs-audiobook-label' }, t('audiobookSize')), h('span', { className: 'bs-audiobook-value' }, formatBytes(estimate.bytes))),
                     ...costItems,
-                  ),
+                  ) : null,
                   h('p', { className: 'bs-audiobook-hint' }, t('audiobookHint')),
                   estimate.priced ? null : h('p', { className: 'bs-audiobook-hint' }, t('audiobookUnpricedHint')),
                 )
@@ -8056,16 +8113,16 @@ html.bb-paged body table tr{break-inside:avoid}
             { className: 'bs-apple-foot' },
             h('button', { type: 'button', className: 'bs-button', onClick: onClose }, phase === 'done' ? t('dismiss') : t('cancel')),
             phase === 'running'
-              ? h('button', { type: 'button', className: 'bs-button', onClick: () => { void cancel() } }, t('audiobookCancel'))
+              ? h('button', { type: 'button', className: 'bs-button', disabled: job?.status === 'cancelling', onClick: () => { void cancel() } }, t('audiobookCancel'))
               : h(
                   'button',
                   {
                     type: 'button',
                     className: 'bs-button bs-button-primary',
-                    onClick: () => { void start() },
-                    disabled: estimate === null || phase === 'extracting',
+                    onClick: needsEstimate ? () => { void replan(provider, voice, speed) } : () => { void start() },
+                    disabled: estimate === null || busy,
                   },
-                  phase === 'done' ? t('audiobookRegenerate') : t('audiobookStart'),
+                  needsEstimate ? t('audiobookReestimate') : phase === 'done' ? t('audiobookRegenerate') : t('audiobookStart'),
                 ),
           ),
         ),
@@ -9147,8 +9204,16 @@ html.bb-paged body table tr{break-inside:avoid}
       const base = useMemo(() => transportBase(), [])
       const effectiveDefaults = defaultReadingSettings || DEFAULT_READING_SETTINGS
       const closeReader = useCallback(
-        async (percent) => {
+        async (percent, flush) => {
           const book = open
+          // Preserve the Back intent if DSH switches panels while the save is
+          // still pending. Keep the mounted reader available on a failed save.
+          viewState.openBookId = null
+          if (flush && !(await flush())) {
+            if (viewState.openBookId === null) viewState.openBookId = book?.id ?? null
+            return
+          }
+          if (viewState.openBookId !== null) return
           setOpen(null)
           if (book === null) {
             setReload((value) => value + 1)
@@ -9165,7 +9230,7 @@ html.bb-paged body table tr{break-inside:avoid}
             setFinishPrompt(book)
           }
         },
-        [base, open, setOpen],
+        [base, open, setOpen, viewState],
       )
 
       useEffect(() => {

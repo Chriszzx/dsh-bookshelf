@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 import { prepareBrowserEnvironment, browserLaunchArgs, navigateTestPage } from './helpers/browser-env.mjs'
 import { zipSync, strToU8 } from '../assets/fflate.mjs'
@@ -15,7 +15,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-audiobook-dialog-'))
 process.env.DSH_HOME = join(temporary, 'home')
 process.env.DEEPSEEK_API_KEY = 'test-key'
-const { apply } = await import(pathToFileURL(join(pluginDir, 'index.js')).href)
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 const providerCalls = []
 
@@ -99,6 +99,7 @@ window.openDialog=async()=>{
 mount();
 </script></body></html>`
 
+let delayEstimate = false
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
   server = createServer(async (req, res) => {
@@ -111,6 +112,7 @@ try {
       }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
+      if (delayEstimate && path.endsWith('/audio/plan')) await new Promise(resolve => setTimeout(resolve, 400))
       await route.handler(req, res)
     } catch (error) { res.writeHead(500); res.end(String(error)) }
   })
@@ -208,12 +210,17 @@ try {
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF')
   assert.equal(bytes.readUInt32LE(40), 24 * 2)
 
+  delayEstimate = true
   const switched = await evaluate(`(async()=>{
     const select=document.querySelector('.bs-audiobook-dialog select[aria-label="audiobookProviderLabel"]');
     check(!!select,'provider select');
     const setter=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value').set;
     setter.call(select,'edge');select.dispatchEvent(new Event('change',{bubbles:true}));
+    await until(()=>dialog().textContent.includes('audiobookEstimating'));
+    check(button('audiobookReestimate').disabled,'start disabled until new estimate arrives');
+    check(value('audiobookCost')===null,'previous price hidden during estimate update');
     await until(()=>document.querySelector('.bs-audiobook-dialog').textContent.includes('audiobookUnpricedHint'));
+    await until(()=>!button('audiobookRegenerate').disabled);
     const text=document.querySelector('.bs-audiobook-dialog').textContent;
     return {
       hasCost:text.includes('audiobookCost'),

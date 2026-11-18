@@ -15,7 +15,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-tab-test-'))
 const ownedPath = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route
 apply({ effect: fn => fn(), webServer: { port: 0, register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 let chrome, socket, server
@@ -44,6 +44,7 @@ mount();
 </script></body></html>`
 let delayWrites = false
 let delayDefaults = false
+let failWrites = false
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
   server = createServer(async (req, res) => {
@@ -53,6 +54,12 @@ try {
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
       if (delayDefaults && req.method === 'GET' && path.endsWith('/settings')) await new Promise(r => setTimeout(r, 3500))
+      if (failWrites && req.method === 'PUT' && path.endsWith('/state')) {
+        req.resume()
+        res.writeHead(503, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: 'simulated write failure' }))
+        return
+      }
       if (delayWrites && req.method === 'PUT' && path.endsWith('/state')) await new Promise(r => setTimeout(r, 800))
       await route.handler(req, res)
     } catch (error) { res.writeHead(500); res.end(String(error)) }
@@ -131,6 +138,26 @@ try {
   assert.equal(savedPdf.state.progress.page, 3)
   const savedEpub = await (await fetch(`${origin}/bookshelf/api/books/${epubId}/state`)).json()
   assert.ok(savedEpub.state.progress.scrollRatio > 0)
+  await evaluate(`(async()=>{
+    const input=document.querySelector('.bs-search-input');
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');
+    input.dispatchEvent(new Event('input',{bubbles:true}));
+    await openBook('PDF');await until(()=>document.querySelector('.bs-pdf-page'));await wait(800);
+  })()`)
+  failWrites = true
+  await evaluate(`(async()=>{
+    click('addBookmark');
+    await until(()=>document.querySelector('.bs-banner-error')?.textContent.includes('readingSaveFailed'));
+    check(!!document.querySelector('.bs-reader'),'save failure dismissed the reader');
+  })()`)
+  failWrites = false
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-banner-error button').click();
+    await until(()=>!document.querySelector('.bs-banner-error'));
+    click('back');await until(()=>document.querySelector('.bs-shelf'));
+  })()`)
+  const retriedPdf = await (await fetch(`${origin}/bookshelf/api/books/${pdfId}/state`)).json()
+  assert.equal(retriedPdf.state.bookmarks.length, 1, 'retry persists the original bookmark')
   delayDefaults = true
   console.log('EPUB waits for Host defaults', await evaluate(`(async()=>{const input=document.querySelector('.bs-search-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));await wait(80);unmount();await wait(25);mount();await openBook('Fresh');await wait(300);check(!document.querySelector('.bs-epub-frame'),'EPUB mounted with fallback defaults');await until(()=>document.querySelector('.bs-epub-frame'));await wait(900);const font=()=>document.querySelector('.bs-epub-frame').contentDocument.documentElement.style.getPropertyValue('--bb-font-size');check(font()==='20px','Host default font not applied: '+font());check(!!labels(),'Host default paged mode not applied');unmount();await wait(25);mount();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900);check(font()==='20px','default font lost on remount');click('back');return {font:'20px',mode:'paged'}})()`))
   delayDefaults = false
@@ -138,7 +165,7 @@ try {
   await new Promise(r => setTimeout(r, 700))
   assert.equal((await fetch(`${origin}/bookshelf/api/books/${epubId}`, { method: 'DELETE' })).status, 200)
   await evaluate(`(async()=>{mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted book must not reopen');check(!document.querySelector('.bs-reader-state-error'),'deleted book caused reader error');unmount();mount();await until(()=>document.querySelector('.bs-search-input'));check(!document.querySelector('.bs-reader'),'deleted selection not cleared')})()`)
-  assert.deepEqual(await evaluate('window.errors'), [])
+  assert.deepEqual(await evaluate('window.errors'), ['bookshelf: could not save reading state Error: simulated write failure'])
   console.log('PASS: durable state, deleted-book recovery and console checks')
 } finally {
   socket?.close()

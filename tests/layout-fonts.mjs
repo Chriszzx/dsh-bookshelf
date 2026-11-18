@@ -13,7 +13,7 @@ const pluginDir = fileURLToPath(new URL('../', import.meta.url))
 const temporary = await mkdtemp(join(tmpdir(), 'bookshelf-layout-fonts-'))
 const owned = await realpath(temporary)
 process.env.DSH_HOME = join(temporary, 'home')
-const { apply } = await import(new URL('../index.js', import.meta.url))
+import { applyTestHost as apply } from './helpers/host-context.mjs'
 let route, chrome, socket, server
 apply({ effect: fn => fn(), webServer: { register(value) { route = value; return () => {} } }, logger: { info() {}, warn() {}, error() {} } })
 const page = `<!doctype html><html data-platform="win32" data-windows-titlebar style="--dsh-frame-top-clearance:36px"><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;font:14px Arial}#root{width:1600px;height:900px}</style></head><body><div id="root"></div>

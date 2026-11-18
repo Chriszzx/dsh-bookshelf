@@ -72,6 +72,10 @@ Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified C
 
 ## Data & Privacy / 数据与隐私
 
+Since 0.6.4, bookshelf HTTP routes require DSH Connection to admit the caller before any operation. This protects book files, reading state, and configured speech services with DSH's Host/Origin and authentication checks.
+
+从 0.6.4 起，书架的 HTTP 路由在处理请求前统一通过 DSH Connection 准入，使用 DSH 的 Host、Origin 和身份检查保护书籍文件、阅读状态与已配置的语音服务。
+
 All state resides under `$DSH_HOME/bookshelf`: `library.json`, `state.json` (progress, bookmarks, annotations), `tags.json`, `tts.json`, `tts-secrets.json` (mode `0600`, write-only to UI), `tts-cache/` (512 MB LRU), and `tts-scratch/` (10-minute TTL for uncached selections). API keys may also be supplied via `DEEPSEEK_API_KEY` or `BOOKSHELF_TTS_OPENAI_KEY`.
 
 所有数据均保存在 `$DSH_HOME/bookshelf` 下：`library.json`、`state.json`（进度、书签、标注）、`tags.json`、`tts.json`、`tts-secrets.json`（`0600` 权限，前端不回显）、`tts-cache/`（512 MB LRU）及 `tts-scratch/`（选区朗读临时音频，10 分钟过期）。API Key 也可通过环境变量 `DEEPSEEK_API_KEY` 或 `BOOKSHELF_TTS_OPENAI_KEY` 提供。
