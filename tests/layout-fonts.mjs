@@ -1,6 +1,7 @@
 // Real Host/Client functional regression in an owned browser profile. Font-access
 // responses are controlled fixtures; no personal font permission is granted.
 import assert from 'node:assert/strict'
+import { embeddedFontFixtures, verifyEmbeddedFonts } from './helpers/embedded-fonts.mjs'
 import { createServer } from 'node:http'
 import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -45,9 +46,11 @@ window.anchorVisible=()=>{const f=document.querySelector('.bs-epub-frame'),d=f.c
 
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
+  const embedded = embeddedFontFixtures(await readFile(join(pluginDir, 'tests/fixtures/wasteland-woff.epub')))
   server = createServer(async (req, res) => {
     try {
       const path = new URL(req.url, 'http://test').pathname
+      if (await embedded.serve(path, res)) return
       const files = { '/react.js': join(fixtures, 'node_modules/react/umd/react.development.js'), '/react-dom.js': join(fixtures, 'node_modules/react-dom/umd/react-dom.development.js'), '/client.js': join(pluginDir, 'client.js') }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
@@ -60,11 +63,12 @@ try {
   const sample = await readFile(join(pluginDir, 'tests/fixtures/typography-reference.epub'))
   const books = []
   for (let i = 0; i < 16; i++) {
-    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: i === 2 ? sample : archive })
+    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: i === 2 ? sample : embedded.books[i - 3] || archive })
     assert.equal(response.status, 201)
     books.push((await response.json()).book)
   }
   for (const [book, settings] of [
+    ...books.slice(3, 8).map(book => [book, { fontFamily: 'publisher', fontSize: 20, pageSpread: 'single' }]),
     [books[2], { fontFamily: 'publisher', fontSize: 19 }],
     [books[0], { fontFamily: 'mono', fontSize: 18 }],
     [books[1], { fontFamily: 'serif', fontName: 'Unavailable Font For Test', fontWeight: 0, fontStyle: 'normal' }],
@@ -237,6 +241,7 @@ try {
   })()`)
   assert.deepEqual(chapterRules, {title:'30px', weight:'700', caption:'20px', lang:'en',
     captionLang:'fr', body:'chapter', position:'static', image:'none', link:false})
+  await verifyEmbeddedFonts({ evaluate, command, fixture: embedded, state: async () => (await (await fetch(`${origin}/bookshelf/api/books/${books[3].id}/state`)).json()).state })
   assert.deepEqual(await evaluate('errors'), [])
   console.log('Layout, platform clearance, font access fallback, native styles, persistence and reading-anchor regressions passed.', widths)
 } finally {

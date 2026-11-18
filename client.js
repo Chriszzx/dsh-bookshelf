@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '12'
+    const ASSET_VERSION = '13'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -2339,6 +2339,49 @@ html.bb-paged body table tr{break-inside:avoid}
       } catch {
         return ''
       }
+    }
+
+    // Column/page numbers change when a face swaps in. The chapter DOM and
+    // text offsets stay stable, including across a close and reopen.
+    function pageAnchorRect(doc, anchor) {
+      if (anchor?.element) return doc.body.contains(anchor.element) ? anchor.element.getClientRects()[0] : null
+      const node = anchor?.node
+      if (!node || !doc.body.contains(node)) return null
+      const range = doc.createRange()
+      if (node.nodeType === 3 && node.length) {
+        // At a column boundary, a collapsed caret can sit at the end of the
+        // preceding column. Measure the glyph the reader is about to read.
+        const start = Math.min(anchor.offset || 0, node.length - 1)
+        range.setStart(node, start)
+        range.setEnd(node, start + 1)
+      } else {
+        range.selectNodeContents(node)
+      }
+      return range.getClientRects()[0]
+    }
+
+    function encodePageLocator(anchor, body) {
+      let node = anchor?.node || anchor?.element
+      if (!body || !node || !body.contains(node) || node === body) return ''
+      const doc = body.ownerDocument
+      const rect = pageAnchorRect(doc, anchor)
+      if (!rect || rect.right <= 0 || rect.left >= doc.defaultView.innerWidth) return ''
+      const path = []
+      while (node !== body) {
+        const siblings = node.parentNode.childNodes
+        path.push(Array.prototype.indexOf.call(siblings, node))
+        node = node.parentNode
+      }
+      return path.reverse().join('.') + ':' + (anchor.offset || 0)
+    }
+
+    function decodePageLocator(locator, body) {
+      if (!locator) return null
+      const [path, offset] = locator.split(':')
+      let node = body
+      for (const index of path.split('.')) node = node?.childNodes[Number(index)]
+      if (node?.nodeType === 3 && Number(offset) <= node.length) return { node, offset: Number(offset) }
+      return node?.nodeType === 1 ? { element: node } : null
     }
 
     function rangePage(doc, win, range) {
@@ -5351,6 +5394,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const scrollRatioRef = useRef(0)
       const positionRatioRef = useRef(0)
       const pendingRatioRef = useRef(0)
+      const pendingLocatorRef = useRef('')
       const anchorRef = useRef('')
       const targetAnnotationRef = useRef(null)
       const chapterRef = useRef(0)
@@ -5508,7 +5552,8 @@ html.bb-paged body table tr{break-inside:avoid}
         (index, ratio, immediate = false, position = ratio) => {
           if (data === null || !readerState.loaded) return
           const safeRatio = Math.min(1, Math.max(0, Number.isFinite(ratio) ? ratio : 0))
-          const progressKey = `${index}:${safeRatio.toFixed(5)}:${position.toFixed(5)}:${anchorRef.current || ''}`
+          const locator = encodePageLocator(pageAnchorRef.current, frameRef.current?.contentDocument?.body)
+          const progressKey = `${locator}:${index}:${safeRatio.toFixed(5)}:${position.toFixed(5)}:${anchorRef.current || ''}`
           if (!immediate && lastSavedProgressRef.current === progressKey) return
           lastSavedProgressRef.current = progressKey
           const percent = metrics.percentFor(index, safeRatio)
@@ -5519,6 +5564,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 chapterIndex: index,
                 chapterPath: data.chapters[index] ? data.chapters[index].path : '',
                 scrollRatio: position,
+                ...(locator ? { pageLocator: locator, locatorRevision: data.sourceRevision } : {}),
                 percent,
                 anchor: anchorRef.current || '',
                 updatedAt: Date.now(),
@@ -5592,22 +5638,8 @@ html.bb-paged body table tr{break-inside:avoid}
         const body = documentNode.body
         const previous = body.scrollLeft
         body.scrollLeft = 0
-        let rect = null
-        try {
-          if (anchorValue.node && (anchorValue.node.isConnected || documentNode.contains(anchorValue.node))) {
-            const node = anchorValue.node
-            const limit = node.nodeType === 3 ? node.length : node.childNodes ? node.childNodes.length : 0
-            const range = documentNode.createRange()
-            range.setStart(node, Math.min(Math.max(0, anchorValue.offset || 0), limit))
-            range.collapse(true)
-            rect = range.getBoundingClientRect()
-          } else if (anchorValue.element && (anchorValue.element.isConnected || documentNode.contains(anchorValue.element))) {
-            rect = anchorValue.element.getBoundingClientRect()
-          }
-        } catch {
-          rect = null
-        }
-        if (rect === null || (rect.width === 0 && rect.height === 0)) {
+        const rect = pageAnchorRect(documentNode, anchorValue)
+        if (!rect || (rect.width === 0 && rect.height === 0)) {
           body.scrollLeft = previous
           pageAnchorRef.current = null
           return null
@@ -5638,7 +5670,12 @@ html.bb-paged body table tr{break-inside:avoid}
           const targetAnchor = typeof options.targetAnchor === 'string' ? options.targetAnchor : ''
           const annotation = options.annotation
           const match = annotation && resolveAnnotationRanges(documentNode, [annotation], chapterRef.current)[0]
-          if (match) {
+          const savedAnchor = decodePageLocator(options.locator, body)
+          if (savedAnchor) {
+            pageAnchorRef.current = savedAnchor
+            resolvedAnchor = savedAnchor
+            page = pageForAnchor(documentNode, windowNode, info) ?? Math.round((options.targetRatio || 0) * (info.pages - 1))
+          } else if (match) {
             page = rangePage(documentNode, windowNode, match.range) ?? 0
             resolvedAnchor = { node: match.range.startContainer, offset: match.range.startOffset }
           } else if (targetAnchor !== '') {
@@ -5659,7 +5696,7 @@ html.bb-paged body table tr{break-inside:avoid}
             // move the reader: a stale anchor from an earlier spread used to snap
             // the page back to the start.
             const spreadAt = (value) => Math.floor(value / info.columns)
-            if (laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
+            if (!options.fontReflow && laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
               page = pageIndexRef.current
             }
           } else if (Number.isFinite(options.targetRatio)) {
@@ -5713,6 +5750,8 @@ html.bb-paged body table tr{break-inside:avoid}
         let cancelled = false
         setStatus('loading')
         setError('')
+        let releaseFonts
+        pendingLocatorRef.current = ''
         setData(null)
         setEpubModule(null)
         setSnapshotModule(null)
@@ -5749,6 +5788,7 @@ html.bb-paged body table tr{break-inside:avoid}
             const bytes = new Uint8Array(await response.arrayBuffer())
             if (cancelled) return
             const parsed = module.parseEpub(bytes)
+            releaseFonts = () => module.releasePublicationFonts(parsed)
             parsed.sourceRevision = response.headers.get('X-Bookshelf-Source-Revision') || ''
             if (cancelled) return
             setSnapshotModule(snapshotSupport)
@@ -5791,6 +5831,9 @@ html.bb-paged body table tr{break-inside:avoid}
             let startScroll = 0
             if (savedValid) {
               startChapter = saved.chapterIndex
+              if (saved.chapterPath === parsed.chapters[startChapter].path && saved.locatorRevision === parsed.sourceRevision) {
+                pendingLocatorRef.current = saved.pageLocator || ''
+              }
               startAnchor = typeof saved.anchor === 'string' ? saved.anchor : ''
               startScroll = Math.min(1, Math.max(0, Number(saved.scrollRatio) || 0))
             } else if (!chapterHasVisibleContent(parsed.chapters[0] && parsed.chapters[0].html)) {
@@ -5822,6 +5865,7 @@ html.bb-paged body table tr{break-inside:avoid}
         })()
         return () => {
           cancelled = true
+          releaseFonts?.()
         }
       }, [readerState.loaded, base, book.id, attempt, t])
 
@@ -6058,24 +6102,27 @@ html.bb-paged body table tr{break-inside:avoid}
         const boundChapter = chapterRef.current
         restoringRef.current = false
         layoutPagedFrame(frame, {
+          locator: pendingLocatorRef.current,
           annotation: targetAnnotationRef.current,
           targetAnchor: anchorRef.current,
           targetRatio: pendingRatioRef.current,
           save: true,
         })
+        pendingLocatorRef.current = ''
         targetAnnotationRef.current = null
-        const refresh = () => {
-          if (frame.contentDocument === documentNode) {
-            layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+        let disposed = false
+        const refresh = (fontReflow = false) => {
+          if (!disposed && frame.contentDocument === documentNode) {
+            layoutPagedFrame(frame, { restoreAnchor: true, fontReflow: fontReflow === true, save: true })
             if (highlightFallbackRef.current) {
               const range = speechRangeRef.current
               if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
             }
           }
         }
-        if (documentNode.fonts && documentNode.fonts.ready) {
-          documentNode.fonts.ready.then(refresh).catch(() => undefined)
-        }
+        const fontsSettled = () => refresh(true)
+        documentNode.fonts?.addEventListener('loadingdone', fontsSettled)
+        documentNode.fonts?.ready.then(() => refresh()).catch(() => undefined)
         for (const image of documentNode.querySelectorAll('img')) {
           if (!image.complete) image.addEventListener('load', refresh, { once: true })
         }
@@ -6097,6 +6144,8 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         windowNode.addEventListener('resize', schedulePagedResize)
         frameCleanupRef.current = () => {
+          disposed = true
+          documentNode.fonts?.removeEventListener('loadingdone', fontsSettled)
           if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true, positionRatioRef.current)
           clearTimeout(settleTimer)
           if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)

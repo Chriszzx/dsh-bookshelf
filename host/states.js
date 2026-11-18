@@ -42,6 +42,11 @@ function sanitizeProgress(value, format) {
   const percent = clampNumber(value.percent, 0, 1)
   if (percent !== undefined) progress.percent = percent
   if (typeof value.anchor === 'string') progress.anchor = value.anchor.slice(0, 300)
+  if (progress.format === 'epub' && typeof value.pageLocator === 'string' && value.pageLocator.length <= 512 &&
+      /^\d+(?:\.\d+)*:\d+$/.test(value.pageLocator)) {
+    progress.pageLocator = value.pageLocator
+    if (typeof value.locatorRevision === 'string' && value.locatorRevision.length <= 100) progress.locatorRevision = value.locatorRevision
+  }
   if (typeof value.chapterPath === 'string') progress.chapterPath = value.chapterPath.slice(0, 500)
   const updatedAt = clampNumber(value.updatedAt, 0, Number.MAX_SAFE_INTEGER)
   progress.updatedAt = updatedAt === undefined ? Date.now() : updatedAt
