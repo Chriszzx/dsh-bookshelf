@@ -9,9 +9,7 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
 ![DSH](https://img.shields.io/badge/DSH-%3E%3D0.2.0--rc.2%20%3C0.3.0-4f46e5)
 ![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24.0-339933)
 
-![Demo cover grid in 0.6.3 / 0.6.3 演示书架](docs/images/shelf.png)
-
-*0.6.3 demo shelf. In 0.6.4, cards show the title, author, reading status and current progress. / 图为 0.6.3 演示书架。0.6.4 卡片显示书名、作者及阅读状态，正在阅读时显示进度。*
+![0.6.4 cover view showing unread, in-progress and finished books / 0.6.4 书架与阅读状态](docs/images/shelf.png)
 
 ## Overview / 概览
 
@@ -28,7 +26,7 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
 
 | | |
 |---|---|
-| [![Read aloud with DeepSeek speech](docs/images/read-aloud.png)](docs/GALLERY.md) | [![Whole-book audiobook estimate](docs/images/audiobook.png)](docs/GALLERY.md) |
+| [![Read aloud with a local system voice](docs/images/read-aloud.png)](docs/GALLERY.md) | [![Whole-book audiobook estimate](docs/images/audiobook.png)](docs/GALLERY.md) |
 | [![Discuss this page](docs/images/discussion.png)](docs/GALLERY.md) | [![Apple Books import](docs/images/apple-books.png)](docs/GALLERY.md) |
 
 See [docs/GALLERY.md](docs/GALLERY.md) for all views and [docs/DEMO.md](docs/DEMO.md) for the 60-second walkthrough script.
@@ -52,21 +50,21 @@ Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified C
 
 ## Core Capabilities / 核心功能
 
-**Shelf & Organization.** Import via file picker, drag-and-drop, or folder links. Manage titles with search, sorting, custom tags, and reading statuses (`Unread`, `Reading`, `Finished`), in either cover or list view. Both use the filename for a missing title and “Unnamed author” for a missing author.
+**Shelf & Organization.** Import via file picker, drag-and-drop, or folder links. Manage titles with search, sorting, custom tags, and reading statuses (`Unread`, `Reading`, `Finished`), in either cover or list view. Each entry shows the title, author and status, with a percentage while reading. Both views use the filename for a missing title and “Unnamed author” for a missing author.
 
-**书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在封面与列表间切换。两种视图均以文件名补全缺失的书名，以「未命名作者」补全缺失的作者。
+**书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在封面与列表间切换。两种视图均显示书名、作者和阅读状态，在读时显示百分比。书架以文件名补全缺失的书名，以「未命名作者」补全缺失的作者。
 
-**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. EPUB typography follows the publication, including unencrypted, unobfuscated regular, bold and italic faces. Missing faces fall back automatically. Changing the text size preserves heading and quotation hierarchy. Choose a reading font or switch back to the publisher’s font in reading settings. PDFs support zoom and single-page or continuous views. Both remember bookmarks and reading progress. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
+**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. EPUB typography follows the publication, including unencrypted, unobfuscated regular, bold and italic faces. Missing faces fall back automatically. Changing the text size preserves heading and quotation hierarchy. Choose a reading font or switch back to the publisher’s font in reading settings. PDFs support zoom and single-page or continuous views. A failed state load offers a retry that restores the saved position and bookmarks. Separate windows can add or remove bookmarks and annotations independently. Select text to copy with citation, read aloud, or apply custom highlights and underlines; bookmarks and annotations share a searchable, sortable sidebar.
 
-**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，默认采用原书字体与排版层级，支持原书中未经加密或混淆的常规、粗体和斜体字面。缺失字面时自动回退，调字号后仍保留标题与引文层级，可在阅读设置中更换正文字体或恢复原书字体。PDF 支持缩放、单页和连续视图。两种格式都支持书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
+**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，默认采用原书字体与排版层级，支持原书中未经加密或混淆的常规、粗体和斜体字面。缺失字面时自动回退，调字号后仍保留标题与引文层级，可在阅读设置中更换正文字体或恢复原书字体。PDF 支持缩放、单页和连续视图。读取记录失败时可重试找回进度与书签。在两个窗口中分别增删书签和标注，也会保留各自的修改。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
 
 **Live Read-Aloud.** Floating frosted-glass controls for play/pause, sentence stepping, speed, and voice selection. Supports offline system voices (`say` on macOS, SAPI on Windows), Edge TTS (keyless), DeepSeek TTS, and OpenAI-compatible endpoints, with automatic language matching by default.
 
 **实时朗读。** 底部毛玻璃控制栏提供播放/暂停、上下句切换、语速与音色选择。支持离线系统音色（macOS `say`、Windows SAPI）、Edge 语音（免 Key）、DeepSeek 语音及 OpenAI 兼容接口，默认按书籍语言自动匹配音色。
 
-**Whole-Book Audio.** Render an entire book into a single audio file (`WAV` or `MP3`) in the background via the book's `More` menu. Previews character count, duration, file size, and DeepSeek billing estimates before generation.
+**Whole-Book Audio.** Render an entire book into a single audio file (`WAV` or `MP3`) in the background via the book's `More` menu. Review the character count, duration and file size before confirming. DeepSeek also shows estimated cost. Repeating the same confirmed request reuses the existing task.
 
-**整书语音合成。** 通过书籍「更多」菜单在后台将整书合成为单个音频文件（`WAV` 或 `MP3`）。生成前直观预览字数、预计时长、文件体积及 DeepSeek 计费预估。
+**整书语音合成。** 通过书籍「更多」菜单在后台将整书合成为单个音频文件（`WAV` 或 `MP3`）。确认前可预览字数、时长与体积，选择 DeepSeek 时还会显示预计费用。重复启动同一次已确认的估算会复用已有任务。
 
 **Page Discussion & Apple Books.** The folded-page discussion button captures visible text into your target workspace and opens a native DSH chat pre-filled with `@file`. On macOS, `Apple Books` links local EPUB and PDF assets directly into the shelf.
 
