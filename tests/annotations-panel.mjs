@@ -184,7 +184,7 @@ try {
     // Both tabs carry their entry count; the merged panel counts bookmarks and
     // annotations together (2 bookmarks + 2 annotations = 4).
     check(asideTabs()[0].textContent==='tocTab (2)','toc tab count: '+asideTabs()[0].textContent);
-    check(asideTabs()[1].textContent==='bookmarksTab (4)','bookmark tab count: '+asideTabs()[1].textContent);
+    check(asideTabs()[1].textContent==='bookmarksAnnotationsTab (4)','bookmark tab count: '+asideTabs()[1].textContent);
     check(!document.querySelector('.bs-reading-tools'),'tool row belongs to the bookmarks tab');
     asideTabs()[1].click();
     await until(()=>document.querySelector('.bs-reading-tools'));
@@ -239,7 +239,7 @@ try {
     // Deleting an annotation writes only the annotations collection back.
     document.querySelector('.bs-reading-row[data-kind="highlight"] .bs-reading-delete').click();
     await until(()=>rows().length===3);
-    check(asideTabs()[1].textContent==='bookmarksTab (3)','tab count follows the delete: '+asideTabs()[1].textContent);
+    check(asideTabs()[1].textContent==='bookmarksAnnotationsTab (3)','tab count follows the delete: '+asideTabs()[1].textContent);
     await untilAsync(async()=>{
       const {state}=await stateFor('Panel');
       return state.annotations.length===1&&state.annotations[0].type==='underline'&&state.bookmarks.length===2;

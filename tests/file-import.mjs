@@ -194,7 +194,7 @@ try {
   await evaluate(`(async()=>{await until(()=>document.querySelectorAll('.bs-book-title').length===2);return true})()`)
   assert.deepEqual(
     (await evaluate(`[...document.querySelectorAll('.bs-book-title')].map(e=>e.textContent)`)).sort(),
-    ['Picked Book', 'dropped'],
+    ['Picked Book', 'dropped.pdf'],
   )
 
   // Folder linking stays available as a separate, explicit action.
@@ -217,7 +217,7 @@ try {
   assert.ok(picked, 'EPUB metadata title imported')
   assert.equal(picked.author, 'Ada Lovelace')
   assert.equal(picked.link, undefined, 'file import is a shelf copy, not a soft link')
-  assert.ok(listed.books.some(book => book.title === 'dropped'), 'dropped file imported')
+  assert.ok(listed.books.some(book => book.title === 'dropped.pdf'), 'dropped file imported')
   const stored = await readdir(join(temporary, 'home', 'bookshelf', 'books'))
   assert.equal(stored.length, 2, 'two shelf files stored')
   for (const name of stored) {

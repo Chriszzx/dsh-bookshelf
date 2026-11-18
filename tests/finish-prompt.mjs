@@ -135,7 +135,7 @@ try {
   // An unconfirmed 100% book still reads as "continue reading" on the shelf.
   assert.equal(await evaluate(`(async()=>{
     await until(()=>document.querySelector('.bs-book-title'));
-    check(sub().includes('continueReading 100%'),'unconfirmed end-of-book stays in continue reading: '+sub());
+    check(sub().includes('statusReading 100%'),'unconfirmed end-of-book stays in continue reading: '+sub());
     check(!!document.querySelector('.bs-card-progress'),'progress bar is shown before finishing');
     return true;
   })()`), true)
@@ -154,7 +154,7 @@ try {
   assert.equal(await evaluate(`(async()=>{
     [...document.querySelectorAll('.bs-apple-dialog button')].find(node=>node.textContent==='finishPromptConfirm').click();
     await until(()=>!document.querySelector('.bs-apple-dialog'));
-    await until(()=>sub().includes('finishedPercent(percent=100)'));
+    await until(()=>sub().includes('statusFinished'));
     check(!document.querySelector('.bs-card-progress'),'finished cards hide the progress bar');
     return true;
   })()`), true)
@@ -178,7 +178,7 @@ try {
   await waitForMount()
   assert.equal(await evaluate(`(async()=>{
     await until(()=>document.querySelector('.bs-book-title'));
-    check(sub().includes('continueReading 40%'),'re-reading shows continue reading: '+sub());
+    check(sub().includes('statusReading 40%'),'re-reading shows continue reading: '+sub());
     check(!!document.querySelector('.bs-card-progress'),'progress bar returns after re-reading');
     check(document.querySelector('.bs-card-progress').getAttribute('aria-valuenow')==='40','progress shows the saved page');
     return true;

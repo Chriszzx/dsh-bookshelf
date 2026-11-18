@@ -83,8 +83,7 @@ function publicBookView(record, state, knownTagIds) {
 
 function titleFromName(name) {
   const base = name.replace(/\\/g, '/').split('/').pop() || 'Untitled'
-  const withoutExtension = base.replace(/\.[^.]+$/, '')
-  return cleanText(withoutExtension, 'Untitled')
+  return cleanText(base, 'Untitled')
 }
 
 export { sameShelfBook, publicBook, titleFromName }

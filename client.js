@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '13'
+    const ASSET_VERSION = '15'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -94,11 +94,9 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-cover-frame::before{content:"";position:absolute;inset:8px;border:1px solid rgba(255,255,255,.2);border-radius:4px;pointer-events:none}
 .bs-cover-title{position:relative;padding-right:26px;font-family:'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif;font-size:15.5px;line-height:1.35;font-weight:600;letter-spacing:.01em;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.28)}
 .bs-cover-author{position:relative;margin-top:auto;padding-top:12px;padding-right:34px;font-size:11px;line-height:1.4;color:rgba(246,241,231,.76);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-cover-format{position:absolute;top:10px;left:10px;right:auto;padding:2px 5px;border-radius:3px;background:rgba(0,0,0,.3);color:rgba(255,255,255,.86);font-size:9px;font-weight:600;letter-spacing:.12em;line-height:1.4;z-index:3}
 .bs-cover-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;opacity:0;background:var(--dsw-alias-bg-base);transition:opacity .18s ease}
 .bs-cover-img[data-loaded="true"]{opacity:1}
 .bs-cover-frame::before{z-index:2}
-.bs-cover-format{z-index:3}
 .bs-cover-title,.bs-cover-author{z-index:0}
 .bs-shelf-tools{flex:none;display:flex;align-items:center;gap:10px;padding:9px 24px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-base)}
 .bs-search{flex:1;min-width:0;display:flex;align-items:center;gap:7px;height:32px;padding:0 9px;border:1px solid var(--dsw-alias-border-l1);border-radius:7px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary)}
@@ -221,7 +219,6 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-book-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-card-progress{height:2px;margin-top:2px;border-radius:999px;background:var(--dsw-alias-border-l1);overflow:hidden}
 .bs-card-progress-fill{height:100%;border-radius:999px;background:var(--dsw-alias-brand-primary);transition:width .2s ease}
-.bs-card-progress[data-finished="true"] .bs-card-progress-fill{background:var(--dsw-alias-state-success-primary)}
 .bs-delete{position:absolute;top:8px;right:8px;z-index:2;display:flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:7px;background:rgba(12,12,14,.55);color:#f4f1ea;opacity:0;cursor:pointer;transition:opacity .14s ease,background .14s ease;backdrop-filter:blur(4px)}
 .bs-card:hover .bs-delete,.bs-delete:focus-visible{opacity:1}
 .bs-delete:hover{background:rgba(185,58,58,.9)}
@@ -443,7 +440,6 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-row-open:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}
 .bs-row-thumb{position:relative;flex:none;width:44px;height:58px;border-radius:6px;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);color:#f6f1e7;box-shadow:0 1px 2px rgba(0,0,0,.12)}
 .bs-row-cover{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.bs-row-format{position:absolute;left:4px;bottom:4px;font-size:7.5px;font-weight:700;letter-spacing:.06em;opacity:.9;text-shadow:0 1px 2px rgba(0,0,0,.35)}
 .bs-row-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .bs-row-title{font-size:13.5px;line-height:1.4;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-row-sub{font-size:11.5px;line-height:1.4;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1004,7 +1000,7 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     function bookStatus(book) {
-      return STATUS_CATEGORIES.includes(book.status) ? book.status : 'reading'
+      return STATUS_CATEGORIES.includes(book.status) ? book.status : book.progress ? 'reading' : 'unread'
     }
 
     function bookCoverUrl(book, base) {
@@ -1013,14 +1009,15 @@ html.bb-paged body table tr{break-inside:avoid}
         : ''
     }
 
-    function bookSubParts(book, t) {
-      const percent = bookPercent(book)
+    function shelfTitle(book, t) {
+      return book.title?.trim() || book.name?.trim() || t('untitled')
+    }
+
+    function shelfSubtitle(book, t) {
       const status = bookStatus(book)
-      const author = book.author || t('unknownAuthor')
-      if (status === 'finished') return [t('finishedPercent', { percent: 100 }), author]
-      if (book.statusManual) return [t(STATUS_LABEL_KEYS[status]), author]
-      if (percent > 0) return [`${t('continueReading')} ${Math.round(percent * 100)}%`, author]
-      return [author, formatBytes(book.bytes), formatDate(book.addedAt)]
+      const label = t(STATUS_LABEL_KEYS[status])
+      const progress = status === 'reading' ? ` ${Math.round(bookPercent(book) * 100)}%` : ''
+      return `${label}${progress} · ${book.author?.trim() || t('unnamedAuthor')}`
     }
 
     function coverStyle(book) {
@@ -5375,6 +5372,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [asideTab, setAsideTab] = useState('toc')
       const [attempt, setAttempt] = useState(0)
       const [pageIndex, setPageIndex] = useState(0)
+      const [activeSection, setActiveSection] = useState(null)
       const [pageCount, setPageCount] = useState(1)
       const [pageColumns, setPageColumns] = useState(1)
       const [bookPageCounts, setBookPageCounts] = useState(null)
@@ -5548,6 +5546,15 @@ html.bb-paged body table tr{break-inside:avoid}
         }))
       }, [data, t])
 
+      const sectionsByChapter = useMemo(() => {
+        const grouped = new Map()
+        for (const entry of toc) {
+          if (!grouped.has(entry.chapterIndex)) grouped.set(entry.chapterIndex, [])
+          grouped.get(entry.chapterIndex).push(entry)
+        }
+        return grouped
+      }, [toc])
+
       const saveEpubProgress = useCallback(
         (index, ratio, immediate = false, position = ratio) => {
           if (data === null || !readerState.loaded) return
@@ -5707,6 +5714,19 @@ html.bb-paged body table tr{break-inside:avoid}
           page = Math.floor(Math.max(0, Math.min(info.pages - 1, page)) / info.columns) * info.columns
           if (info.columns === 2 && info.pages % 2 === 1) body.setAttribute('data-bb-pad-spread', '')
           body.scrollLeft = page * info.step
+          let currentSection = null
+          for (const entry of sectionsByChapter.get(chapterRef.current) || []) {
+            if (!entry.anchor) {
+              currentSection ??= entry
+              continue
+            }
+            const target = documentNode.getElementById(decodeAnchor(entry.anchor))
+            const rect = target?.getClientRects()[0]
+            if (!rect || rect.left >= body.clientWidth) continue
+            currentSection = entry
+            if (entry.anchor === targetAnchor && rect.right >= 0) break
+          }
+          setActiveSection(currentSection)
           setPageIndex(page)
           pageIndexRef.current = page
           setPageCount(info.pages)
@@ -5738,7 +5758,7 @@ html.bb-paged body table tr{break-inside:avoid}
           // the new column geometry.
           if (generation === layoutGenerationRef.current) repaintHighlights(documentNode)
         },
-        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress],
+        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress, sectionsByChapter],
       )
 
       useEffect(() => {
@@ -6318,10 +6338,7 @@ html.bb-paged body table tr{break-inside:avoid}
         const target = Math.round(Math.min(1, Math.max(0, Number(bookmark.scrollRatio) || 0)) * (pageCount - 1))
         return Math.floor(target / pageColumns) * pageColumns === pageIndex
       })
-      const chapterTocLabel = (() => {
-        const entry = toc.find((item) => item.chapterIndex === chapter && !item.anchor) || toc.find((item) => item.chapterIndex === chapter)
-        return entry ? entry.label : chapterLabel(t, chapter)
-      })()
+      const chapterTocLabel = activeSection?.chapterIndex === chapter ? activeSection.label : chapterLabel(t, chapter)
 
       const toggleBookmark = useCallback(() => {
         if (status !== 'ready') return
@@ -6589,7 +6606,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const sub =
         data === null || status !== 'ready'
           ? undefined
-          : `${data.author || t('unknownAuthor')} · ${t('chapterOf', { current: chapter + 1, total: data.chapters.length })}`
+          : `${data.author || t('unknownAuthor')} · ${(sectionsByChapter.get(chapter)?.length > 1 ? chapterTocLabel : t('chapterOf', { current: chapter + 1, total: data.chapters.length }))}`
 
       const speechLanguage = useMemo(() => epubSpeechLanguage(data), [data])
       const readAloud = useReadAloud({ base, t, language: speechLanguage })
@@ -6698,12 +6715,49 @@ html.bb-paged body table tr{break-inside:avoid}
       // the panel falls back to the plain bookmark list only if that load failed.
       const readingListLib = clientLib('reading-list')
       const chapterLabels = useMemo(() => {
-        const labels = new Map()
-        for (const entry of toc) {
-          if (!labels.has(entry.chapterIndex)) labels.set(entry.chapterIndex, entry.label || chapterLabel(t, entry.chapterIndex))
+        const boundaries = new Map()
+        return (index, mark) => {
+          const entries = sectionsByChapter.get(index)
+          if (!entries?.length) return ''
+          if (entries.length === 1) return entries[0].label
+          const generic = entries.find(entry => !entry.anchor)?.label || chapterLabel(t, index)
+          if (!Number.isInteger(mark?.start)) {
+            return entries.find(entry => entry.anchor && entry.anchor === mark?.anchor)?.label || generic
+          }
+          // Old and new highlights use the same offsets into the rendered text.
+          // Index only chapters with both a saved mark and multiple TOC entries.
+          if (!boundaries.has(index)) {
+            let html
+            try {
+              html = epubModule.renderChapterHtml({
+                data, chapterIndex: index, resourceIndex, imageCache: imageCacheRef.current,
+                readingCss: '', tooLargeText: t('chapterTooLarge'),
+              })
+            } catch {
+              // An unreadable chapter must not prevent the rest of the mark list from opening.
+              boundaries.set(index, [])
+              return generic
+            }
+            const doc = new DOMParser().parseFromString(html, 'text/html')
+            const points = clientLib('text-index')?.buildSpeechIndex(doc).entries || []
+            const starts = []
+            for (const entry of entries) {
+              const target = entry.anchor && doc.getElementById(decodeAnchor(entry.anchor))
+              if (!target) continue
+              let low = 0
+              let high = points.length
+              while (low < high) {
+                const mid = Math.floor((low + high) / 2)
+                if (target.compareDocumentPosition(points[mid].node) & Node.DOCUMENT_POSITION_FOLLOWING) high = mid
+                else low = mid + 1
+              }
+              starts.push({ offset: low, label: entry.label })
+            }
+            boundaries.set(index, starts.sort((a, b) => a.offset - b.offset))
+          }
+          return boundaries.get(index).findLast(entry => entry.offset <= mark.start)?.label || generic
         }
-        return labels
-      }, [toc, t])
+      }, [sectionsByChapter, data, epubModule, resourceIndex, t])
       const readingMerged = useMemo(() => {
         if (readingListLib === null) return []
         return readingListLib.mergeReadingItems({
@@ -6778,7 +6832,7 @@ html.bb-paged body table tr{break-inside:avoid}
                             'aria-selected': asideTab === 'bookmarks',
                             onClick: () => setAsideTab('bookmarks'),
                           },
-                          `${t('bookmarksTab')} (${readingTabCount})`,
+                          `${t('bookmarksAnnotationsTab')} (${readingTabCount})`,
                         ),
                       ),
                       h(
@@ -6793,7 +6847,7 @@ html.bb-paged body table tr{break-inside:avoid}
                                 type: 'button',
                                 className: 'bs-toc-label',
                                 style: { paddingLeft: `${8 + Math.min(5, entry.depth) * 12}px` },
-                                'aria-current': entry.chapterIndex === chapter ? 'true' : undefined,
+                                'aria-current': entry === activeSection ? 'true' : undefined,
                                 onClick: () => goTo(entry.chapterIndex, entry.anchor, 0),
                                 title: entry.label,
                               },
@@ -7989,8 +8043,8 @@ html.bb-paged body table tr{break-inside:avoid}
       // percent-derived "continue reading".
       const percent = bookPercent(book)
       const status = bookStatus(book)
-      const finished = status === 'finished'
-      const subParts = bookSubParts(book, t)
+      const subtitle = shelfSubtitle(book, t)
+      const title = shelfTitle(book, t)
       const coverSrc = bookCoverUrl(book, base)
       const [loadedCover, setLoadedCover] = useState('')
       const [failedCover, setFailedCover] = useState('')
@@ -8022,8 +8076,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const cover = h(
         'span',
         { className: 'bs-cover-frame' },
-        h('span', { className: 'bs-cover-title' }, book.title || t('untitled')),
-        h('span', { className: 'bs-cover-author' }, book.author || t('unknownAuthor')),
+        h('span', { className: 'bs-cover-title' }, title),
+        h('span', { className: 'bs-cover-author' }, book.author?.trim() || t('unnamedAuthor')),
         coverSrc !== '' && !coverFailed
           ? h('img', {
               className: 'bs-cover-img',
@@ -8036,7 +8090,6 @@ html.bb-paged body table tr{break-inside:avoid}
               onError: () => setFailedCover(coverSrc),
             })
           : null,
-        h('span', { className: 'bs-cover-format' }, String(book.format || '').toUpperCase()),
       )
       const interactive = confirming
         ? h(
@@ -8046,7 +8099,7 @@ html.bb-paged body table tr{break-inside:avoid}
             h(
               'div',
               { className: 'bs-confirm' },
-              h('p', { className: 'bs-confirm-title' }, t('deleteBody', { title: book.title })),
+              h('p', { className: 'bs-confirm-title' }, t('deleteBody', { title })),
               h(
                 'div',
                 { className: 'bs-confirm-actions' },
@@ -8070,7 +8123,7 @@ html.bb-paged body table tr{break-inside:avoid}
               className: 'bs-cover',
               style: coverStyle(book),
               onClick: () => onOpen(book),
-              'aria-label': t('openBook', { title: book.title || t('untitled') }),
+              'aria-label': t('openBook', { title }),
             },
             cover,
           )
@@ -8094,7 +8147,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     onAskDelete(book)
                   },
                   title: t('delete'),
-                  'aria-label': t('deleteBook', { title: book.title || t('untitled') }),
+                  'aria-label': t('deleteBook', { title }),
                 },
                 h(TrashIcon),
               ),
@@ -8159,13 +8212,13 @@ html.bb-paged body table tr{break-inside:avoid}
         h(
           'div',
           { className: 'bs-meta' },
-          h('div', { className: 'bs-book-title', title: book.title }, book.title || t('untitled')),
+          h('div', { className: 'bs-book-title', title }, title),
           h(
             'div',
-            { className: 'bs-book-sub', title: subParts.filter(Boolean).join(' · ') },
-            subParts.filter(Boolean).join(' · '),
+            { className: 'bs-book-sub', title: subtitle },
+            subtitle,
           ),
-          percent > 0 && !finished
+          status === 'reading'
             ? h(
                 'div',
                 {
@@ -8175,7 +8228,6 @@ html.bb-paged body table tr{break-inside:avoid}
                   'aria-valuemin': 0,
                   'aria-valuemax': 100,
                   'aria-valuenow': Math.round(percent * 100),
-                  'data-finished': finished ? 'true' : undefined,
                 },
                 h('div', { className: 'bs-card-progress-fill', style: { width: `${percent * 100}%` } }),
               )
@@ -8186,8 +8238,9 @@ html.bb-paged body table tr{break-inside:avoid}
 
     function BookRow({ book, base = '', t, onOpen, onDelete, confirming, deleting, onAskDelete, onCancelDelete, onRename, onEditTags, onGenerateAudio }) {
       const percent = bookPercent(book)
-      const finished = bookStatus(book) === 'finished'
-      const subParts = bookSubParts(book, t)
+      const status = bookStatus(book)
+      const subtitle = shelfSubtitle(book, t)
+      const title = shelfTitle(book, t)
       const coverSrc = bookCoverUrl(book, base)
       const [coverFailed, setCoverFailed] = useState(false)
       const [menuOpen, setMenuOpen] = useState(false)
@@ -8227,7 +8280,6 @@ html.bb-paged body table tr{break-inside:avoid}
               onError: () => setCoverFailed(true),
             })
           : null,
-        h('span', { className: 'bs-row-format' }, String(book.format || '').toUpperCase()),
       )
 
       if (confirming) {
@@ -8239,7 +8291,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'div',
             { className: 'bs-row-text' },
             h('span', { className: 'bs-row-title' }, t('deleteTitle')),
-            h('span', { className: 'bs-row-sub', title: t('deleteBody', { title: book.title }) }, t('deleteBody', { title: book.title })),
+            h('span', { className: 'bs-row-sub', title: t('deleteBody', { title }) }, t('deleteBody', { title })),
           ),
           h(
             'div',
@@ -8256,26 +8308,26 @@ html.bb-paged body table tr{break-inside:avoid}
 
       return h(
         'article',
-        { className: 'bs-row', role: 'listitem', 'data-finished': finished ? 'true' : undefined },
+        { className: 'bs-row', role: 'listitem', 'data-finished': status === 'finished' ? 'true' : undefined },
         h(
           'button',
           {
             type: 'button',
             className: 'bs-row-open',
             onClick: () => onOpen(book),
-            'aria-label': t('openBook', { title: book.title || t('untitled') }),
+            'aria-label': t('openBook', { title }),
           },
           thumb,
           h(
             'span',
             { className: 'bs-row-text' },
-            h('span', { className: 'bs-row-title', title: book.title }, book.title || t('untitled')),
+            h('span', { className: 'bs-row-title', title }, title),
             h(
               'span',
-              { className: 'bs-row-sub', title: subParts.filter(Boolean).join(' · ') },
-              subParts.filter(Boolean).join(' · '),
+              { className: 'bs-row-sub', title: subtitle },
+              subtitle,
             ),
-            percent > 0 && !finished
+            status === 'reading'
               ? h(
                   'span',
                   {
@@ -8377,7 +8429,7 @@ html.bb-paged body table tr{break-inside:avoid}
     }
 
     function sortBookList(list, mode) {
-      const titleOf = (book) => String(book && book.title ? book.title : '')
+      const titleOf = (book) => book.title?.trim() || book.name?.trim() || ''
       const authorOf = (book) => String(book && book.author ? book.author : '').trim()
       const compareTitle = (left, right) => titleOf(left).localeCompare(titleOf(right), undefined, { numeric: true, sensitivity: 'base' })
       return list.slice().sort((left, right) => {
@@ -9386,7 +9438,7 @@ html.bb-paged body table tr{break-inside:avoid}
               if (format === null) throw new Error(t('unsupportedFile', { name: file.name }))
               if (file.size > MAX_IMPORT_BYTES) throw new Error(t('tooLarge', { name: file.name }))
               const bytes = new Uint8Array(await file.arrayBuffer())
-              let title = String(file.name || '').replace(/\.[^.]+$/, '')
+              let title = file.name || ''
               let author = ''
               let epubModule = null
               if (format === 'epub') {
@@ -10086,16 +10138,16 @@ html.bb-paged body table tr{break-inside:avoid}
       dismiss: 'Dismiss',
       untitled: 'Untitled',
       unknownAuthor: 'Unknown author',
+      unnamedAuthor: 'Unnamed author',
+      bookmarksAnnotationsTab: 'Bookmarks & annotations',
       back: 'Back to bookshelf',
       readingProgress: 'Reading progress',
-      continueReading: 'Continue reading',
       finishedReading: 'Finished',
       statusLabel: 'Status',
       statusAuto: 'Follow progress',
       statusUnread: 'Unread',
       statusReading: 'Reading',
       statusFinished: 'Finished',
-      finishedPercent: 'Finished {percent}%',
       finishPromptTitle: 'Mark as finished?',
       finishPromptBody: 'You reached the last page of “{title}”. Mark this book as finished?',
       finishPromptConfirm: 'Mark as finished',
@@ -10155,16 +10207,16 @@ html.bb-paged body table tr{break-inside:avoid}
       dismiss: '关闭',
       untitled: '无标题',
       unknownAuthor: '未知作者',
+      unnamedAuthor: '未命名作者',
+      bookmarksAnnotationsTab: '书签与标注',
       back: '返回书架',
       readingProgress: '阅读进度',
-      continueReading: '继续阅读',
       finishedReading: '已读完',
       statusLabel: '状态',
       statusAuto: '跟随阅读进度',
       statusUnread: '未读',
       statusReading: '正在阅读',
       statusFinished: '已读完',
-      finishedPercent: '已读完 {percent}%',
       finishPromptTitle: '标记为已读完？',
       finishPromptBody: '《{title}》已经读到最后一页，要标记为已读完吗？',
       finishPromptConfirm: '标记为已读完',

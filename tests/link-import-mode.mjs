@@ -138,7 +138,7 @@ test('the host copies a folder import when Windows denies the symbolic link', as
     assert.equal(imported.status, 201)
     const result = await imported.json()
     assert.equal(result.mode, 'copy')
-    assert.equal(result.book.title, 'fallback')
+    assert.equal(result.book.title, 'fallback.epub')
 
     const library = JSON.parse(await readFile(join(process.env.DSH_HOME, 'bookshelf', 'library.json'), 'utf8'))
     assert.equal(library.books.length, 1)

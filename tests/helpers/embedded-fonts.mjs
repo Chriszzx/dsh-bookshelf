@@ -79,6 +79,28 @@ export async function verifyEmbeddedFonts({ evaluate, command, fixture, state })
     console.log('EPUB painted faces', number, [regular, bold, emphasis].map(f => f.postScriptName))
   }
 
+  await evaluate(`(async()=>{
+    if (!document.querySelector('.bs-aside-tab')) click('toc')
+    document.querySelector('.bs-aside-tab').click()
+    await until(()=>document.querySelectorAll('.bs-toc-label').length===6)
+    document.querySelectorAll('.bs-toc-label')[1].click()
+    await until(()=>document.querySelector('.bs-toc-label[aria-current="true"]')?.textContent.includes('GAME OF CHESS'))
+  })()`)
+  assert.equal(await evaluate("document.querySelectorAll('.bs-toc-label[aria-current=true]').length"), 1)
+  const markDetail = await evaluate(`(async()=>{
+    const frame = fontFrame()
+    const line = frame.contentDocument.getElementById('ln77')
+    const text = line.firstChild
+    const start = text.data.indexOf('burnished')
+    frame.contentWindow.getSelection().setBaseAndExtent(text, start, text, start + 'burnished'.length)
+    line.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    await until(()=>document.querySelector('.bs-selection-menu'))
+    Array.from(document.querySelectorAll('.bs-selection-item')).find(n=>n.textContent==='selectionHighlight').click()
+    document.querySelectorAll('.bs-aside-tab')[1].click()
+    await until(()=>document.querySelector('.bs-reading-row[data-kind="highlight"]'))
+    return document.querySelector('.bs-reading-row[data-kind="highlight"]').textContent
+  })()`)
+  assert.match(markDetail, /burnished.*II\. A GAME OF CHESS/)
   await evaluate('openFontBook(3)')
   // Hold the exact three WOFF byte streams at a loopback endpoint after the
   // first layout. This exercises a later loading cycle on an interactive page.
