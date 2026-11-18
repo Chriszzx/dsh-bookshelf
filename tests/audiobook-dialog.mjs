@@ -99,6 +99,7 @@ window.openDialog=async()=>{
 mount();
 </script></body></html>`
 
+const initialJobState = Promise.withResolvers()
 let delayEstimate = false
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary)
@@ -112,6 +113,7 @@ try {
       }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
+      if (req.method === 'GET' && path.endsWith('/audio')) await initialJobState.promise
       if (delayEstimate && path.endsWith('/audio/plan')) await new Promise(resolve => setTimeout(resolve, 400))
       await route.handler(req, res)
     } catch (error) { res.writeHead(500); res.end(String(error)) }
@@ -188,10 +190,12 @@ try {
   assert.match(estimate.cost, /^¥/)
   assert.ok(estimate.billed !== '')
   assert.ok(estimate.size !== '')
-  assert.equal(estimate.startEnabled, true)
+  assert.equal(estimate.startEnabled, false, 'wait for the existing job state before enabling generation')
+  initialJobState.resolve()
   assert.equal(providerCalls.length, 0, 'estimating must not synthesise anything')
 
   const done = await evaluate(`(async()=>{
+    await until(()=>button('audiobookStart') && !button('audiobookStart').disabled);
     button('audiobookStart').click();
     await until(()=>document.querySelector('.bs-audiobook-done'));
     await until(()=>document.querySelector('.bs-audiobook-done a'));
@@ -251,6 +255,7 @@ try {
   assert.deepEqual(await evaluate('window.errors'), [])
   console.log('audiobook dialog: menu entry, estimate, stubbed render and WAV download')
 } finally {
+  initialJobState.resolve()
   try { socket?.close() } catch {}
   if (chrome && chrome.exitCode === null) {
     const exited = new Promise(resolve => chrome.once('exit', resolve))
