@@ -638,7 +638,7 @@ html.bb-paged body table tr{break-inside:avoid}
       lineHeight: 1.85,
       pageMargin: 'standard',
       theme: 'auto',
-      pageMode: 'scroll',
+      pageMode: 'paged',
       pageSpread: 'auto',
     }
 
@@ -2194,15 +2194,6 @@ html.bb-paged body table tr{break-inside:avoid}
             onChange: (value) => onChange({ pageMargin: value }),
           }),
           h(ReadingSegmented, {
-            label: t('readingMode'),
-            value: settings.pageMode,
-            options: [
-              { value: 'scroll', label: t('modeScroll') },
-              { value: 'paged', label: t('modePaged') },
-            ],
-            onChange: (value) => onChange({ pageMode: value }),
-          }),
-          settings.pageMode === 'paged' ? h(ReadingSegmented, {
             label: t('pageSpread'),
             value: settings.pageSpread || 'auto',
             options: [
@@ -2210,7 +2201,7 @@ html.bb-paged body table tr{break-inside:avoid}
               { value: 'single', label: t('spreadSingle') },
             ],
             onChange: (value) => onChange({ pageSpread: value }),
-          }) : null,
+          }),
           h(ReadingSegmented, {
             label: t('readingTheme'),
             value: settings.theme,
@@ -4269,12 +4260,6 @@ html.bb-paged body table tr{break-inside:avoid}
       ;(documentNode.head || documentNode.documentElement).appendChild(style)
     }
 
-    function clearPagedLayout(documentNode) {
-      if (documentNode && documentNode.documentElement) {
-        documentNode.documentElement.classList.remove('bb-paged')
-      }
-    }
-
     // ===== [reader] =====
     // PDF reader: page rendering, zoom/fit modes, bookmarks and read-aloud page
     // batches.
@@ -5068,17 +5053,6 @@ html.bb-paged body table tr{break-inside:avoid}
     // ----- [frame:epub] -----
     // Scroll-frame helper for the EPUB reader.
 
-    function frameScrollRatio(frame) {
-      const documentNode = frame && frame.contentDocument
-      const windowNode = frame && frame.contentWindow
-      if (!documentNode || !windowNode) return 0
-      const root = documentNode.scrollingElement || documentNode.documentElement
-      if (!root) return 0
-      const maximum = root.scrollHeight - windowNode.innerHeight
-      if (maximum <= 0) return 0
-      return Math.min(1, Math.max(0, root.scrollTop / maximum))
-    }
-
     // ----- [chrome:dialog] -----
     // "Discuss this page" handoff dialog.
 
@@ -5304,7 +5278,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const [directBusy, setDirectBusy] = useState(false)
       const discussionClickRef = useRef(false)
       const [chapter, setChapter] = useState(0)
-      const [anchor, setAnchor] = useState('')
       const [scrollRatio, setScrollRatio] = useState(0)
       const [settings, setSettings] = useState(() => ({ ...DEFAULT_READING_SETTINGS, ...(defaultSettings || {}) }))
       const [settingsOpen, setSettingsOpen] = useState(false)
@@ -5329,12 +5302,11 @@ html.bb-paged body table tr{break-inside:avoid}
       const probeTokenRef = useRef(0)
       const imageCacheRef = useRef(new Map())
       const scrollRatioRef = useRef(0)
-      const pendingScrollRef = useRef(0)
+      const pendingRatioRef = useRef(0)
       const anchorRef = useRef('')
       const chapterRef = useRef(0)
       const restoringRef = useRef(false)
-      const scrollBindingRef = useRef(null)
-      const frameTokenRef = useRef(0)
+      const frameCleanupRef = useRef(null)
       const layoutGenerationRef = useRef(0)
       const speechRangeRef = useRef(null)
       // Annotation ranges are cached per chapter document: the stored anchors
@@ -5348,7 +5320,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const laidOutPagesRef = useRef(1)
       const pageColumnsRef = useRef(1)
       const pageAnchorRef = useRef(null)
-      const previousModeRef = useRef(settings.pageMode)
       const turnPageRef = useRef(() => {})
       const themeTick = useThemeTick()
       const settingsRef = useRef(settings)
@@ -5691,7 +5662,6 @@ html.bb-paged body table tr{break-inside:avoid}
         setSnapshotModule(null)
         setSnapshotLoadError('')
         setChapter(0)
-        setAnchor('')
         setScrollRatio(0)
         setAsideTab('toc')
         setPageIndex(0)
@@ -5700,12 +5670,11 @@ html.bb-paged body table tr{break-inside:avoid}
         pageCountRef.current = 1
         pageAnchorRef.current = null
         scrollRatioRef.current = 0
-        pendingScrollRef.current = 0
+        pendingRatioRef.current = 0
         anchorRef.current = ''
         chapterRef.current = 0
         restoringRef.current = false
         imageCacheRef.current.clear()
-        frameTokenRef.current += 1
         ;(async () => {
           try {
             const [module, snapshotSupport] = await Promise.all([
@@ -5752,8 +5721,6 @@ html.bb-paged body table tr{break-inside:avoid}
             annotationStyleRef.current = loadedAnnotationStyle
             setAnnotationStyle(loadedAnnotationStyle)
             settingsRef.current = nextSettings
-            // Loading stored settings is initialization, not a user mode switch.
-            previousModeRef.current = nextSettings.pageMode
             setSettings(nextSettings)
             const saved = readerState.stateRef.current && readerState.stateRef.current.progress
             const savedValid =
@@ -5781,11 +5748,10 @@ html.bb-paged body table tr{break-inside:avoid}
             }
             chapterRef.current = startChapter
             anchorRef.current = startAnchor
-            pendingScrollRef.current = startScroll
+            pendingRatioRef.current = startScroll
             scrollRatioRef.current = startScroll
             restoringRef.current = Boolean(savedValid) || startAnchor !== '' || startScroll > 0
             setChapter(startChapter)
-            setAnchor(startAnchor)
             setScrollRatio(startScroll)
             setEpubModule(module)
             setData(parsed)
@@ -5804,9 +5770,9 @@ html.bb-paged body table tr{break-inside:avoid}
 
       useEffect(
         () => () => {
-          if (scrollBindingRef.current) {
-            scrollBindingRef.current()
-            scrollBindingRef.current = null
+          if (frameCleanupRef.current) {
+            frameCleanupRef.current()
+            frameCleanupRef.current = null
           }
           // Leaving the chapter (or the reader) must not leave the previous
           // document's highlight layers registered on its window.
@@ -5846,66 +5812,18 @@ html.bb-paged body table tr{break-inside:avoid}
           const nextAnchor = typeof targetAnchor === 'string' ? targetAnchor : ''
           const nextRatio = Math.min(1, Math.max(0, Number.isFinite(targetRatio) ? targetRatio : 0))
           anchorRef.current = nextAnchor
-          if (settingsRef.current.pageMode === 'paged') {
-            if (safeIndex === chapterRef.current && frameRef.current !== null) {
-              layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, save: true })
-              setAnchor(nextAnchor)
-              return
-            }
-            chapterRef.current = safeIndex
-            pendingScrollRef.current = nextRatio
-            restoringRef.current = false
-            pageAnchorRef.current = null
-            setPageIndex(0)
-            pageIndexRef.current = 0
-            setPageCount(1)
-            pageCountRef.current = 1
-            setAnchor(nextAnchor)
-            setChapter(safeIndex)
-            setScrollRatio(nextRatio)
-            scrollRatioRef.current = nextRatio
-            saveEpubProgress(safeIndex, nextRatio)
+          if (safeIndex === chapterRef.current && frameRef.current !== null) {
+            layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, save: true })
             return
           }
-          if (safeIndex === chapterRef.current) {
-            const frame = frameRef.current
-            const documentNode = frame && frame.contentDocument
-            const windowNode = frame && frame.contentWindow
-            if (documentNode && windowNode) {
-              restoringRef.current = true
-              if (nextAnchor !== '') {
-                const target = documentNode.getElementById(decodeAnchor(nextAnchor))
-                if (target) {
-                  try {
-                    target.scrollIntoView({ block: 'start' })
-                  } catch {
-                    // Detached by a later chapter change.
-                  }
-                }
-              } else {
-                const root = documentNode.scrollingElement || documentNode.documentElement
-                if (root) {
-                  const maximum = Math.max(0, root.scrollHeight - windowNode.innerHeight)
-                  windowNode.scrollTo(0, maximum * nextRatio)
-                }
-              }
-              setAnchor(nextAnchor)
-              setScrollRatio(nextRatio)
-              scrollRatioRef.current = nextRatio
-              requestAnimationFrame(() => {
-                const actual = frameScrollRatio(frame)
-                restoringRef.current = false
-                scrollRatioRef.current = actual
-                setScrollRatio(actual)
-                saveEpubProgress(safeIndex, actual)
-              })
-              return
-            }
-          }
           chapterRef.current = safeIndex
-          pendingScrollRef.current = nextRatio
-          restoringRef.current = true
-          setAnchor(nextAnchor)
+          pendingRatioRef.current = nextRatio
+          restoringRef.current = false
+          pageAnchorRef.current = null
+          setPageIndex(0)
+          pageIndexRef.current = 0
+          setPageCount(1)
+          pageCountRef.current = 1
           setChapter(safeIndex)
           setScrollRatio(nextRatio)
           scrollRatioRef.current = nextRatio
@@ -5916,7 +5834,7 @@ html.bb-paged body table tr{break-inside:avoid}
 
       const turnPage = useCallback(
         (direction) => {
-          if (settingsRef.current.pageMode !== 'paged' || data === null) return
+          if (data === null) return
           const frame = frameRef.current
           if (frame === null) return
           const page = pageIndexRef.current
@@ -6024,19 +5942,8 @@ html.bb-paged body table tr{break-inside:avoid}
             const hrefValue = link.getAttribute('href') || ''
             if (hrefValue.startsWith('#')) {
               event.preventDefault()
-              let id = hrefValue.slice(1)
-              try { id = decodeURIComponent(id) } catch { /* keep the literal id */ }
-              if (id === '') return
-              anchorRef.current = id
-              const currentFrame = frameRef.current
-              if (settingsRef.current.pageMode === 'paged' && currentFrame !== null) {
-                layoutPagedFrame(currentFrame, { targetAnchor: id, save: true })
-              } else {
-                const target = documentNode.getElementById(id)
-                if (target) {
-                  try { target.scrollIntoView({ block: 'start' }) } catch { /* detached */ }
-                }
-              }
+              const id = hrefValue.slice(1)
+              if (id) goTo(chapterRef.current, id, 0)
               return
             }
             if (link.getAttribute('data-bb-external') === 'true') {
@@ -6077,7 +5984,7 @@ html.bb-paged body table tr{break-inside:avoid}
           })
         }
         documentNode.addEventListener('keydown', (event) => {
-          if (settingsRef.current.pageMode !== 'paged' || event.defaultPrevented) return
+          if (event.defaultPrevented) return
           if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
             event.preventDefault()
             turnPageRef.current(-1)
@@ -6086,157 +5993,59 @@ html.bb-paged body table tr{break-inside:avoid}
             turnPageRef.current(1)
           }
         })
-        if (scrollBindingRef.current) {
-          scrollBindingRef.current()
-          scrollBindingRef.current = null
+        if (frameCleanupRef.current) {
+          frameCleanupRef.current()
+          frameCleanupRef.current = null
         }
-        const token = frameTokenRef.current
         const boundChapter = chapterRef.current
-        let lastRatio = scrollRatioRef.current
-        let frameRequest = 0
-        let saveTimer = 0
-        let glassTimer = 0
-        const onScroll = () => {
-          setSelectionMenu((current) => (current === null ? current : null))
-          if (restoringRef.current || settingsRef.current.pageMode === 'paged') return
-          anchorRef.current = ''
-          // The glass bands are viewport-fixed, so a manual scroll leaves them
-          // behind; follow the sentence once the scroll settles.
-          if (glassTimer !== 0) clearTimeout(glassTimer)
-          glassTimer = setTimeout(() => {
-            glassTimer = 0
-            const range = speechRangeRef.current
-            // Only the overlay fallback needs the fixed-position band; with the
-            // CSS Custom Highlight API the inversion follows the text natively.
-            if (highlightFallbackRef.current && range !== null && documentNode.contains(range.startContainer)) {
-              paintSpeechGlass(documentNode, range)
+        restoringRef.current = false
+        layoutPagedFrame(frame, {
+          targetAnchor: anchorRef.current,
+          targetRatio: pendingRatioRef.current,
+          save: true,
+        })
+        const refresh = () => {
+          if (frame.contentDocument === documentNode) {
+            layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+            if (highlightFallbackRef.current) {
+              const range = speechRangeRef.current
+              if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
             }
-          }, 140)
-          if (frameRequest !== 0) return
-          frameRequest = requestAnimationFrame(() => {
-            frameRequest = 0
-            const ratio = frameScrollRatio(frame)
-            lastRatio = ratio
-            scrollRatioRef.current = ratio
-            setScrollRatio((value) => (Math.abs(value - ratio) < 0.002 ? value : ratio))
-            if (saveTimer !== 0) clearTimeout(saveTimer)
-            saveTimer = setTimeout(() => {
-              saveTimer = 0
-              saveEpubProgress(chapterRef.current, scrollRatioRef.current)
-            }, 650)
-          })
-        }
-        windowNode.addEventListener('scroll', onScroll, { passive: true })
-        scrollBindingRef.current = () => {
-          windowNode.removeEventListener('scroll', onScroll)
-          if (frameRequest !== 0) cancelAnimationFrame(frameRequest)
-          if (saveTimer !== 0) clearTimeout(saveTimer)
-          if (glassTimer !== 0) clearTimeout(glassTimer)
-          if (!restoringRef.current && chapterRef.current === boundChapter) {
-            saveEpubProgress(
-              boundChapter,
-              settingsRef.current.pageMode === 'paged' ? scrollRatioRef.current : lastRatio,
-              true,
-            )
           }
         }
-        if (settingsRef.current.pageMode === 'paged') {
-          restoringRef.current = false
-          layoutPagedFrame(frame, {
-            targetAnchor: anchorRef.current,
-            targetRatio: pendingScrollRef.current,
-            save: true,
-          })
-          const refresh = () => {
-            if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
+        if (documentNode.fonts && documentNode.fonts.ready) {
+          documentNode.fonts.ready.then(refresh).catch(() => undefined)
+        }
+        for (const image of documentNode.querySelectorAll('img')) {
+          if (!image.complete) image.addEventListener('load', refresh, { once: true })
+        }
+        const settleTimer = setTimeout(refresh, 280)
+        let pagedResizeTimer = 0
+        let pagedObserver = null
+        const schedulePagedResize = () => {
+          if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
+          pagedResizeTimer = setTimeout(() => {
+            pagedResizeTimer = 0
+            if (frame.contentDocument === documentNode) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-              if (highlightFallbackRef.current) {
-                const range = speechRangeRef.current
-                if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
-              }
             }
-          }
-          if (documentNode.fonts && documentNode.fonts.ready) {
-            documentNode.fonts.ready.then(refresh).catch(() => undefined)
-          }
-          for (const image of documentNode.querySelectorAll('img')) {
-            if (!image.complete) image.addEventListener('load', refresh, { once: true })
-          }
-          const settleTimer = setTimeout(refresh, 280)
-          let pagedResizeTimer = 0
-          let pagedObserver = null
-          const schedulePagedResize = () => {
-            if (settingsRef.current.pageMode !== 'paged') return
-            if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
-            pagedResizeTimer = setTimeout(() => {
-              pagedResizeTimer = 0
-              if (settingsRef.current.pageMode === 'paged' && frame.contentDocument === documentNode) {
-                layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-              }
-            }, 150)
-          }
-          if (typeof ResizeObserver !== 'undefined') {
-            pagedObserver = new ResizeObserver(schedulePagedResize)
-            pagedObserver.observe(documentNode.documentElement)
-          }
-          windowNode.addEventListener('resize', schedulePagedResize)
-          const previousBinding = scrollBindingRef.current
-          scrollBindingRef.current = () => {
-            previousBinding()
-            clearTimeout(settleTimer)
-            if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
-            if (pagedObserver !== null) pagedObserver.disconnect()
-            windowNode.removeEventListener('resize', schedulePagedResize)
-          }
-          return
+          }, 150)
         }
-        const targetAnchor = anchorRef.current
-        const targetRatio = pendingScrollRef.current
-        const apply = () => {
-          if (frameTokenRef.current !== token) return
-          const currentDocument = frame.contentDocument
-          const currentWindow = frame.contentWindow
-          if (!currentDocument || !currentWindow) return
-          if (targetAnchor !== '') {
-            const target = currentDocument.getElementById(decodeAnchor(targetAnchor))
-            if (target) {
-              try {
-                target.scrollIntoView({ block: 'start' })
-              } catch {
-                // The document changed again.
-              }
-            }
-          } else {
-            const root = currentDocument.scrollingElement || currentDocument.documentElement
-            if (root) {
-              const maximum = Math.max(0, root.scrollHeight - currentWindow.innerHeight)
-              currentWindow.scrollTo(0, maximum * targetRatio)
-            }
-          }
+        if (typeof ResizeObserver !== 'undefined') {
+          pagedObserver = new ResizeObserver(schedulePagedResize)
+          pagedObserver.observe(documentNode.documentElement)
         }
-        restoringRef.current = targetAnchor !== '' || targetRatio > 0
-        apply()
-        const retry = setTimeout(apply, 140)
-        const settle = setTimeout(() => {
-          if (frameTokenRef.current !== token) return
-          restoringRef.current = false
-          const ratio = frameScrollRatio(frame)
-          lastRatio = ratio
-          scrollRatioRef.current = ratio
-          setScrollRatio(ratio)
-          saveEpubProgress(chapterRef.current, ratio)
-        }, 380)
-        const previousBinding = scrollBindingRef.current
-        scrollBindingRef.current = () => {
-          previousBinding()
-          clearTimeout(retry)
-          clearTimeout(settle)
+        windowNode.addEventListener('resize', schedulePagedResize)
+        frameCleanupRef.current = () => {
+          if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true)
+          clearTimeout(settleTimer)
+          if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
+          if (pagedObserver !== null) pagedObserver.disconnect()
+          windowNode.removeEventListener('resize', schedulePagedResize)
         }
       }, [clearDisplayedHighlights, goTo, layoutPagedFrame, repaintHighlights, saveEpubProgress])
 
       useEffect(() => {
-        const previousMode = previousModeRef.current
-        previousModeRef.current = settings.pageMode
         const frame = frameRef.current
         const documentNode = frame && frame.contentDocument
         if (!documentNode) return
@@ -6244,40 +6053,13 @@ html.bb-paged body table tr{break-inside:avoid}
         // A font, size or theme change moves the glyphs; the plan depends on the
         // palette, so both highlight layers are rebuilt here.
         repaintHighlights(documentNode)
-        if (settings.pageMode === 'paged') {
-          if (previousMode === 'paged') {
-            layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-          } else {
-            pageAnchorRef.current = null
-            layoutPagedFrame(frame, { targetRatio: scrollRatioRef.current, save: true })
-          }
-          let cancelled = false
-          if (documentNode.fonts?.ready) documentNode.fonts.ready.then(() => {
-            if (!cancelled && frame.contentDocument === documentNode && settingsRef.current.pageMode === 'paged') layoutPagedFrame(frame, { restoreAnchor: true, save: true })
-          }).catch(() => undefined)
-          return () => { cancelled = true }
-        }
-        if (previousMode === 'paged') {
-          clearPagedLayout(documentNode)
-          if (documentNode.body) documentNode.body.scrollLeft = 0
-          const ratio = scrollRatioRef.current
-          const windowNode = frame.contentWindow
-          const root = documentNode.scrollingElement || documentNode.documentElement
-          if (windowNode && root) {
-            const maximum = Math.max(0, root.scrollHeight - windowNode.innerHeight)
-            windowNode.scrollTo(0, maximum * ratio)
-          }
-          pageAnchorRef.current = null
-          setPageIndex(0)
-          pageIndexRef.current = 0
-          setPageCount(1)
-          pageCountRef.current = 1
-          anchorRef.current = ''
-          scrollRatioRef.current = ratio
-          setScrollRatio(ratio)
-          saveEpubProgress(chapterRef.current, ratio)
-        }
-      }, [settings, themeTick, layoutPagedFrame, repaintHighlights, saveEpubProgress])
+        layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+        let cancelled = false
+        if (documentNode.fonts?.ready) documentNode.fonts.ready.then(() => {
+          if (!cancelled && frame.contentDocument === documentNode) layoutPagedFrame(frame, { restoreAnchor: true, save: true })
+        }).catch(() => undefined)
+        return () => { cancelled = true }
+      }, [settings, themeTick, layoutPagedFrame, repaintHighlights])
 
       // Creating or deleting an annotation must repaint without a page turn.
       // The array identity only changes when the Host state actually stores a
@@ -6290,7 +6072,7 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [annotationList, repaintHighlights])
 
       useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+        if (status !== 'ready') return undefined
         const node = frameWrapRef.current
         if (node === null || typeof ResizeObserver === 'undefined') return undefined
         let timer = 0
@@ -6299,7 +6081,7 @@ html.bb-paged body table tr{break-inside:avoid}
           timer = setTimeout(() => {
             timer = 0
             const frame = frameRef.current
-            if (frame !== null && settingsRef.current.pageMode === 'paged') {
+            if (frame !== null) {
               layoutPagedFrame(frame, { restoreAnchor: true, save: true })
             }
           }, 160)
@@ -6309,18 +6091,18 @@ html.bb-paged body table tr{break-inside:avoid}
           observer.disconnect()
           if (timer !== 0) clearTimeout(timer)
         }
-      }, [settings.pageMode, status, layoutPagedFrame])
+      }, [status, layoutPagedFrame])
 
       useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+        if (status !== 'ready') return undefined
         const timer = setTimeout(() => {
           const frame = frameRef.current
-          if (frame !== null && settingsRef.current.pageMode === 'paged') {
+          if (frame !== null) {
             layoutPagedFrame(frame, { restoreAnchor: true, save: true })
           }
         }, 180)
         return () => clearTimeout(timer)
-      }, [tocOpen, settings.pageMode, status, layoutPagedFrame])
+      }, [tocOpen, status, layoutPagedFrame])
 
       useEffect(() => {
         if (status !== 'ready') return undefined
@@ -6337,11 +6119,10 @@ html.bb-paged body table tr{break-inside:avoid}
         const observer = new ResizeObserver(measure)
         observer.observe(frame)
         return () => observer.disconnect()
-      }, [status, chapter, settings.pageMode])
+      }, [status, chapter])
 
       useEffect(() => {
         if (
-          settings.pageMode !== 'paged' ||
           status !== 'ready' ||
           data === null ||
           epubModule === null ||
@@ -6422,10 +6203,8 @@ html.bb-paged body table tr{break-inside:avoid}
       const percent = data === null ? 0 : metrics.percentFor(chapter, scrollRatio)
       const bookmarks = readerState.state && Array.isArray(readerState.state.bookmarks) ? readerState.state.bookmarks : []
       const annotations = readerState.state && Array.isArray(readerState.state.annotations) ? readerState.state.annotations : []
-      const currentRatio = scrollRatioRef.current
       const currentBookmark = bookmarks.find((bookmark) => {
         if (bookmark.format !== 'epub' || bookmark.chapterIndex !== chapter) return false
-        if (settings.pageMode !== 'paged') return Math.abs((Number(bookmark.scrollRatio) || 0) - currentRatio) < 0.02
         if (bookmark.anchor && bookmark.anchor === anchorRef.current) return true
         const target = Math.round(Math.min(1, Math.max(0, Number(bookmark.scrollRatio) || 0)) * (pageCount - 1))
         return Math.floor(target / pageColumns) * pageColumns === pageIndex
@@ -6497,7 +6276,7 @@ html.bb-paged body table tr{break-inside:avoid}
       )
 
       useEffect(() => {
-        if (settings.pageMode !== 'paged' || status !== 'ready') return undefined
+        if (status !== 'ready') return undefined
         const onKeyDown = (event) => {
           if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
           const target = event.target
@@ -6518,12 +6297,10 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
-      }, [settings.pageMode, status, turnPage])
+      }, [status, turnPage])
 
-      const paged = settings.pageMode === 'paged' && status === 'ready' && data !== null
       const currentPageLabel = (() => {
-        if (data === null) return ''
-        if (!paged) return t('chapterOf', { current: chapter + 1, total: data.chapters.length })
+        if (data === null || status !== 'ready') return ''
         const complete = Array.isArray(bookPageCounts) && bookPageCounts.length === data.chapters.length && bookPageCounts.every(value => Number.isInteger(value) && value > 0)
         const end = Math.min(pageIndex + pageColumns, pageCount)
         if (!complete) return end > pageIndex + 1
@@ -6554,7 +6331,7 @@ html.bb-paged body table tr{break-inside:avoid}
             book: { id: book.id, title: book.title || data.title || '', author: book.author || data.author || '' },
             chapter: { path: entry.path, label: entry.label || chapterLabel(t, chapter) },
             sourceRevision: data.sourceRevision,
-            pageMode: settings.pageMode,
+            pageMode: 'paged',
             pageLabel: currentPageLabel,
           }
           const snapshotId = crypto.randomUUID()
@@ -6671,11 +6448,11 @@ html.bb-paged body table tr{break-inside:avoid}
             key: 'prev',
             type: 'button',
             className: 'bs-icon-button',
-            onClick: () => (paged ? turnPage(-1) : goTo(chapter - 1, '', 0)),
-            disabled: paged ? pageIndex <= 0 && chapter <= 0 : data === null || chapter <= 0,
-            title: paged ? t('previousPage') : t('previousChapter'),
-            'aria-label': paged ? t('previousPage') : t('previousChapter'),
-            'aria-keyshortcuts': paged ? 'ArrowLeft PageUp' : undefined,
+            onClick: () => turnPage(-1),
+            disabled: data === null || (pageIndex <= 0 && chapter <= 0),
+            title: t('previousPage'),
+            'aria-label': t('previousPage'),
+            'aria-keyshortcuts': 'ArrowLeft PageUp',
           },
           h(ChevronLeftIcon),
         ),
@@ -6694,13 +6471,11 @@ html.bb-paged body table tr{break-inside:avoid}
             key: 'next',
             type: 'button',
             className: 'bs-icon-button',
-            onClick: () => (paged ? turnPage(1) : goTo(chapter + 1, '', 0)),
-            disabled: paged
-              ? pageIndex + pageColumns >= pageCount && chapter >= data.chapters.length - 1
-              : data === null || chapter >= data.chapters.length - 1,
-            title: paged ? t('nextPage') : t('nextChapter'),
-            'aria-label': paged ? t('nextPage') : t('nextChapter'),
-            'aria-keyshortcuts': paged ? 'ArrowRight PageDown' : undefined,
+            onClick: () => turnPage(1),
+            disabled: data === null || (pageIndex + pageColumns >= pageCount && chapter >= data.chapters.length - 1),
+            title: t('nextPage'),
+            'aria-label': t('nextPage'),
+            'aria-keyshortcuts': 'ArrowRight PageDown',
           },
           h(ChevronRightIcon),
         ),
@@ -6744,24 +6519,12 @@ html.bb-paged body table tr{break-inside:avoid}
           if (!windowNode) return []
           const sentences = module.splitSentences(documentNode.body.innerText || '')
           const entries = textIndex.buildSpeechBatches(documentNode, sentences)
-          const paged = settingsRef.current.pageMode === 'paged'
           const startPage = pageIndexRef.current
-          let start = 0
-          if (paged) {
-            const found = entries.findIndex((entry) => {
-              const page = rangePage(documentNode, windowNode, entry.range)
-              return page !== null && page >= startPage
-            })
-            if (found > 0) start = found
-          } else {
-            const found = entries.findIndex((entry) => {
-              if (entry.range === null) return false
-              const rect = entry.range.getBoundingClientRect()
-              return rect.bottom > 0 && rect.top < windowNode.innerHeight
-            })
-            if (found > 0) start = found
-          }
-          return entries.slice(start).map((entry) => ({
+          const start = entries.findIndex((entry) => {
+            const page = rangePage(documentNode, windowNode, entry.range)
+            return page !== null && page >= startPage
+          })
+          return entries.slice(Math.max(0, start)).map((entry) => ({
             text: entry.text,
             enter: async () => {
               if (entry.range === null) return
@@ -6769,25 +6532,16 @@ html.bb-paged body table tr{break-inside:avoid}
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
               speechRangeRef.current = entry.range
-              // Paint after the page turn or scroll settles so the inversion (or
+              // Paint after the page turn settles so the inversion (or
               // the fallback marker band) matches the final line boxes.
               const paint = () => {
                 const live = frameRef.current
                 if (!live || live.contentDocument !== documentNode) return
                 repaintHighlights(documentNode)
               }
-              if (paged) {
-                const page = rangePage(documentNode, windowNode, entry.range)
-                if (page !== null && page > pageIndexRef.current) {
-                  layoutPagedFrame(frameNode, { targetPage: page, save: true })
-                }
-                windowNode.requestAnimationFrame(paint)
-                return
-              }
-              const rect = entry.range.getBoundingClientRect()
-              if (rect.top < 0 || rect.bottom > windowNode.innerHeight) {
-                const element = entry.range.startContainer.parentElement || documentNode.body
-                if (element && typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
+              const page = rangePage(documentNode, windowNode, entry.range)
+              if (page !== null && page > pageIndexRef.current) {
+                layoutPagedFrame(frameNode, { targetPage: page, save: true })
               }
               windowNode.requestAnimationFrame(paint)
             },
@@ -6798,13 +6552,8 @@ html.bb-paged body table tr{break-inside:avoid}
               const frameNode = frameRef.current
               const currentDocument = frameNode && frameNode.contentDocument
               if (currentDocument !== documentNode) return
-              if (paged) {
-                const page = rangePage(documentNode, windowNode, entry.range)
-                if (page === null || page !== pageIndexRef.current) return
-              } else {
-                const rect = entry.range.getBoundingClientRect()
-                if (rect.bottom <= 0 || rect.top >= windowNode.innerHeight) return
-              }
+              const page = rangePage(documentNode, windowNode, entry.range)
+              if (page === null || page !== pageIndexRef.current) return
               speechRangeRef.current = entry.range
               windowNode.requestAnimationFrame(() => {
                 const live = frameRef.current

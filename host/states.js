@@ -10,7 +10,6 @@ import { sanitizeFontSettings } from '../assets/reading-fonts.mjs'
 
 const SETTING_THEMES = new Set(['auto', 'light', 'dark'])
 const SETTING_PAGE_MARGINS = new Set(['standard', 'compact', 'fill'])
-const SETTING_PAGE_MODES = new Set(['scroll', 'paged'])
 const SETTING_PDF_FITS = new Set(['page', 'width', 'custom'])
 const SETTING_PDF_VIEWS = new Set(['continuous', 'single'])
 
@@ -87,7 +86,7 @@ function sanitizeSettings(value) {
   if (lineHeight !== undefined) settings.lineHeight = Math.round(lineHeight * 100) / 100
   if (SETTING_PAGE_MARGINS.has(value.pageMargin)) settings.pageMargin = value.pageMargin
   if (SETTING_THEMES.has(value.theme)) settings.theme = value.theme
-  if (SETTING_PAGE_MODES.has(value.pageMode)) settings.pageMode = value.pageMode
+  if (value.pageMode === 'paged' || value.pageMode === 'scroll') settings.pageMode = 'paged'
   if (value.pageSpread === 'auto' || value.pageSpread === 'single') settings.pageSpread = value.pageSpread
   if (SETTING_PDF_FITS.has(value.pdfFit)) settings.pdfFit = value.pdfFit
   const pdfZoom = clampNumber(value.pdfZoom, 0.5, 3)

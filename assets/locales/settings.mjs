@@ -60,9 +60,6 @@ export const en = {
   marginCompact: 'Compact',
   marginFill: 'Fill',
   readingTheme: 'Page theme',
-  readingMode: 'Reading mode',
-  modeScroll: 'Scroll',
-  modePaged: 'Paged',
 }
 
 export const zh = {
@@ -123,7 +120,4 @@ export const zh = {
   marginCompact: '紧凑',
   marginFill: '铺满',
   readingTheme: '页面主题',
-  readingMode: '阅读方式',
-  modeScroll: '滚动',
-  modePaged: '分页',
 }

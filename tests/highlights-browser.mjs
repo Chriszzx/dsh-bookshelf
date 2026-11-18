@@ -122,12 +122,12 @@ try {
   const origin = `http://127.0.0.1:${server.address().port}`
   const api = `${origin}/bookshelf/api`
 
-  // A pinned light palette and scroll mode make every colour assertion
+  // A pinned light palette makes every colour assertion
   // deterministic (no DSH token stylesheet is loaded in this fixture page).
   const preferenceResponse = await fetch(`${api}/settings`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ theme: 'light', pageMode: 'scroll' }),
+    body: JSON.stringify({ theme: 'light' }),
   })
   assert.equal(preferenceResponse.status, 200)
 
@@ -309,7 +309,7 @@ try {
     await until(()=>!document.querySelector('.bs-reader-settings'),'settings closed');
     // Chapter switch: every layer of the old document is cleared and the new
     // chapter (which has no annotations) starts clean.
-    const nextChapter=document.querySelector('button[title="nextChapter"]');
+    const nextChapter=document.querySelectorAll('.bs-toc-label')[1];
     check(!!nextChapter,'next chapter button');
     nextChapter.click();
     await until(()=>chapterText().includes('第二章第一句话'),'chapter two renders');

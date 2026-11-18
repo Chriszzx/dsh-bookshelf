@@ -19,8 +19,8 @@ DeepSeek Harness Web GUI 的本地 PDF / EPUB 书架与阅读器，将阅读、�
   **页面级 AI 讨论**：将当前可见页面快照保存至工作区，并附带 `@file` 引用直接发起原生对话。
 - **Non-Destructive Library**: Import files, link local folders, or link macOS Apple Books libraries without altering original files.
   **无损书库管理**：支持文件导入、文件夹链接及 macOS Apple Books 书库链接，绝不修改原始文件。
-- **Native Reading Experience**: Adapts to DSH light, dark, and custom themes with paged/scroll layouts, TOC, bookmarks, and per-book highlight/underline styles.
-  **原生阅读体验**：自适应 DSH 浅色、深色与自定义主题，提供分页/滚动布局、目录、书签及按书记忆的高亮与下划线样式。
+- **Native Reading Experience**: Adapts to DSH light, dark, and custom themes with paginated EPUBs and single-page or continuous PDF views, TOC, bookmarks, and per-book highlight/underline styles.
+  **原生阅读体验**：自适应 DSH 浅色、深色与自定义主题，提供 EPUB 分页、PDF 单页与连续视图、目录、书签及按书记忆的高亮与下划线样式。
 
 ## Screenshots / 截图
 
@@ -54,9 +54,9 @@ Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified C
 
 **书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在响应式封面网格与列表视图间自由切换。
 
-**Reader & Annotations.** Supports PDF and EPUB with zoom, paged/scroll modes, TOC, bookmarks, and automatic progress restore. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
+**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. PDFs support zoom and single-page or continuous views. Both remember bookmarks and reading progress. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
 
-**阅读与标注。** 支持 PDF 与 EPUB 缩放、分页/滚动、目录、书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
+**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，PDF 支持缩放、单页和连续视图。两种格式都支持书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
 
 **Live Read-Aloud.** Floating frosted-glass controls for play/pause, sentence stepping, speed, and voice selection. Supports offline system voices (`say` on macOS, SAPI on Windows), Edge TTS (keyless), DeepSeek TTS, and OpenAI-compatible endpoints, with automatic language matching by default.
 
