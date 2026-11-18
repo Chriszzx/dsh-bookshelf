@@ -9,7 +9,7 @@ export const FONT_FALLBACKS = {
 export function sanitizeFontSettings(value) {
   const settings = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) return settings
-  if (Object.hasOwn(FONT_FALLBACKS, value.fontFamily)) settings.fontFamily = value.fontFamily
+  if (value.fontFamily === 'publisher' || Object.hasOwn(FONT_FALLBACKS, value.fontFamily)) settings.fontFamily = value.fontFamily
   if (typeof value.fontName === 'string' && value.fontName.length <= 200 && !/[\u0000-\u001f\u007f]/u.test(value.fontName)) {
     settings.fontName = value.fontName.trim()
   }

@@ -230,6 +230,9 @@ try {
     await until(()=>document.querySelector('.bs-reader'));
     document.querySelector('.bs-reader-bar .bs-icon-button').click();
     await until(()=>document.querySelectorAll('.bs-row').length===4);
+    // This fixture fits on one page, so returning can offer to mark it finished.
+    document.querySelector('[aria-label="finishPromptTitle"] [aria-label="dismiss"]')?.click();
+    await until(()=>!document.querySelector('[aria-label="finishPromptTitle"]'));
     check(!!document.querySelector('.bs-list'),'list survives the reader');
     openRowMenu('Beta');
     await until(()=>document.querySelector('.bs-row-menu'));

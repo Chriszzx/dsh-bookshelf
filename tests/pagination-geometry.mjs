@@ -223,6 +223,9 @@ try {
   const state=await evaluate('inspect()');assert.equal(state.columns,2);assert.equal(state.label,`pageOf(current=${current},total=3)`,'short/empty chapters count one real page each');assert.equal(state.scroll,0);assert.deepEqual(state.leaks,[])
   if(current<3)await evaluate(`(async()=>{click('nextPage');await wait(700)})()`)
  }
+ const shortState = await (await fetch(`${origin}/bookshelf/api/books/${shortBook.id}/state`)).json()
+ assert.equal(shortState.state.progress.percent, 1, 'the single-page last chapter completes the book')
+ assert.equal(shortState.state.progress.scrollRatio, 0, 'its saved location still refers to the start of that page')
  assert.ok(await evaluate(`(()=>{const table=document.querySelector('.bs-epub-frame').contentDocument.querySelector('.bb-table-wrap');return table.scrollWidth>table.clientWidth})()`),'wide table really overflows within its own scroller without adding pages')
  await evaluate(`(async()=>{click('previousPage');await wait(700)})()`)
  assert.equal((await evaluate('inspect()')).label,'pageOf(current=2,total=3)','previous chapter restores final spread')

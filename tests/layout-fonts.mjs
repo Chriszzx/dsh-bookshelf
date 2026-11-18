@@ -57,13 +57,15 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${server.address().port}`
   const archive = await readFile(join(fixtures, 'paged-long.epub'))
+  const sample = await readFile(join(pluginDir, 'tests/fixtures/typography-reference.epub'))
   const books = []
   for (let i = 0; i < 16; i++) {
-    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: archive })
+    const response = await fetch(`${origin}/bookshelf/api/books?name=layout-${i}.epub&title=Layout%20${i}&format=epub`, { method: 'POST', body: i === 2 ? sample : archive })
     assert.equal(response.status, 201)
     books.push((await response.json()).book)
   }
   for (const [book, settings] of [
+    [books[2], { fontFamily: 'publisher', fontSize: 19 }],
     [books[0], { fontFamily: 'mono', fontSize: 18 }],
     [books[1], { fontFamily: 'serif', fontName: 'Unavailable Font For Test', fontWeight: 0, fontStyle: 'normal' }],
   ]) {
@@ -173,6 +175,68 @@ try {
   assert.equal(await evaluate(`document.querySelector('select[aria-label="fontFamily"]').value`), 'font:Unavailable Font For Test')
   assert.ok(await evaluate(`document.querySelector('.bs-reader-settings').textContent.includes('fontMissingHint')`), 'missing fonts retain the saved preference and explain the fallback')
   assert.ok(await evaluate(`document.querySelector('.bs-epub-frame').contentDocument.querySelector('p').getBoundingClientRect().height>0`), 'missing fonts still render readable content')
+  await evaluate(`(async()=>{
+    click('dismiss'); click('back');
+    await until(()=>document.querySelector('.bs-card'));
+    const card=[...document.querySelectorAll('.bs-card')].find(c=>c.querySelector('.bs-book-title')?.textContent==='Layout 2');
+    card.querySelector('.bs-cover').click();
+    await until(()=>document.querySelector('.bs-epub-frame')?.contentDocument?.getElementById('note'));
+    click('readingSettings');
+    await until(()=>document.querySelector('select[aria-label="fontFamily"]'));
+  })()`)
+  for (const [mode, size] of [['publisher', 19], ['mono', 20], ['publisher', 20]]) {
+    await evaluate(`choose('fontFamily','preset:${mode}')`)
+    if (mode === 'mono') await evaluate(`click('fontLarger')`)
+    const result = await evaluate(`(async()=>{
+      const wanted=${size}, mode='${mode}';
+      function sample(selector) {
+        const frame=document.querySelector(selector), doc=frame?.contentDocument;
+        if (!doc?.getElementById('note')) return null;
+        const style=selector=>frame.contentWindow.getComputedStyle(doc.querySelector(selector));
+        const base=parseFloat(style('#body').fontSize);
+        return {
+          base, family:style('#body').fontFamily, title:parseFloat(style('h1').fontSize)/base,
+          subtitle:parseFloat(style('#subtitle').fontSize)/base, note:parseFloat(style('#note').fontSize)/base,
+          weight:style('#kicker').fontWeight, headingFamily:style('h1').fontFamily,
+          indent:parseFloat(style('#poem').marginLeft)/base, quote:parseFloat(style('blockquote').paddingLeft),
+          code:parseFloat(style('pre code').fontSize)/base, language:doc.documentElement.lang,
+          ruby:doc.querySelector('[lang="ja"] rt').textContent,
+        };
+      }
+      const visible=()=>sample('.bs-epub-frame'), probe=()=>sample('.bs-epub-probe');
+      await until(()=>visible()?.base===wanted && (mode==='mono'?visible().family.includes('monospace'):visible().family.includes('Songti'))
+        && JSON.stringify(visible())===JSON.stringify(probe()));
+      return visible();
+    })()`)
+    assert.ok(Math.abs(result.title - 1.7) < .001)
+    assert.ok(Math.abs(result.subtitle - 1.15) < .001)
+    assert.ok(Math.abs(result.note - .8) < .001)
+    assert.equal(result.weight, '700')
+    assert.equal(result.headingFamily, 'sans-serif')
+    assert.equal(result.indent, 2)
+    assert.ok(result.quote > 0)
+    assert.ok(Math.abs(result.code - .86) < .001)
+    assert.equal(result.language, 'zh-Hans')
+    assert.equal(result.ruby, 'みなも')
+  }
+  const chapterRules = await evaluate(`(async()=>{
+    const { renderChapterHtml } = await import('/bookshelf/assets/epub.mjs')
+    const html = '<html><head><link rel="stylesheet" href="../missing.css"><style>.title{font:bold 24px serif;position:fixed;background-image:url(/unused.png)} .caption{font-size:75%}</style></head>' +
+      '<body class="chapter"><h1 class="title">Title</h1><p class="caption" xml:lang="fr" style="font-size:12pt">Caption</p></body></html>'
+    const result = renderChapterHtml({ data:{chapters:[{path:'text/chapter.xhtml',html}], language:'en'},
+      chapterIndex:0, resourceIndex:new Map(), imageCache:new Map(), readingCss:':root{font-size:20px}' })
+    const frame=document.createElement('iframe')
+    const loaded=new Promise(resolve=>{frame.onload=resolve})
+    frame.srcdoc=result; document.body.appendChild(frame); await loaded
+    const doc=frame.contentDocument, css=el=>frame.contentWindow.getComputedStyle(doc.querySelector(el))
+    const actual={title:css('h1').fontSize,weight:css('h1').fontWeight,caption:css('p').fontSize,
+      lang:doc.documentElement.lang,captionLang:doc.querySelector('p').lang,body:doc.body.className,position:css('h1').position,
+      image:css('h1').backgroundImage,link:!!doc.querySelector('link')}
+    frame.remove()
+    return actual
+  })()`)
+  assert.deepEqual(chapterRules, {title:'30px', weight:'700', caption:'20px', lang:'en',
+    captionLang:'fr', body:'chapter', position:'static', image:'none', link:false})
   assert.deepEqual(await evaluate('errors'), [])
   console.log('Layout, platform clearance, font access fallback, native styles, persistence and reading-anchor regressions passed.', widths)
 } finally {

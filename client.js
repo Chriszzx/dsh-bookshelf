@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '11'
+    const ASSET_VERSION = '12'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -562,9 +562,15 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 `
 
     const READING_CSS = `
-:root{color-scheme:var(--bb-scheme,light)}
+@layer readerDefaults {
+html{font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif);}
+:root{color-scheme:var(--bb-scheme,light);font-size:var(--bb-font-size,19px)!important}
 html,body{margin:0;padding:0;background:var(--bb-bg,transparent)}
-body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-family:var(--bb-font-family,'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif);font-size:var(--bb-font-size,19px);font-weight:var(--bb-font-weight,normal);font-style:var(--bb-font-style,normal);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
+body{max-width:var(--bb-max-width,46rem);margin:0 auto;padding:var(--bb-padding-y,44px) var(--bb-padding-x,34px) 120px;color:var(--bb-fg,#1f2328);font-size:1em;font-weight:var(--bb-font-weight,normal);font-style:var(--bb-font-style,normal);line-height:var(--bb-line-height,1.85);text-align:justify;overflow-wrap:break-word;hyphens:auto}
+html.bb-custom-font body{font-family:var(--bb-prose-font)!important}
+html.bb-custom-weight body{font-weight:var(--bb-font-weight)!important}
+html.bb-custom-italic body{font-style:italic!important}
+html.bb-custom-leading body{line-height:var(--bb-line-height)!important}
 body > :first-child{margin-top:0}
 h1,h2,h3,h4,h5,h6{margin:1.55em 0 .65em;font-weight:600;line-height:1.35;text-align:left;text-wrap:balance}
 h1{font-size:1.6em}h2{font-size:1.34em}h3{font-size:1.16em}
@@ -580,7 +586,7 @@ blockquote p{margin-bottom:.5em}
 pre,code,kbd,samp{font-family:ui-monospace,'SFMono-Regular',Menlo,monospace;font-size:.86em}
 pre{margin:1em 0;padding:.85em 1em;border:1px solid var(--bb-border);border-radius:8px;background:var(--bb-code-bg);white-space:pre-wrap;overflow-wrap:anywhere;text-align:left}
 code{padding:.1em .3em;border-radius:4px;background:var(--bb-code-bg)}
-pre code{padding:0;background:transparent}
+pre code{font-size:inherit;padding:0;background:transparent}
 hr{margin:2em 0;border:0;border-top:1px solid var(--bb-border)}
 .bb-table-wrap{max-width:100%;overflow-x:auto;scrollbar-width:thin}
 .bb-table-wrap table{margin:.4em 0}
@@ -590,8 +596,10 @@ th{background:var(--bb-code-bg);font-weight:600}
 ul,ol{margin:.4em 0 1em;padding-left:1.5em}
 li{margin:.18em 0}
 dt{font-weight:600}dd{margin:0 0 .6em 1.4em}
+:where([role="doc-footnote"],[role="doc-endnote"],[epub\\:type~="footnote"],[epub\\:type~="endnote"]){font-size:.85em;line-height:1.5}
 sup,sub{line-height:0}
 ::selection{background:rgba(80,130,240,.26)}
+}
 `
 
     const PAGED_CSS = `
@@ -630,7 +638,7 @@ html.bb-paged body table tr{break-inside:avoid}
     const READER_LINE_HEIGHTS = { compact: 1.65, normal: 1.85, loose: 2.05 }
 
     const DEFAULT_READING_SETTINGS = {
-      fontFamily: 'serif',
+      fontFamily: 'publisher',
       fontName: '',
       fontWeight: 0,
       fontStyle: 'normal',
@@ -2081,7 +2089,8 @@ html.bb-paged body table tr{break-inside:avoid}
           options.map(option => h('option', { key: String(option.value), value: option.value }, option.label))))
       return h(React.Fragment, null,
         h('h3', { className: 'bs-settings-section' }, t('fontSection')),
-        row('fontFamily', selected ? `font:${selected}` : `preset:${settings.fontFamily || 'serif'}`, [
+        row('fontFamily', selected ? `font:${selected}` : `preset:${settings.fontFamily || 'publisher'}`, [
+          { value: 'preset:publisher', label: t('fontPublisher') },
           { value: 'preset:serif', label: t('fontDefaultSerif') },
           { value: 'preset:sans', label: t('fontDefaultSans') },
           { value: 'preset:mono', label: t('fontDefaultMono') },
@@ -4188,6 +4197,16 @@ html.bb-paged body table tr{break-inside:avoid}
       const root = documentNode.documentElement
       const body = documentNode.body
       root.style.setProperty('--bb-font-family', readingFonts ? readingFonts.fontStack(settings) : READER_FONTS[settings.fontFamily] || READER_FONTS.serif)
+      if (settings.fontName || (settings.fontFamily && settings.fontFamily !== 'publisher')) {
+        root.style.setProperty('--bb-prose-font', root.style.getPropertyValue('--bb-font-family'))
+        root.classList.add('bb-custom-font')
+      } else {
+        root.style.removeProperty('--bb-prose-font')
+        root.classList.remove('bb-custom-font')
+      }
+      root.classList.toggle('bb-custom-weight', Boolean(settings.fontWeight))
+      root.classList.toggle('bb-custom-italic', settings.fontStyle === 'italic')
+      root.classList.toggle('bb-custom-leading', Boolean(settings.lineHeight && settings.lineHeight !== DEFAULT_READING_SETTINGS.lineHeight))
       root.style.setProperty('--bb-font-weight', settings.fontWeight ? String(settings.fontWeight) : 'normal')
       root.style.setProperty('--bb-font-style', settings.fontStyle === 'italic' ? 'italic' : 'normal')
       root.style.setProperty('--bb-font-size', `${Math.min(30, Math.max(12, Math.round(settings.fontSize || 19)))}px`)
@@ -5330,8 +5349,10 @@ html.bb-paged body table tr{break-inside:avoid}
       const probeTokenRef = useRef(0)
       const imageCacheRef = useRef(new Map())
       const scrollRatioRef = useRef(0)
+      const positionRatioRef = useRef(0)
       const pendingRatioRef = useRef(0)
       const anchorRef = useRef('')
+      const targetAnnotationRef = useRef(null)
       const chapterRef = useRef(0)
       const restoringRef = useRef(false)
       const frameCleanupRef = useRef(null)
@@ -5484,10 +5505,10 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [data, t])
 
       const saveEpubProgress = useCallback(
-        (index, ratio, immediate = false) => {
+        (index, ratio, immediate = false, position = ratio) => {
           if (data === null || !readerState.loaded) return
           const safeRatio = Math.min(1, Math.max(0, Number.isFinite(ratio) ? ratio : 0))
-          const progressKey = `${index}:${safeRatio.toFixed(5)}:${anchorRef.current || ''}`
+          const progressKey = `${index}:${safeRatio.toFixed(5)}:${position.toFixed(5)}:${anchorRef.current || ''}`
           if (!immediate && lastSavedProgressRef.current === progressKey) return
           lastSavedProgressRef.current = progressKey
           const percent = metrics.percentFor(index, safeRatio)
@@ -5497,7 +5518,7 @@ html.bb-paged body table tr{break-inside:avoid}
                 format: 'epub',
                 chapterIndex: index,
                 chapterPath: data.chapters[index] ? data.chapters[index].path : '',
-                scrollRatio: safeRatio,
+                scrollRatio: position,
                 percent,
                 anchor: anchorRef.current || '',
                 updatedAt: Date.now(),
@@ -5615,7 +5636,12 @@ html.bb-paged body table tr{break-inside:avoid}
           let page = pageIndexRef.current
           let resolvedAnchor = null
           const targetAnchor = typeof options.targetAnchor === 'string' ? options.targetAnchor : ''
-          if (targetAnchor !== '') {
+          const annotation = options.annotation
+          const match = annotation && resolveAnnotationRanges(documentNode, [annotation], chapterRef.current)[0]
+          if (match) {
+            page = rangePage(documentNode, windowNode, match.range) ?? 0
+            resolvedAnchor = { node: match.range.startContainer, offset: match.range.startOffset }
+          } else if (targetAnchor !== '') {
             const target = documentNode.getElementById(decodeAnchor(targetAnchor))
             if (target !== null) {
               body.scrollLeft = 0
@@ -5651,7 +5677,9 @@ html.bb-paged body table tr{break-inside:avoid}
           laidOutPagesRef.current = info.pages
           setPageColumns(info.columns)
           pageColumnsRef.current = info.columns
-          const ratio = info.pages <= 1 ? 0 : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
+          const ratio = info.pages <= 1 ? (chapterRef.current === data?.chapters.length - 1 ? 1 : 0) : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
+          // A one-page chapter starts at zero even when its last page counts as read.
+          positionRatioRef.current = info.pages > 1 ? ratio : 0
           scrollRatioRef.current = ratio
           setScrollRatio(ratio)
           // Keep the same reading anchor throughout successive reflows. Taking
@@ -5666,14 +5694,14 @@ html.bb-paged body table tr{break-inside:avoid}
             if (generation === layoutGenerationRef.current) capturePagedAnchor()
           }
           if (options.save && generation === layoutGenerationRef.current) {
-            saveEpubProgress(chapterRef.current, ratio)
+            saveEpubProgress(chapterRef.current, ratio, false, positionRatioRef.current)
           }
           // A reflow keeps the Range objects valid, but the overlay fallback
           // band is viewport-fixed and a repaint keeps both layers in step with
           // the new column geometry.
           if (generation === layoutGenerationRef.current) repaintHighlights(documentNode)
         },
-        [capturePagedAnchor, pageForAnchor, repaintHighlights, saveEpubProgress],
+        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress],
       )
 
       useEffect(() => {
@@ -5700,6 +5728,7 @@ html.bb-paged body table tr{break-inside:avoid}
         scrollRatioRef.current = 0
         pendingRatioRef.current = 0
         anchorRef.current = ''
+        targetAnnotationRef.current = null
         chapterRef.current = 0
         restoringRef.current = false
         imageCacheRef.current.clear()
@@ -5834,16 +5863,17 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [data, epubModule, chapter, resourceIndex, t])
 
       const goTo = useCallback(
-        (index, targetAnchor, targetRatio) => {
+        (index, targetAnchor, targetRatio, annotation = null) => {
           if (data === null) return
           const safeIndex = Math.min(data.chapters.length - 1, Math.max(0, Number(index) || 0))
           const nextAnchor = typeof targetAnchor === 'string' ? targetAnchor : ''
           const nextRatio = Math.min(1, Math.max(0, Number.isFinite(targetRatio) ? targetRatio : 0))
           anchorRef.current = nextAnchor
           if (safeIndex === chapterRef.current && frameRef.current !== null) {
-            layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, save: true })
+            layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, annotation, save: true })
             return
           }
+          targetAnnotationRef.current = annotation
           chapterRef.current = safeIndex
           pendingRatioRef.current = nextRatio
           restoringRef.current = false
@@ -6028,10 +6058,12 @@ html.bb-paged body table tr{break-inside:avoid}
         const boundChapter = chapterRef.current
         restoringRef.current = false
         layoutPagedFrame(frame, {
+          annotation: targetAnnotationRef.current,
           targetAnchor: anchorRef.current,
           targetRatio: pendingRatioRef.current,
           save: true,
         })
+        targetAnnotationRef.current = null
         const refresh = () => {
           if (frame.contentDocument === documentNode) {
             layoutPagedFrame(frame, { restoreAnchor: true, save: true })
@@ -6065,7 +6097,7 @@ html.bb-paged body table tr{break-inside:avoid}
         }
         windowNode.addEventListener('resize', schedulePagedResize)
         frameCleanupRef.current = () => {
-          if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true)
+          if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true, positionRatioRef.current)
           clearTimeout(settleTimer)
           if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
           if (pagedObserver !== null) pagedObserver.disconnect()
@@ -6256,7 +6288,7 @@ html.bb-paged body table tr{break-inside:avoid}
           label,
           format: 'epub',
           chapterIndex: chapter,
-          scrollRatio: ratio,
+          scrollRatio: positionRatioRef.current,
           anchor: anchorRef.current || '',
           percent: bookmarkPercent,
           createdAt: Date.now(),
@@ -6755,7 +6787,7 @@ html.bb-paged body table tr{break-inside:avoid}
                                   onSelect: (item) => {
                                     const source = item.source || {}
                                     const ratio = item.kind === 'bookmark' ? Number(source.scrollRatio) || 0 : 0
-                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio)
+                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio, item.kind === 'bookmark' ? null : source)
                                   },
                                   onDelete: (item) => {
                                     const source = item.source || {}

@@ -94,7 +94,7 @@ try {
     method: 'POST',
     body: epubBytes('Panel', [
       ['第一章的正文足够长，方便把高亮锚点放在章节开头之后的位置。', '第一章的第二段让滚动位置更自然。'],
-      ['第二章的正文同样保留为下划线锚点所在的位置。', '第二章的第二段收尾。'],
+      [...Array(240).fill('第二章的正文同样保留为下划线锚点所在的位置。'), '第二章的第二段收尾。'],
     ]),
   })
   assert.equal(epubResponse.status, 201)
@@ -112,7 +112,7 @@ try {
       quote: '高亮引用文字', color: '#ffd23f', strength: 0.35, thickness: 2, underlineStyle: 'solid', createdAt: 2000,
     },
     {
-      id: 'an_underline', type: 'underline', chapterIndex: 1, start: 120, end: 130,
+      id: 'an_underline', type: 'underline', chapterIndex: 1, start: 3100, end: 3110,
       quote: '下划线引用', color: '#112233', strength: 0.5, thickness: 4, underlineStyle: 'wavy', createdAt: 4000,
     },
   ]
@@ -207,6 +207,16 @@ try {
     check(annotationRow.querySelector('.bs-reading-detail').textContent.includes(' · '),'annotation detail carries chapter and time: '+annotationRow.querySelector('.bs-reading-detail').textContent);
     // Position sort is chapter-major: bookmark then annotation inside each chapter.
     check(kinds().join(',')==='bookmark,highlight,bookmark,underline','position order: '+kinds().join(','));
+    // Jump directly from chapter one to a mark several pages into chapter two.
+    const underline=document.querySelector('.bs-reading-row[data-kind="underline"] .bs-reading-main');
+    underline.click();
+    await until(()=>{
+      const frame=document.querySelector('.bs-epub-frame'), win=frame?.contentWindow;
+      const mark=win?.CSS.highlights.get('bb-an-an_underline');
+      if(!mark || !frame.contentDocument.body.scrollLeft) return false;
+      const rect=[...mark][0].getClientRects()[0];
+      return rect.left>=0 && rect.left<win.innerWidth;
+    });
     // Time sort is newest first.
     setSelect(sortSelect,'recent');
     await until(()=>kinds().join(',')==='underline,bookmark,highlight,bookmark');

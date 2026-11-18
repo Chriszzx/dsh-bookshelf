@@ -330,6 +330,7 @@ function coverOf(packageDocument, manifest, files, index, opfDirectory) {
  *   title: string, author: string, language: string, opfPath: string,
  *   chapters: Array<{path: string, html: string, label: string}>,
  *   toc: Array<{label: string, chapterIndex: number, anchor: string, depth: number}>,
+ *   stylesheets: Map<string, string>,
  *   resources: Record<string, {type: string, data: Uint8Array}>,
  *   cover: {type: string, data: Uint8Array} | null,
  * }}
@@ -362,8 +363,14 @@ export function parseEpub(bytes) {
   }
   if (chapters.length === 0) throw new Error('this EPUB has no readable chapters')
 
-  const resources = {}
+  const stylesheets = new Map()
+  const resources = Object.create(null)
   for (const item of manifest.values()) {
+    if (item.mediaType === 'text/css') {
+      const bytes = readEntry(files, index, item.href)
+      if (bytes) stylesheets.set(item.href.toLowerCase(), publicationCss(decodeText(bytes)))
+      continue
+    }
     if (!item.mediaType.startsWith('image/')) continue
     if (item.href === '') continue
     const data = readEntry(files, index, item.href)
@@ -391,6 +398,7 @@ export function parseEpub(bytes) {
     chapters,
     toc,
     resources,
+    stylesheets,
     cover,
   }
 }
@@ -412,28 +420,66 @@ const BLOCKED_TAGS = new Set([
   'track', 'canvas', 'svg', 'math', 'template', 'noscript', 'dialog', 'slot',
 ])
 
-const SAFE_STYLE_PROPERTIES = new Set([
-  'font-style', 'font-weight', 'font-variant', 'font-size', 'font-family', 'text-align', 'text-indent',
-  'text-decoration', 'text-transform', 'letter-spacing', 'word-spacing', 'line-height', 'color',
-  'background-color', 'vertical-align', 'white-space', 'margin-top', 'margin-bottom', 'margin-left',
+// CSSOM expands shorthands before we select typography. No authored at-rules,
+// resource-valued properties, priorities or custom properties enter the frame.
+const TYPOGRAPHY = [
+  'font-family', 'font-weight', 'font-style', 'font-variant-caps', 'font-size', 'line-height',
+  'letter-spacing', 'word-spacing', 'text-align', 'text-indent', 'text-decoration-line',
+  'text-transform', 'vertical-align', 'white-space', 'margin-top', 'margin-bottom', 'margin-left',
   'margin-right', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
-])
+]
 
-function sanitizeStyleAttribute(element) {
-  const raw = element.getAttribute('style')
-  if (!raw) return
+function publicationDeclarations(style, prose) {
   const kept = []
-  for (const declaration of raw.split(';')) {
-    const colon = declaration.indexOf(':')
-    if (colon === -1) continue
-    const property = declaration.slice(0, colon).trim().toLowerCase()
-    const value = declaration.slice(colon + 1).trim()
-    if (!SAFE_STYLE_PROPERTIES.has(property)) continue
-    if (value === '' || /url\s*\(|expression\s*\(|@import|javascript:/i.test(value)) continue
+  for (const property of TYPOGRAPHY) {
+    let value = style.getPropertyValue(property)
+    if (!value || /[(){};<>@\\]/u.test(value)) continue
+    if (property === 'font-size' || property === 'line-height') {
+      // A print-point or pixel size should grow with the reader's base size,
+      // even when the element is nested inside another scaled paragraph.
+      const absolute = /^(\d*\.?\d+)(px|pt)$/i.exec(value)
+      if (absolute) value = Number(absolute[1]) / (absolute[2] === 'pt' ? 12 : 16) + 'rem'
+    }
+    if (prose && property === 'font-family' && !/^(inherit|initial|unset|revert)$/i.test(value)) {
+      value = `var(--bb-prose-font,${value})`
+    }
     kept.push(`${property}:${value}`)
   }
-  if (kept.length === 0) element.removeAttribute('style')
-  else element.setAttribute('style', kept.join(';'))
+  return kept.join(';')
+}
+
+function publicationCss(source) {
+  if (typeof CSSStyleSheet === 'undefined' || !CSSStyleSheet.prototype.replaceSync) return ''
+  const sheet = new CSSStyleSheet()
+  sheet.replaceSync(source)
+  const kept = []
+  for (const rule of sheet.cssRules) {
+    if (rule.type !== CSSRule.STYLE_RULE || /[<>{}]|::/u.test(rule.selectorText)) continue
+    const prose = /^(?:(?:html|:root|body|p|div|span|\*)[\s,>+~]*)+$/i.test(rule.selectorText)
+    const declarations = publicationDeclarations(rule.style, prose)
+    if (declarations) kept.push(`${rule.selectorText}{${declarations}}`)
+  }
+  return kept.join('\n')
+}
+
+function sanitizeStyleAttribute(element) {
+  const kept = publicationDeclarations(element.style, /^(?:p|body|html)$/i.test(element.localName))
+  if (kept) element.setAttribute('style', kept)
+  else element.removeAttribute('style')
+}
+
+function chapterStyles(parsed, directory, sheets) {
+  const rules = []
+  for (const node of parsed.querySelectorAll('style,link[rel~="stylesheet" i]')) {
+    if (node.hasAttribute('disabled') || !/^(?:|screen|all)$/i.test((node.media || '').trim())) continue
+    if (node.type && node.type.toLowerCase() !== 'text/css') continue
+    if (node.localName === 'style') rules.push(publicationCss(node.textContent))
+    else {
+      const href = (node.getAttribute('href') || '').trim()
+      if (!/^(?:[a-z][\w+.-]*:|\/\/)/i.test(href)) rules.push(sheets?.get(resolveHref(directory, href).toLowerCase()) || '')
+    }
+  }
+  return rules.join('\n')
 }
 
 function base64Of(bytes) {
@@ -457,7 +503,7 @@ function safeDataUrl(resource, path, imageCache) {
 /**
  * Turn one spine chapter into a self-contained, script-free HTML document.
  *
- * The source is untrusted: scripts, stylesheets, embedded content, forms,
+ * The source is untrusted: scripts, external stylesheets, embedded content, forms,
  * event handlers, remote images, and non-typographic CSS are removed. Images
  * resolve through the EPUB manifest into data URLs, internal links carry
  * `data-bb-chapter`/`data-bb-anchor`, and external links carry
@@ -480,6 +526,15 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
   const body = parsed.body
   if (body === null) return '<!doctype html><html><body></body></html>'
   const chapterDirectory = directoryOf(chapter.path)
+  const css = chapterStyles(parsed, chapterDirectory, data.stylesheets)
+  // Rebuild the chapter shell with just the attributes needed by typography.
+  for (const element of [parsed.documentElement, body]) {
+    if (!element.lang) element.lang = element.getAttribute('xml:lang') || parsed.documentElement.lang || data.language || ''
+    for (const name of element.getAttributeNames()) {
+      if (!['class', 'id', 'lang', 'style'].includes(name)) element.removeAttribute(name)
+    }
+    sanitizeStyleAttribute(element)
+  }
   const nodeCount = body.querySelectorAll('*').length
   if (nodeCount > 12000) {
     const notice = parsed.createElement('p')
@@ -514,6 +569,9 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
       if (BLOCKED_TAGS.has(tag)) {
         element.remove()
         continue
+      }
+      if (!element.hasAttribute('lang') && element.hasAttribute('xml:lang')) {
+        element.setAttribute('lang', element.getAttribute('xml:lang'))
       }
       for (const attribute of Array.from(element.attributes)) {
         const name = attribute.name.toLowerCase()
@@ -575,6 +633,9 @@ export function renderChapterHtml({ data, chapterIndex, resourceIndex, imageCach
       }
     }
   }
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${readingCss}</style></head><body>${body.innerHTML}</body></html>`
+  const style = parsed.createElement('style')
+  style.textContent = readingCss + '\n' + css
+  parsed.head.replaceChildren(style)
+  return '<!doctype html>' + parsed.documentElement.outerHTML
 }
 

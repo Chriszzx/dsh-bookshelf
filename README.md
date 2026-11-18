@@ -54,9 +54,9 @@ Registers `ui-bookshelf` in the sidebar and follows the DSH locale (Simplified C
 
 **书架与整理。** 支持文件选择、拖拽或文件夹链接导入。提供搜索、排序、自定义标签与阅读状态（未读 / 正在阅读 / 已读完），可在响应式封面网格与列表视图间自由切换。
 
-**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. PDFs support zoom and single-page or continuous views. Both remember bookmarks and reading progress. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
+**Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. EPUB typography follows the publication. Choose a reading font or switch back to the publisher’s font in reading settings. PDFs support zoom and single-page or continuous views. Both remember bookmarks and reading progress. Select text to copy with citation, read aloud, or apply custom highlights and underlines; all marks merge into a searchable, filterable sidebar.
 
-**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，PDF 支持缩放、单页和连续视图。两种格式都支持书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
+**阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，默认采用原书字体与排版层级，可在阅读设置中更换正文字体或恢复原书字体。PDF 支持缩放、单页和连续视图。两种格式都支持书签与进度恢复。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
 
 **Live Read-Aloud.** Floating frosted-glass controls for play/pause, sentence stepping, speed, and voice selection. Supports offline system voices (`say` on macOS, SAPI on Windows), Edge TTS (keyless), DeepSeek TTS, and OpenAI-compatible endpoints, with automatic language matching by default.
 
