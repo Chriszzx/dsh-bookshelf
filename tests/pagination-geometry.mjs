@@ -192,6 +192,7 @@ try {
  await evaluate(`(async()=>{document.getElementById('root').style.width='1500px';document.getElementById('root').style.height='900px';segment('spreadAuto');await wait(700);document.querySelector('.bs-progress').dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));await wait(150);click('nextPage');await wait(100)})()`)
  let dual=await evaluate('inspect()');console.log('First dual spread',dual)
  assert.equal(dual.columns,2);assert.match(dual.label,/current=3,end=4/);assert.deepEqual(dual.leaks,[])
+ await evaluate("click('dismiss')")
  await checkProgressGeometry()
  const dualAnchor=await evaluate('capture()')
  for(const width of [1000,1500,1100,1500]){
@@ -200,6 +201,7 @@ try {
   assert.ok((await evaluate('anchorVisible()')).visible,'same text remains visible through single/dual reflow');assert.deepEqual(state.leaks,[])
  }
  // Font 19 fits two 24em columns, font 25 does not at this actual width.
+ await evaluate("click('readingSettings')")
  for(let i=0;i<6;i++)await evaluate(`(async()=>{click('fontLarger');await wait(60)})()`)
  await evaluate('wait(650)');assert.equal((await evaluate('inspect()')).columns,1);assert.ok((await evaluate('anchorVisible()')).visible)
  for(let i=0;i<6;i++)await evaluate(`(async()=>{click('fontSmaller');await wait(60)})()`)
