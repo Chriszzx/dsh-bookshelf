@@ -148,6 +148,20 @@ try {
   assert.equal(await evaluate(`document.querySelector('select[aria-label="fontFamily"]').value`), 'font:Source Han Serif CN')
   await evaluate(`(async()=>{click('dismiss');document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900)})()`)
   const title = await evaluate(`document.querySelector('.bs-reader-title').textContent`)
+  async function verifyToolbarAlignment() {
+    const geometry = await evaluate(`(()=>{
+      const bar=document.querySelector('.bs-reader-bar')
+      const buttons=[...bar.querySelectorAll('button')]
+      const centers=buttons.map(button=>{const r=button.getBoundingClientRect();return r.top+r.height/2})
+      const icon=bar.querySelector('[aria-label="discussPage"] img')
+      return {spread:Math.max(...centers)-Math.min(...centers),width:icon.naturalWidth,
+        navigation:[...bar.querySelectorAll('.bs-reader-navigation button')].map(button=>button.getAttribute('aria-label'))}
+    })()`)
+    assert.deepEqual(geometry.navigation, ['back', 'toc'])
+    assert.equal(geometry.width, 96, 'the selected discussion artwork loads')
+    assert.ok(geometry.spread <= 1, 'all toolbar buttons share a horizontal centerline')
+  }
+  await verifyToolbarAlignment()
   const winHeader = await evaluate(`(()=>{const b=document.querySelector('.bs-reader-bar'),r=b.getBoundingClientRect();return{height:r.height,padding:parseFloat(getComputedStyle(b).paddingTop),subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
   assert.equal(winHeader.padding, 6, 'Windows caption space is not added a second time')
   assert.ok(winHeader.height >= 48 && winHeader.height < 51)
@@ -165,6 +179,7 @@ try {
   assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.bs-reader-bar')).paddingTop)`), 54, 'macOS keeps its overlay clearance')
   await evaluate(`(async()=>{document.documentElement.dataset.platform='win32';document.getElementById('root').style.width='480px';await wait(300)})()`)
   const narrow = await evaluate(`(()=>{const s=document.querySelector('.bs-reader').getBoundingClientRect(),p=document.querySelector('.bs-reader-settings').getBoundingClientRect();return{inside:p.left>=s.left&&p.right<=s.right+1&&p.bottom<=s.bottom+1,subtitle:getComputedStyle(document.querySelector('.bs-reader-sub')).display}})()`)
+  await verifyToolbarAlignment()
   assert.ok(narrow.inside, 'narrow settings stay inside the content panel')
   assert.notEqual(narrow.subtitle, 'none')
   await evaluate(`(async()=>{click('dismiss');click('back');await until(()=>document.querySelector('.bs-cover'));document.getElementById('root').style.width='1600px';document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(900)})()`)

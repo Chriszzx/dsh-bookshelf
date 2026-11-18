@@ -246,12 +246,14 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 @keyframes bs-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion: reduce){.bs-spinner{animation-duration:2.4s}button.bs-cover{transition:none}}
 .bs-reader{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--dsw-alias-bg-base)}
-.bs-reader-bar{flex:none;display:flex;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
-.bs-reader-navigation{align-self:flex-start;display:flex;align-items:center;gap:2px;flex:none;position:relative;top:-3px}
+.bs-reader-bar{flex:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;min-height:48px;padding:calc(var(--bs-top-clearance,0px) + 6px) 18px 6px 12px;border-bottom:1px solid var(--dsw-alias-border-l1)}
+.bs-reader-navigation{display:flex;align-items:center;gap:2px}
 .bs-reader-title-wrap{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0;padding:0 4px}
 .bs-reader-title{font-size:14px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-sub{font-size:11.5px;line-height:1.35;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.bs-reader-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex:none;flex-wrap:wrap;row-gap:3px}
+.bs-reader-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:nowrap}
+.bs-discuss-glyph{display:block;width:20px;height:20px;opacity:.78}
+.bs-icon-button:hover .bs-discuss-glyph{opacity:1}
 .bs-control-label{font-size:11.5px;line-height:1;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;padding:0 5px;white-space:nowrap}
 .bs-percent{min-width:34px;text-align:right}
 /* Reserve a fixed footer: hover/focus must never resize the EPUB viewport. */
@@ -392,9 +394,11 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
   .bs-scroll{padding-left:20px;padding-right:20px}
   .bs-banner{margin-left:20px;margin-right:20px}
   .bs-epub-toc{position:absolute;left:0;top:0;bottom:0;z-index:4;width:min(82vw,290px);background:var(--dsw-alias-bg-overlay);box-shadow:18px 0 40px -28px rgba(0,0,0,.8)}
-  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;flex-wrap:wrap}
-  .bs-reader-title-wrap{padding:0 2px;min-width:120px}
-  .bs-reader-controls{gap:2px;flex-wrap:wrap;justify-content:flex-end;row-gap:3px;width:100%}
+  .bs-reader-bar{padding-left:8px;padding-right:10px;gap:5px;grid-template-columns:auto minmax(0,1fr)}
+  .bs-reader-title-wrap{grid-row:1;grid-column:1/-1;padding:0 2px}
+  .bs-reader-navigation,.bs-reader-controls{grid-row:2}
+  .bs-reader-controls{gap:2px;min-width:0;overflow-x:auto;justify-content:safe flex-end;scrollbar-width:thin}
+  .bs-reader-controls>*{flex:none}
   .bs-reader-controls .bs-divider{margin:0 2px}
   .bs-reader-settings{right:8px;left:8px;width:auto}
   .bs-annotation-menu{right:8px;left:8px;width:auto}
@@ -6391,7 +6395,14 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }
       const controls = []
-      controls.push(h('button', { key: 'discuss', type: 'button', className: 'bs-text-button', onClick: discussPage, disabled: status !== 'ready' || directBusy, title: t('discussPage'), 'aria-label': t('discussPage'), 'aria-haspopup': 'dialog' }, directBusy ? t('discussionCreating') : t('discussPage')))
+      controls.push(h('button', {
+        key: 'discuss', type: 'button', className: 'bs-icon-button', onClick: discussPage,
+        disabled: status !== 'ready' || directBusy, 'aria-busy': directBusy,
+        title: t('discussPage'), 'aria-label': t('discussPage'), 'aria-haspopup': 'dialog',
+      }, directBusy ? h(Spinner, { small: true }) : h('img', {
+        className: 'bs-discuss-glyph', src: resourceUrl(base, `${ASSET_ROOT}/discuss-page.png`),
+        alt: '', draggable: false, style: { filter: palette.scheme === 'dark' ? 'invert(1)' : undefined },
+      })))
       const navigationToggle = h('button', {
         type: 'button',
         className: 'bs-icon-button',
