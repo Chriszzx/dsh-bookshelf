@@ -1,8 +1,8 @@
 # Screenshots / 截图
 
-These captures use a demo shelf of public-domain titles, a test DeepSeek key and a temporary read-aloud cache. No personal library, account or real API key appears in them.
+These 0.6.3 captures use a demo shelf of public-domain titles, a test DeepSeek key and a temporary read-aloud cache. No personal library, account or real API key appears in them.
 
-以下截图使用公版书演示书架、测试用 DeepSeek Key 和临时朗读缓存，不包含个人书库、账号或真实 API Key。
+以下截图摄于 0.6.3，使用公版书演示书架、测试用 DeepSeek Key 和临时朗读缓存，不包含个人书库、账号或真实 API Key。
 
 ## Shelf / 书架
 
@@ -60,9 +60,9 @@ On macOS, import EPUB or PDF titles from the local Apple Books library. The shel
 
 ![Reader settings](images/reader-settings.png)
 
-Typography, margins, page mode and the reading palette follow the DSH theme; pinned Light and Dark use the same DSH palettes.
+In 0.6.4 the EPUB page follows the DSH theme. Open Aa to set the reading font, text size, margins and single-page or adaptive spread layout.
 
-排版、边距、阅读模式与阅读主题跟随 DSH 主题；固定的浅色/深色也使用 DSH 自己的配色。
+0.6.4 的 EPUB 页面跟随 DSH 主题。在工具栏点「Aa」可调整字体、字号和边距，并选择单页或自适应跨页。
 
 ## Demo covers / 演示封面
 

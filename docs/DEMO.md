@@ -1,18 +1,18 @@
 # Demo script / 演示脚本
 
-A 60-second screen recording for the README, a release post or a chat reply. Record the DSH Web GUI at 1440×900, light theme, with a demo shelf and a DeepSeek key whose value is hidden.
+A 60-second screen recording for the README, a release post or a chat reply. Record the DSH Web GUI at 1440×900, light theme, with a demo shelf and a local system voice.
 
-一份 60 秒的屏幕录像，可用于 README、发布说明或聊天回复。建议在 1440×900、浅色主题下录制，使用演示书架，并隐藏 DeepSeek Key 的实际内容。
+一份 60 秒的屏幕录像，可用于 README、发布说明或聊天回复。建议在 1440×900、浅色主题下录制，使用演示书架和本机系统音色。
 
 ## Before recording / 录制前
 
 1. Import 8–12 public-domain books so the first row is full and the second row is short.
-2. Configure DeepSeek speech once, then return to the shelf; keep the key field masked.
+2. Select a system voice for the public-domain sample, then return to the shelf.
 3. Close unrelated DSH panels and use a clean workspace path in dialogs.
 4. Prepare a clean desktop; no notification banners or personal file names.
 
 1. 导入 8–12 本公版书，让第一排排满、第二排有短行。
-2. 提前配置好 DeepSeek 语音后回到书架，保持 Key 输入框为掩码状态。
+2. 为公版样书选择本机系统音色，然后回到书架。
 3. 关闭无关的 DSH 面板，弹窗里使用干净的工作区路径。
 4. 准备干净桌面，关闭通知横幅，避免出现个人文件名。
 
@@ -21,9 +21,9 @@ A 60-second screen recording for the README, a release post or a chat reply. Rec
 | Time | Screen | Action | Caption |
 |---|---|---|---|
 | 0:00–0:08 | Shelf, cover view | Scroll once; hover a cover | 本地 PDF / EPUB 书架 / A local PDF & EPUB shelf |
-| 0:08–0:20 | Reader | Open a book, press the speaker button, play; let one sentence finish | DeepSeek 逐句朗读，自动翻页 / Sentence-by-sentence with DeepSeek |
-| 0:20–0:34 | Whole-book dialog | More → Generate audiobook; pan across counts, duration, price | 整书语音与费用预估 / Whole-book audio with estimate |
-| 0:34–0:46 | Page discussion | Toolbar → Discuss this page; show captured text and workspace | 把当前页带进原生对话 / Bring the page into a native conversation |
+| 0:08–0:20 | Reader | Open a book, press the speaker button, play; let one sentence finish | 系统音色逐句朗读 / Read aloud with a system voice |
+| 0:20–0:34 | Whole-book dialog | More → Generate audiobook; pan across character count, duration and file size | 整书语音与时长预估 / Whole-book audio with estimate |
+| 0:34–0:46 | Page discussion | Folded-page toolbar button → Discuss this page; show captured text and workspace | 把当前页带进原生对话 / Bring the page into a native conversation |
 | 0:46–0:56 | Apple Books dialog | Header → Apple Books; show rows and Import | 从 Apple Books 导入 / Import from Apple Books |
 | 0:56–1:00 | Shelf again | Ease back; end on the cover grid | 一个插件，整条阅读链路 / One plugin, the whole reading loop |
 

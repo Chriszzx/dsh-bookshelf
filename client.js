@@ -252,7 +252,10 @@ button.bs-cover:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);o
 .bs-reader-title{font-size:14px;line-height:1.35;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-sub{font-size:11.5px;line-height:1.35;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bs-reader-controls{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:nowrap}
-.bs-discuss-glyph{display:block;width:20px;height:20px;opacity:.78}
+/* Match visible strokes as well as hit areas. Glyphs have different internal margins. */
+.bs-reader-bar .bs-icon-button svg>*{vector-effect:non-scaling-stroke;stroke-width:1.5px}
+.bs-reader-bar .bs-text-button{height:30px}
+.bs-discuss-glyph{display:block;width:17px;height:17px;opacity:.78}
 .bs-icon-button:hover .bs-discuss-glyph{opacity:1}
 .bs-control-label{font-size:11.5px;line-height:1;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;padding:0 5px;white-space:nowrap}
 .bs-percent{min-width:34px;text-align:right}
@@ -3965,7 +3968,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   title: t('back'),
                   'aria-label': t('back'),
                   autoFocus: true,
-                }, h(ArrowLeftIcon)),
+                }, h(ArrowLeftIcon, { size: 25 })),
                 navigationToggle,
               ),
               h(
@@ -3994,7 +3997,7 @@ html.bb-paged body table tr{break-inside:avoid}
                         title: t('readAloud'),
                         'aria-label': t('readAloud'),
                       },
-                      h(SpeechIcon),
+                      h(SpeechIcon, { size: 22 }),
                     )
                   : null,
                 h('span', { key: 'shell-div', className: 'bs-divider' }),
@@ -4007,7 +4010,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     title: t('immersive'),
                     'aria-label': t('immersive'),
                   },
-                  h(ImmersiveIcon),
+                  h(ImmersiveIcon, { size: 22 }),
                 ),
                 h(
                   'button',
@@ -4019,7 +4022,7 @@ html.bb-paged body table tr{break-inside:avoid}
                     title: isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                     'aria-label': isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                   },
-                  isFullscreen ? h(MinimizeIcon) : h(FullscreenIcon),
+                  isFullscreen ? h(MinimizeIcon, { size: 20 }) : h(FullscreenIcon, { size: 20 }),
                 ),
                 progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
               ),
@@ -4072,7 +4075,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   title: t('back'),
                   'aria-label': t('back'),
                 },
-                h(ArrowLeftIcon),
+                h(ArrowLeftIcon, { size: 25 }),
               ),
               h(
                 'button',
@@ -4084,7 +4087,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   'aria-label': t('exitImmersive'),
                   autoFocus: true,
                 },
-                h(MinimizeIcon),
+                h(MinimizeIcon, { size: 20 }),
               ),
               h(
                 'button',
@@ -4096,7 +4099,7 @@ html.bb-paged body table tr{break-inside:avoid}
                   title: isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                   'aria-label': isFullscreen ? t('exitFullscreen') : t('fullscreen'),
                 },
-                isFullscreen ? h(MinimizeIcon) : h(FullscreenIcon),
+                isFullscreen ? h(MinimizeIcon, { size: 20 }) : h(FullscreenIcon, { size: 20 }),
               ),
               progress ? h('span', { className: 'bs-control-label bs-percent' }, `${Math.round(progress.percent * 100)}%`) : null,
             )
@@ -4782,7 +4785,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: currentBookmark ? t('removeBookmark') : t('addBookmark'),
             'aria-label': currentBookmark ? t('removeBookmark') : t('addBookmark'),
           },
-          h(BookmarkIcon, { filled: Boolean(currentBookmark) }),
+          h(BookmarkIcon, { size: 21, filled: Boolean(currentBookmark) }),
         ),
       )
       controls.push(
@@ -4814,7 +4817,7 @@ html.bb-paged body table tr{break-inside:avoid}
               title: t('zoomOut'),
               'aria-label': t('zoomOut'),
             },
-            h(ZoomOutIcon),
+            h(ZoomOutIcon, { size: 23 }),
           ),
           h('span', { className: 'bs-control-label' }, `${Math.round(effectiveZoom * 100)}%`),
           h(
@@ -4827,7 +4830,7 @@ html.bb-paged body table tr{break-inside:avoid}
               title: t('zoomIn'),
               'aria-label': t('zoomIn'),
             },
-            h(ZoomInIcon),
+            h(ZoomInIcon, { size: 23 }),
           ),
           h(
             'button',
@@ -4867,7 +4870,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('previousPage'),
             'aria-keyshortcuts': 'ArrowLeft PageUp',
           },
-          h(ChevronLeftIcon),
+          h(ChevronLeftIcon, { size: 25 }),
         ),
       )
       controls.push(h('span', { key: 'page', className: 'bs-control-label', 'aria-live': 'polite', 'aria-atomic': 'true' }, pdfDocument ? t('pageOf', { current: currentPage, total: pdfDocument.numPages }) : ''))
@@ -4884,7 +4887,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('nextPage'),
             'aria-keyshortcuts': 'ArrowRight PageDown',
           },
-          h(ChevronRightIcon),
+          h(ChevronRightIcon, { size: 25 }),
         ),
       )
       controls.push(
@@ -6412,7 +6415,7 @@ html.bb-paged body table tr{break-inside:avoid}
         'aria-pressed': tocOpen,
         title: t('toc'),
         'aria-label': t('toc'),
-      }, h(ListIcon))
+      }, h(ListIcon, { size: 23 }))
       controls.push(
         h(
           'button',
@@ -6426,7 +6429,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: currentBookmark ? t('removeBookmark') : t('addBookmark'),
             'aria-label': currentBookmark ? t('removeBookmark') : t('addBookmark'),
           },
-          h(BookmarkIcon, { filled: Boolean(currentBookmark) }),
+          h(BookmarkIcon, { size: 21, filled: Boolean(currentBookmark) }),
         ),
       )
       // Annotation style button, directly right of the bookmark button (§5).
@@ -6448,7 +6451,7 @@ html.bb-paged body table tr{break-inside:avoid}
             title: t('annotationStyle'),
             'aria-label': t('annotationStyle'),
           },
-          h(MarkerIcon),
+          h(MarkerIcon, { size: 18 }),
         ),
       )
       controls.push(h('span', { key: 'div1', className: 'bs-divider' }))
@@ -6458,7 +6461,7 @@ html.bb-paged body table tr{break-inside:avoid}
           {
             key: 'settings',
             type: 'button',
-            className: 'bs-text-button',
+            className: 'bs-icon-button',
             onClick: () => {
               setAnnotationOpen(false)
               setSettingsOpen((value) => !value)
@@ -6468,7 +6471,10 @@ html.bb-paged body table tr{break-inside:avoid}
             title: t('readingSettings'),
             'aria-label': t('readingSettings'),
           },
-          'Aa',
+          svgIcon(20, [
+            h('path', { key: 'A', d: 'M2.5 18 7.4 5.5 12.3 18M4.2 13.7h6.4' }),
+            h('path', { key: 'a', d: 'M15 10.5c2.7-2.1 6.4-1.2 6.4 2v5.4m0-4.6c-2.8-.8-7.2-.3-7.1 2.4.1 3 4.7 3.6 7.1.4' }),
+          ]),
         ),
       )
       controls.push(h('span', { key: 'div2', className: 'bs-divider' }))
@@ -6485,7 +6491,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('previousPage'),
             'aria-keyshortcuts': 'ArrowLeft PageUp',
           },
-          h(ChevronLeftIcon),
+          h(ChevronLeftIcon, { size: 25 }),
         ),
       )
       controls.push(
@@ -6508,7 +6514,7 @@ html.bb-paged body table tr{break-inside:avoid}
             'aria-label': t('nextPage'),
             'aria-keyshortcuts': 'ArrowRight PageDown',
           },
-          h(ChevronRightIcon),
+          h(ChevronRightIcon, { size: 25 }),
         ),
       )
 

@@ -154,10 +154,32 @@ try {
       const buttons=[...bar.querySelectorAll('button')]
       const centers=buttons.map(button=>{const r=button.getBoundingClientRect();return r.top+r.height/2})
       const icon=bar.querySelector('[aria-label="discussPage"] img')
-      return {spread:Math.max(...centers)-Math.min(...centers),width:icon.naturalWidth,
+      const glyphSpans=buttons.map(button=>{
+        const svg=button.querySelector('svg')
+        if(!svg){
+          const canvas=document.createElement('canvas')
+          canvas.width=icon.naturalWidth;canvas.height=icon.naturalHeight
+          const ctx=canvas.getContext('2d')
+          ctx.drawImage(icon,0,0)
+          const pixels=ctx.getImageData(0,0,canvas.width,canvas.height).data
+          let top=canvas.height,bottom=-1
+          for(let i=3;i<pixels.length;i+=4){
+            if(pixels[i]<128)continue
+            const y=Math.floor((i>>2)/canvas.width)
+            top=Math.min(top,y);bottom=Math.max(bottom,y)
+          }
+          return (bottom-top+1)*icon.height/canvas.height
+        }
+        const bounds=svg.getBBox()
+        return Math.max(bounds.width,bounds.height)*svg.getScreenCTM().a+1.5
+      })
+      return {spread:Math.max(...centers)-Math.min(...centers),width:icon.naturalWidth,glyphSpans,
+        equalTargets:buttons.every(b=>b.offsetWidth===30&&b.offsetHeight===30),
         navigation:[...bar.querySelectorAll('.bs-reader-navigation button')].map(button=>button.getAttribute('aria-label'))}
     })()`)
     assert.deepEqual(geometry.navigation, ['back', 'toc'])
+    assert.ok(geometry.equalTargets, 'every reader icon has a 30px square hit area')
+    assert.ok(geometry.glyphSpans.every(v=>v>=15 && v<=17.5), 'visible icon sizes: '+geometry.glyphSpans)
     assert.equal(geometry.width, 96, 'the selected discussion artwork loads')
     assert.ok(geometry.spread <= 1, 'all toolbar buttons share a horizontal centerline')
   }
