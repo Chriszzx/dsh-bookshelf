@@ -99,6 +99,26 @@ try {
  await evaluate(`(async()=>{await until(()=>document.querySelector('.bs-cover'));document.querySelector('.bs-cover').click();await until(()=>document.querySelector('.bs-epub-frame'));await wait(1000)})()`)
  const baseline=await evaluate('inspect()');console.log('Initial geometry',baseline)
  assert.deepEqual(baseline.leaks,[],'adjacent page text must not appear inside the current page margins')
+ // Select text with the keyboard inside the chapter, then page normally.
+ await evaluate(`(()=>{
+  const frame=document.querySelector('.bs-epub-frame')
+  frame.contentWindow.focus()
+  const sample=frame.contentDocument.querySelector('#p0').firstChild
+  frame.contentWindow.getSelection().setBaseAndExtent(sample,0,sample,1)
+ })()`)
+ async function arrow(key, modifiers = 0) {
+  const params={key,code:key,windowsVirtualKeyCode:key==='ArrowRight'?39:37,modifiers}
+  await command('Input.dispatchKeyEvent',{...params,type:'keyDown'})
+  await command('Input.dispatchKeyEvent',{...params,type:'keyUp'})
+ }
+ await arrow('ArrowRight',8)
+ assert.equal(await evaluate("document.querySelector('.bs-epub-frame').contentWindow.getSelection().toString()"),'Pa','Shift+Right extends the selection by one character')
+ assert.equal((await evaluate('inspect()')).scroll,baseline.scroll,'extending a selection stays on the current page')
+ await evaluate("document.querySelector('.bs-epub-frame').contentWindow.getSelection().removeAllRanges()")
+ await arrow('ArrowRight')
+ await evaluate('until(()=>inspect().scroll>0)')
+ await arrow('ArrowLeft')
+ await evaluate('until(()=>inspect().scroll===0)')
  const pointer=await evaluate(`(()=>{const r=document.querySelector('.bs-epub-frame').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`)
  await command('Input.dispatchMouseEvent',{type:'mouseWheel',...pointer,deltaX:baseline.width*.55,deltaY:0})
  await evaluate('wait(250)')

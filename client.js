@@ -6086,7 +6086,7 @@ html.bb-paged body table tr{break-inside:avoid}
           })
         }
         documentNode.addEventListener('keydown', (event) => {
-          if (event.defaultPrevented) return
+          if (event.defaultPrevented || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
           if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
             event.preventDefault()
             turnPageRef.current(-1)
@@ -6383,7 +6383,7 @@ html.bb-paged body table tr{break-inside:avoid}
       useEffect(() => {
         if (status !== 'ready') return undefined
         const onKeyDown = (event) => {
-          if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return
+          if (event.defaultPrevented || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return
           const target = event.target
           if (
             target &&
