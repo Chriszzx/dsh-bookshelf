@@ -205,8 +205,8 @@ try {
     const annotationRow=document.querySelector('.bs-reading-row[data-kind="highlight"] .bs-reading-main');
     check(annotationRow.querySelector('.bs-reading-label').textContent==='高亮引用文字','annotation label: '+annotationRow.querySelector('.bs-reading-label').textContent);
     check(annotationRow.querySelector('.bs-reading-detail').textContent.includes(' · '),'annotation detail carries chapter and time: '+annotationRow.querySelector('.bs-reading-detail').textContent);
-    // Position sort is chapter-major: bookmark then annotation inside each chapter.
-    check(kinds().join(',')==='bookmark,highlight,bookmark,underline','position order: '+kinds().join(','));
+    // In chapter two, the underline comes before the legacy 90% bookmark.
+    check(kinds().join(',')==='bookmark,highlight,underline,bookmark','position order: '+kinds().join(','));
     // Jump directly from chapter one to a mark several pages into chapter two.
     const underline=document.querySelector('.bs-reading-row[data-kind="underline"] .bs-reading-main');
     underline.click();
@@ -235,7 +235,7 @@ try {
     setValue(searchInput,'');
     await until(()=>rows().length===4);
     setSelect(sortSelect,'position');
-    await until(()=>kinds().join(',')==='bookmark,highlight,bookmark,underline');
+    await until(()=>kinds().join(',')==='bookmark,highlight,underline,bookmark');
     // Deleting an annotation writes only the annotations collection back.
     document.querySelector('.bs-reading-row[data-kind="highlight"] .bs-reading-delete').click();
     await until(()=>rows().length===3);

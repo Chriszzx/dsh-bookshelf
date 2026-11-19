@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     const ASSET_ROOT = 'bookshelf/assets'
     // Bump when a served browser asset changes so a loaded page cannot keep an
     // older module from its HTTP cache.
-    const ASSET_VERSION = '16'
+    const ASSET_VERSION = '19'
     const DISCUSSION_WORKSPACE_KEY = 'bookshelf.discussion.workspace.v1'
     const APPLE_BOOKS_ENABLED_KEY = 'bookshelf.appleBooks.enabled.v1'
     // Shelf arrangement is a reading preference, so it survives a page reload
@@ -606,27 +606,6 @@ sup,sub{line-height:0}
 }
 `
 
-    const PAGED_CSS = `
-html.bb-paged{height:100%;overflow:hidden}
-/* Each spread advances by one actual iframe viewport. The gap contains the
-   right margin of this page plus the left margin of the next page. Hidden
-   overflow still permits explicit page navigation, but prevents a trackpad
-   from leaving the book between columns while its page counter stays put. */
-html.bb-paged body{box-sizing:border-box;width:100%!important;max-width:none!important;height:100%!important;margin:0!important;padding:var(--bb-page-pad-y,36px) var(--bb-page-pad-x,28px)!important;column-width:auto;column-count:var(--bb-page-columns,1);column-gap:calc(var(--bb-page-pad-x,28px) + var(--bb-page-pad-x,28px));column-fill:auto;overflow:hidden;scrollbar-width:none;overflow-anchor:none;scroll-behavior:auto}
-/* An odd final column needs a blank partner so scrollLeft can reach a full
-   spread boundary. This generated box is never counted as publication content. */
-html.bb-paged body[data-bb-pad-spread]::after{content:'';display:block;break-before:column;width:1px;height:1px}
-html.bb-paged body::-webkit-scrollbar{display:none}
-html.bb-paged body p{orphans:2;widows:2}
-html.bb-paged body h1,html.bb-paged body h2,html.bb-paged body h3,html.bb-paged body h4,html.bb-paged body h5{break-after:avoid}
-html.bb-paged body img,html.bb-paged body figure{break-inside:avoid}
-html.bb-paged body img{max-height:calc(100vh - var(--bb-page-pad-y,36px) - var(--bb-page-pad-y,36px) - 4em);width:auto;max-width:100%;object-fit:contain}
-html.bb-paged body pre,html.bb-paged body blockquote{break-inside:auto;max-width:100%}
-html.bb-paged body .bb-table-wrap{max-width:100%;overflow-x:auto;break-inside:auto}
-html.bb-paged body .bb-table-wrap table{break-inside:auto;font-size:.86em}
-html.bb-paged body table tr{break-inside:avoid}
-`
-
     const READER_FONTS = {
       serif: "'Iowan Old Style','Palatino Linotype','Songti SC','STSong','Noto Serif SC','Noto Serif CJK SC',serif",
       sans: "-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif",
@@ -1000,6 +979,7 @@ html.bb-paged body table tr{break-inside:avoid}
       }
       return {
         total,
+        textLengthFor: (index) => weights[index] || 0,
         percentFor(index, ratio) {
           if (weights.length === 0) return 0
           const safeIndex = Math.min(weights.length - 1, Math.max(0, index))
@@ -1135,15 +1115,18 @@ html.bb-paged body table tr{break-inside:avoid}
     function loadClientLib(base, name) {
       let record = clientLibs.get(name)
       if (record === undefined) {
-        record = { module: null, promise: null }
+        record = { module: null, promise: null, failedAttempts: 0 }
         clientLibs.set(name, record)
       }
       if (record.module !== null) return Promise.resolve(record.module)
       if (record.promise === null) {
-        record.promise = import(absoluteServiceUrl(base, `${ASSET_ROOT}/lib/${name}.mjs?v=${ASSET_VERSION}`)).then((module) => {
+        // Browsers can cache a failed import by URL for the lifetime of the page.
+        const retry = record.failedAttempts ? `&retry=${record.failedAttempts}` : ''
+        record.promise = import(absoluteServiceUrl(base, `${ASSET_ROOT}/lib/${name}.mjs?v=${ASSET_VERSION}${retry}`)).then((module) => {
           record.module = module
           return module
         }).catch((error) => {
+          record.failedAttempts++
           record.promise = null
           throw error
         })
@@ -2248,65 +2231,6 @@ html.bb-paged body table tr{break-inside:avoid}
       } catch {
         return ''
       }
-    }
-
-    // Column/page numbers change when a face swaps in. The chapter DOM and
-    // text offsets stay stable, including across a close and reopen.
-    function pageAnchorRect(doc, anchor) {
-      if (anchor?.element) return doc.body.contains(anchor.element) ? anchor.element.getClientRects()[0] : null
-      const node = anchor?.node
-      if (!node || !doc.body.contains(node)) return null
-      const range = doc.createRange()
-      if (node.nodeType === 3 && node.length) {
-        // At a column boundary, a collapsed caret can sit at the end of the
-        // preceding column. Measure the glyph the reader is about to read.
-        const start = Math.min(anchor.offset || 0, node.length - 1)
-        range.setStart(node, start)
-        range.setEnd(node, start + 1)
-      } else {
-        range.selectNodeContents(node)
-      }
-      return range.getClientRects()[0]
-    }
-
-    function encodePageLocator(anchor, body) {
-      let node = anchor?.node || anchor?.element
-      if (!body || !node || !body.contains(node) || node === body) return ''
-      const doc = body.ownerDocument
-      const rect = pageAnchorRect(doc, anchor)
-      if (!rect || rect.right <= 0 || rect.left >= doc.defaultView.innerWidth) return ''
-      const path = []
-      while (node !== body) {
-        const siblings = node.parentNode.childNodes
-        path.push(Array.prototype.indexOf.call(siblings, node))
-        node = node.parentNode
-      }
-      return path.reverse().join('.') + ':' + (anchor.offset || 0)
-    }
-
-    function decodePageLocator(locator, body) {
-      if (!locator) return null
-      const [path, offset] = locator.split(':')
-      let node = body
-      for (const index of path.split('.')) node = node?.childNodes[Number(index)]
-      if (node?.nodeType === 3 && Number(offset) <= node.length) return { node, offset: Number(offset) }
-      return node?.nodeType === 1 ? { element: node } : null
-    }
-
-    function rangePage(doc, win, range) {
-      if (range === null) return null
-      const info = pagedMetrics(doc, win)
-      if (info === null) return null
-      const rects = range.getClientRects()
-      const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect()
-      if (!Number.isFinite(rect.left)) return null
-      // Range rects are viewport-relative: add the current column offset, or a
-      // sentence two pages ahead would be computed as page 2 and the reader
-      // would jump back and forth between the same two pages.
-      const body = doc.body
-      const documentElement = doc.documentElement
-      const scrollLeft = Math.max(body ? body.scrollLeft : 0, documentElement ? documentElement.scrollLeft : 0)
-      return Math.max(0, Math.floor((rect.left + scrollLeft - info.padLeft + 1) / info.step))
     }
 
     // A highlighter swipe painted over the sentence being read. Each band is a
@@ -4178,87 +4102,6 @@ html.bb-paged body table tr{break-inside:avoid}
       if (body) body.style.background = palette.bg
     }
 
-    function configurePagedColumns(documentNode, settings) {
-      const root = documentNode.documentElement
-      const body = documentNode.body
-      const view = documentNode.defaultView
-      if (!body || !view) return
-      const styles = view.getComputedStyle(body)
-      const width = body.getBoundingClientRect().width
-      const height = body.getBoundingClientRect().height
-      const padX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight)
-      const padY = parseFloat(styles.paddingTop) + parseFloat(styles.paddingBottom)
-      const font = parseFloat(styles.fontSize) || 19
-      const line = parseFloat(styles.lineHeight) || font * 1.85
-      // Product experiment: each column needs 24 em and at least eight lines.
-      // With gap=padX, two content columns occupy width - 2*padX.
-      const columns = settings.pageSpread !== 'single' && width >= 48 * font + 2 * padX && height - padY >= 8 * line ? 2 : 1
-      root.style.setProperty('--bb-page-columns', String(columns))
-      body.removeAttribute('data-bb-pad-spread')
-    }
-
-    function pagedMetrics(documentNode, windowNode) {
-      const body = documentNode.body
-      if (!body || !windowNode) return null
-      const styles = windowNode.getComputedStyle(body)
-      const padLeft = parseFloat(styles.paddingLeft) || 0
-      const padTop = parseFloat(styles.paddingTop) || 0
-      const padX = padLeft + (parseFloat(styles.paddingRight) || 0)
-      const padY = padTop + (parseFloat(styles.paddingBottom) || 0)
-      const gap = parseFloat(styles.columnGap) || 0
-      const width = Math.max(1, body.getBoundingClientRect().width || windowNode.innerWidth || 0)
-      const columns = parseInt(styles.columnCount, 10) === 2 ? 2 : 1
-      const pageWidth = Math.max(1, (width - padX - gap * (columns - 1)) / columns)
-      const step = pageWidth + gap
-      const scrollWidth = Math.max(body.scrollWidth, documentNode.documentElement.scrollWidth)
-      let pages = Math.max(1, Math.ceil((scrollWidth - padX + gap - 1) / step))
-      if (columns === 2 && scrollWidth <= width + 1) {
-        // The scroll box is always at least one spread wide, including for a
-        // short or empty chapter. Count only occupied columns in that case.
-        let end = padLeft
-        for (const node of body.childNodes) {
-          // Only outer-flow fragments count. Range over the entire subtree also
-          // includes clipped cells inside horizontally scrolling table wrappers.
-          let rects
-          if (node.nodeType === 1) rects = node.getClientRects()
-          else if (node.nodeType === 3 && node.textContent.trim()) {
-            const range = documentNode.createRange()
-            range.selectNodeContents(node)
-            rects = range.getClientRects()
-          } else continue
-          for (const rect of rects) {
-            if (rect.width > 0 && rect.height > 0) end = Math.max(end, rect.right + body.scrollLeft)
-          }
-        }
-        pages = Math.max(1, Math.ceil((end - padLeft + gap - 1) / step))
-      } else if (body.hasAttribute('data-bb-pad-spread')) {
-        pages = Math.max(1, pages - 1)
-      }
-      return { padLeft, padTop, padX, padY, gap, width, pageWidth, step, pages, columns }
-    }
-
-    function wrapTables(documentNode) {
-      if (!documentNode || !documentNode.body) return
-      for (const table of documentNode.body.querySelectorAll('table')) {
-        const parent = table.parentElement
-        if (parent && parent.classList && parent.classList.contains('bb-table-wrap')) continue
-        const wrap = documentNode.createElement('div')
-        wrap.className = 'bb-table-wrap'
-        if (parent) {
-          parent.insertBefore(wrap, table)
-          wrap.appendChild(table)
-        }
-      }
-    }
-
-    function ensurePagedStyle(documentNode) {
-      if (documentNode.getElementById('bb-paged-style') !== null) return
-      const style = documentNode.createElement('style')
-      style.id = 'bb-paged-style'
-      style.textContent = PAGED_CSS
-      ;(documentNode.head || documentNode.documentElement).appendChild(style)
-    }
-
     // ===== [reader] =====
     // PDF reader: page rendering, zoom/fit modes, bookmarks and read-aloud page
     // batches.
@@ -5288,6 +5131,7 @@ html.bb-paged body table tr{break-inside:avoid}
       const [attempt, setAttempt] = useState(0)
       const [pageIndex, setPageIndex] = useState(0)
       const [activeSection, setActiveSection] = useState(null)
+      const [currentBookmarkId, setCurrentBookmarkId] = useState(null)
       const [pageCount, setPageCount] = useState(1)
       const [pageColumns, setPageColumns] = useState(1)
       const [bookPageCounts, setBookPageCounts] = useState(null)
@@ -5323,7 +5167,6 @@ html.bb-paged body table tr{break-inside:avoid}
       const lastSavedProgressRef = useRef('')
       const pageIndexRef = useRef(0)
       const pageCountRef = useRef(1)
-      const laidOutPagesRef = useRef(1)
       const pageColumnsRef = useRef(1)
       const pageAnchorRef = useRef(null)
       const turnPageRef = useRef(() => {})
@@ -5474,7 +5317,7 @@ html.bb-paged body table tr{break-inside:avoid}
         (index, ratio, immediate = false, position = ratio) => {
           if (data === null || !readerState.loaded) return
           const safeRatio = Math.min(1, Math.max(0, Number.isFinite(ratio) ? ratio : 0))
-          const locator = encodePageLocator(pageAnchorRef.current, frameRef.current?.contentDocument?.body)
+          const locator = clientLib('epub-location').encodePageLocator(pageAnchorRef.current, frameRef.current?.contentDocument?.body)
           const progressKey = `${locator}:${index}:${safeRatio.toFixed(5)}:${position.toFixed(5)}:${anchorRef.current || ''}`
           if (!immediate && lastSavedProgressRef.current === progressKey) return
           lastSavedProgressRef.current = progressKey
@@ -5518,8 +5361,9 @@ html.bb-paged body table tr{break-inside:avoid}
         const documentNode = frame && frame.contentDocument
         const windowNode = frame && frame.contentWindow
         if (!documentNode || !documentNode.body || !windowNode) return
-        const info = pagedMetrics(documentNode, windowNode)
+        const info = clientLib('epub-pagination').pagedMetrics(documentNode, windowNode)
         if (info === null) return
+        const { pageAnchorRect } = clientLib('epub-location')
         function visibleTextAt(x, y) {
           let node, offset
           if (documentNode.caretRangeFromPoint) {
@@ -5568,22 +5412,45 @@ html.bb-paged body table tr{break-inside:avoid}
         }
       }, [])
 
-      const pageForAnchor = useCallback((documentNode, windowNode, info) => {
-        const anchorValue = pageAnchorRef.current
+      const pageForAnchor = useCallback((documentNode, info, anchorValue) => {
         if (anchorValue === null) return null
         const body = documentNode.body
         const previous = body.scrollLeft
         body.scrollLeft = 0
-        const rect = pageAnchorRect(documentNode, anchorValue)
+        const rect = clientLib('epub-location').pageAnchorRect(documentNode, anchorValue)
         if (!rect || (rect.width === 0 && rect.height === 0)) {
           body.scrollLeft = previous
-          pageAnchorRef.current = null
           return null
         }
-        const page = Math.max(0, Math.min(info.pages - 1, Math.floor((rect.left - info.padLeft + 1) / info.step)))
+        const page = Math.max(0, Math.min(info.pages - 1, clientLib('epub-pagination').pageAtX(rect.left, info)))
         body.scrollLeft = previous
         return page
       }, [])
+
+      const updateCurrentBookmark = useCallback((documentNode) => {
+        const chapterIndex = chapterRef.current
+        const visibleChapter = displayedChapterRef.current
+        if (!documentNode || visibleChapter?.document !== documentNode || visibleChapter.chapter !== chapterIndex) return
+        const location = clientLib('epub-location')
+        const stored = readerState.stateRef.current?.bookmarks
+        const marks = Array.isArray(stored) ? stored : []
+        const columns = pageColumnsRef.current
+        const bookmark = marks.find((mark) => {
+          if (mark?.format !== 'epub' || mark.chapterIndex !== chapterIndex) return false
+          const locator = location.matchingPageLocator(mark, data?.chapters[chapterIndex], data?.sourceRevision)
+          const anchor = location.decodePageLocator(locator, documentNode.body)
+          const rect = anchor && location.pageAnchorRect(documentNode, anchor)
+          if (rect && rect.width > 0 && rect.height > 0) {
+            const view = documentNode.defaultView
+            return rect.right > 0 && rect.left < view.innerWidth && rect.bottom > 0 && rect.top < view.innerHeight
+          }
+          if (mark.anchor && mark.anchor === anchorRef.current) return true
+          const ratio = Math.min(1, Math.max(0, Number(mark.scrollRatio) || 0))
+          const page = Math.round(ratio * (pageCountRef.current - 1))
+          return Math.floor(page / columns) * columns === pageIndexRef.current
+        })
+        setCurrentBookmarkId(bookmark?.id ?? null)
+      }, [data, readerState.stateRef])
 
       const layoutPagedFrame = useCallback(
         (frame, options = {}) => {
@@ -5594,25 +5461,24 @@ html.bb-paged body table tr{break-inside:avoid}
           // The speech band is viewport-fixed; a re-layout (page turn, resize,
           // mode switch) would leave it over different text, so drop it first.
           clearSpeechGlass(documentNode)
-          ensurePagedStyle(documentNode)
-          documentNode.documentElement.classList.add('bb-paged')
-          configurePagedColumns(documentNode, settingsRef.current)
+          const pagination = clientLib('epub-pagination')
+          pagination.configurePagedColumns(documentNode, settingsRef.current.pageSpread)
           const body = documentNode.body
           body.scrollLeft = 0
-          const info = pagedMetrics(documentNode, windowNode)
+          const info = pagination.pagedMetrics(documentNode, windowNode)
           if (info === null) return
           let page = pageIndexRef.current
           let resolvedAnchor = null
           const targetAnchor = typeof options.targetAnchor === 'string' ? options.targetAnchor : ''
           const annotation = options.annotation
           const match = annotation && resolveAnnotationRanges(documentNode, [annotation], chapterRef.current)[0]
-          const savedAnchor = decodePageLocator(options.locator, body)
-          if (savedAnchor) {
-            pageAnchorRef.current = savedAnchor
+          const savedAnchor = clientLib('epub-location').decodePageLocator(options.locator, body)
+          const savedPage = pageForAnchor(documentNode, info, savedAnchor)
+          if (savedPage !== null) {
             resolvedAnchor = savedAnchor
-            page = pageForAnchor(documentNode, windowNode, info) ?? Math.round((options.targetRatio || 0) * (info.pages - 1))
+            page = savedPage
           } else if (match) {
-            page = rangePage(documentNode, windowNode, match.range) ?? 0
+            page = pagination.rangePage(documentNode, windowNode, match.range) ?? 0
             resolvedAnchor = { node: match.range.startContainer, offset: match.range.startOffset }
           } else if (targetAnchor !== '') {
             const target = documentNode.getElementById(decodeAnchor(targetAnchor))
@@ -5620,29 +5486,24 @@ html.bb-paged body table tr{break-inside:avoid}
               body.scrollLeft = 0
               const rect = target.getBoundingClientRect()
               resolvedAnchor = { element: target }
-              page = Math.floor((rect.left - info.padLeft + 1) / info.step)
+              page = pagination.pageAtX(rect.left, info)
             } else if (Number.isFinite(options.targetRatio)) {
               page = Math.round(options.targetRatio * (info.pages - 1))
             }
           } else if (options.restoreAnchor) {
-            const anchored = pageForAnchor(documentNode, windowNode, info)
+            // The text can cross a page boundary even when the page count stays the same.
+            const anchored = pageForAnchor(documentNode, info, pageAnchorRef.current)
             if (anchored !== null) page = anchored
-            else if (Number.isFinite(options.targetRatio)) page = Math.round(options.targetRatio * (info.pages - 1))
-            // A height-only reflow (toolbar or read-aloud bar appearing) must not
-            // move the reader: a stale anchor from an earlier spread used to snap
-            // the page back to the start.
-            const spreadAt = (value) => Math.floor(value / info.columns)
-            if (!options.fontReflow && laidOutPagesRef.current === info.pages && spreadAt(page) !== spreadAt(pageIndexRef.current)) {
-              page = pageIndexRef.current
+            else {
+              pageAnchorRef.current = null
+              if (Number.isFinite(options.targetRatio)) page = Math.round(options.targetRatio * (info.pages - 1))
             }
           } else if (Number.isFinite(options.targetRatio)) {
             page = Math.round(options.targetRatio * (info.pages - 1))
           } else if (Number.isFinite(options.targetPage)) {
             page = options.targetPage
           }
-          page = Math.floor(Math.max(0, Math.min(info.pages - 1, page)) / info.columns) * info.columns
-          if (info.columns === 2 && info.pages % 2 === 1) body.setAttribute('data-bb-pad-spread', '')
-          body.scrollLeft = page * info.step
+          page = pagination.showPagedSpread(body, info, page)
           let currentSection = null
           for (const entry of sectionsByChapter.get(chapterRef.current) || []) {
             if (!entry.anchor) {
@@ -5660,9 +5521,9 @@ html.bb-paged body table tr{break-inside:avoid}
           pageIndexRef.current = page
           setPageCount(info.pages)
           pageCountRef.current = info.pages
-          laidOutPagesRef.current = info.pages
           setPageColumns(info.columns)
           pageColumnsRef.current = info.columns
+          updateCurrentBookmark(documentNode)
           const ratio = info.pages <= 1 ? (chapterRef.current === data?.chapters.length - 1 ? 1 : 0) : (Math.min(page + info.columns, info.pages) - 1) / (info.pages - 1)
           // A one-page chapter starts at zero even when its last page counts as read.
           positionRatioRef.current = info.pages > 1 ? ratio : 0
@@ -5687,7 +5548,7 @@ html.bb-paged body table tr{break-inside:avoid}
           // the new column geometry.
           if (generation === layoutGenerationRef.current) repaintHighlights(documentNode)
         },
-        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress, sectionsByChapter],
+        [capturePagedAnchor, data, pageForAnchor, repaintHighlights, resolveAnnotationRanges, saveEpubProgress, sectionsByChapter, updateCurrentBookmark],
       )
 
       useEffect(() => {
@@ -5729,6 +5590,8 @@ html.bb-paged body table tr{break-inside:avoid}
                 return null
               }),
               loadReadingFonts(base),
+              loadClientLib(base, 'epub-location'),
+              loadClientLib(base, 'epub-pagination'),
               // Warm the shared browser modules before the reader renders.
               preloadClientLibs(base),
             ])
@@ -5779,9 +5642,7 @@ html.bb-paged body table tr{break-inside:avoid}
             let startScroll = 0
             if (savedValid) {
               startChapter = saved.chapterIndex
-              if (saved.chapterPath === parsed.chapters[startChapter].path && saved.locatorRevision === parsed.sourceRevision) {
-                pendingLocatorRef.current = saved.pageLocator || ''
-              }
+              pendingLocatorRef.current = clientLib('epub-location').matchingPageLocator(saved, parsed.chapters[startChapter], parsed.sourceRevision)
               startAnchor = typeof saved.anchor === 'string' ? saved.anchor : ''
               startScroll = Math.min(1, Math.max(0, Number(saved.scrollRatio) || 0))
             } else if (!chapterHasVisibleContent(parsed.chapters[0] && parsed.chapters[0].html)) {
@@ -5855,21 +5716,25 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [data, epubModule, chapter, resourceIndex, t])
 
       const goTo = useCallback(
-        (index, targetAnchor, targetRatio, annotation = null) => {
+        (index, targetAnchor, targetRatio, annotation = null, locator = '') => {
           if (data === null) return
           const safeIndex = Math.min(data.chapters.length - 1, Math.max(0, Number(index) || 0))
           const nextAnchor = typeof targetAnchor === 'string' ? targetAnchor : ''
           const nextRatio = Math.min(1, Math.max(0, Number.isFinite(targetRatio) ? targetRatio : 0))
           anchorRef.current = nextAnchor
-          if (safeIndex === chapterRef.current && frameRef.current !== null) {
-            layoutPagedFrame(frameRef.current, { targetAnchor: nextAnchor, targetRatio: nextRatio, annotation, save: true })
+          const frame = frameRef.current
+          const visibleChapter = displayedChapterRef.current
+          if (safeIndex === chapterRef.current && visibleChapter?.chapter === safeIndex && visibleChapter.document === frame?.contentDocument) {
+            layoutPagedFrame(frame, { targetAnchor: nextAnchor, targetRatio: nextRatio, annotation, locator, save: true })
             return
           }
           targetAnnotationRef.current = annotation
           chapterRef.current = safeIndex
           pendingRatioRef.current = nextRatio
+          pendingLocatorRef.current = locator
           restoringRef.current = false
           pageAnchorRef.current = null
+          setCurrentBookmarkId(null)
           setPageIndex(0)
           pageIndexRef.current = 0
           setPageCount(1)
@@ -5972,7 +5837,7 @@ html.bb-paged body table tr{break-inside:avoid}
         // ::highlight() rules and registry entries would otherwise leak.
         clearDisplayedHighlights()
         paintFrame(documentNode, settingsRef.current)
-        wrapTables(documentNode)
+        clientLib('epub-pagination').wrapTables(documentNode)
         displayedChapterRef.current = { document: documentNode, chapter: chapterRef.current }
         // Paint the chapter's annotations before the first sentence arrives.
         repaintHighlights(documentNode)
@@ -6059,17 +5924,16 @@ html.bb-paged body table tr{break-inside:avoid}
         pendingLocatorRef.current = ''
         targetAnnotationRef.current = null
         let disposed = false
-        const refresh = (fontReflow = false) => {
+        const refresh = () => {
           if (!disposed && frame.contentDocument === documentNode) {
-            layoutPagedFrame(frame, { restoreAnchor: true, fontReflow: fontReflow === true, save: true })
+            layoutPagedFrame(frame, { restoreAnchor: true, save: true })
             if (highlightFallbackRef.current) {
               const range = speechRangeRef.current
               if (range !== null && documentNode.contains(range.startContainer)) paintSpeechGlass(documentNode, range)
             }
           }
         }
-        const fontsSettled = () => refresh(true)
-        documentNode.fonts?.addEventListener('loadingdone', fontsSettled)
+        documentNode.fonts?.addEventListener('loadingdone', refresh)
         documentNode.fonts?.ready.then(() => refresh()).catch(() => undefined)
         for (const image of documentNode.querySelectorAll('img')) {
           if (!image.complete) image.addEventListener('load', refresh, { once: true })
@@ -6093,7 +5957,7 @@ html.bb-paged body table tr{break-inside:avoid}
         windowNode.addEventListener('resize', schedulePagedResize)
         frameCleanupRef.current = () => {
           disposed = true
-          documentNode.fonts?.removeEventListener('loadingdone', fontsSettled)
+          documentNode.fonts?.removeEventListener('loadingdone', refresh)
           if (chapterRef.current === boundChapter) saveEpubProgress(boundChapter, scrollRatioRef.current, true, positionRatioRef.current)
           clearTimeout(settleTimer)
           if (pagedResizeTimer !== 0) clearTimeout(pagedResizeTimer)
@@ -6194,6 +6058,7 @@ html.bb-paged body table tr{break-inside:avoid}
         probe.style.width = `${frameSize.width}px`
         probe.style.height = `${frameSize.height}px`
         const token = ++probeTokenRef.current
+        const pagination = clientLib('epub-pagination')
         // Keep the last complete count while measuring its replacement. Switching
         // to chapter-only labels can wrap a narrow toolbar, resize the frame,
         // and restart measurement indefinitely. Initial/mode changes reset above.
@@ -6227,17 +6092,15 @@ html.bb-paged body table tr{break-inside:avoid}
             try {
               if (documentNode && windowNode && documentNode.body) {
                 paintFrame(documentNode, settingsRef.current)
-                wrapTables(documentNode)
-                ensurePagedStyle(documentNode)
-                documentNode.documentElement.classList.add('bb-paged')
-                configurePagedColumns(documentNode, settingsRef.current)
+                pagination.wrapTables(documentNode)
+                pagination.configurePagedColumns(documentNode, settingsRef.current.pageSpread)
                 // Match visible-frame pagination after font metrics and layout
                 // have settled, including newly selected native font faces.
                 if (documentNode.fonts) await documentNode.fonts.ready
                 await new Promise(resolve => requestAnimationFrame(resolve))
                 if (cancelled || token !== probeTokenRef.current || probe.contentDocument !== documentNode) return
-                configurePagedColumns(documentNode, settingsRef.current)
-                const info = pagedMetrics(documentNode, windowNode)
+                pagination.configurePagedColumns(documentNode, settingsRef.current.pageSpread)
+                const info = pagination.pagedMetrics(documentNode, windowNode)
                 if (info !== null) pages = info.pages
               }
             } catch {
@@ -6258,22 +6121,30 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [settings, status, data, epubModule, resourceIndex, frameSize.width, frameSize.height, t])
 
       const percent = data === null ? 0 : metrics.percentFor(chapter, scrollRatio)
-      const bookmarks = readerState.state && Array.isArray(readerState.state.bookmarks) ? readerState.state.bookmarks : []
+      const storedBookmarks = readerState.state?.bookmarks
+      const bookmarks = Array.isArray(storedBookmarks) ? storedBookmarks : []
       const annotations = readerState.state && Array.isArray(readerState.state.annotations) ? readerState.state.annotations : []
-      const currentBookmark = bookmarks.find((bookmark) => {
-        if (bookmark.format !== 'epub' || bookmark.chapterIndex !== chapter) return false
-        if (bookmark.anchor && bookmark.anchor === anchorRef.current) return true
-        const target = Math.round(Math.min(1, Math.max(0, Number(bookmark.scrollRatio) || 0)) * (pageCount - 1))
-        return Math.floor(target / pageColumns) * pageColumns === pageIndex
-      })
+      const currentBookmark = bookmarks.find((bookmark) => bookmark?.id === currentBookmarkId)
       const chapterTocLabel = activeSection?.chapterIndex === chapter ? activeSection.label : chapterLabel(t, chapter)
 
+      useLayoutEffect(() => {
+        updateCurrentBookmark(frameRef.current?.contentDocument)
+      }, [storedBookmarks, updateCurrentBookmark])
+
       const toggleBookmark = useCallback(() => {
-        if (status !== 'ready') return
+        const documentNode = frameRef.current?.contentDocument
+        if (status !== 'ready' || displayedChapterRef.current?.chapter !== chapter || displayedChapterRef.current.document !== documentNode) return
         if (currentBookmark) {
           readerState.editMark('bookmarks', currentBookmark.id)
           return
         }
+        const anchor = pageAnchorRef.current
+        const locator = clientLib('epub-location').encodePageLocator(anchor, documentNode.body)
+        const textIndex = clientLib('text-index')
+        const precise = locator && data?.sourceRevision && data.chapters[chapter]
+        const textOffset = precise && textIndex
+          ? textIndex.textOffsetForAnchor(textIndex.buildSpeechIndex(documentNode).entries, anchor)
+          : undefined
         const ratio = Math.min(1, Math.max(0, scrollRatioRef.current))
         const bookmarkPercent = metrics.percentFor(chapter, ratio)
         const label = `${chapterTocLabel} · ${Math.round(bookmarkPercent * 100)}%`
@@ -6284,12 +6155,19 @@ html.bb-paged body table tr{break-inside:avoid}
           chapterIndex: chapter,
           scrollRatio: positionRatioRef.current,
           anchor: anchorRef.current || '',
+          ...(precise ? { pageLocator: locator, locatorRevision: data.sourceRevision, chapterPath: data.chapters[chapter].path, textOffset } : {}),
           percent: bookmarkPercent,
           createdAt: Date.now(),
         }
         readerState.editMark('bookmarks', bookmark.id, bookmark)
         setAsideTab('bookmarks')
-      }, [chapter, chapterTocLabel, currentBookmark, metrics, readerState.editMark, status])
+      }, [chapter, chapterTocLabel, currentBookmark, data, metrics, readerState.editMark, status])
+
+      const jumpToBookmark = useCallback((bookmark) => {
+        const index = bookmark.chapterIndex || 0
+        const locator = clientLib('epub-location').matchingPageLocator(bookmark, data?.chapters[index], data?.sourceRevision)
+        goTo(index, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0, null, locator)
+      }, [data, goTo])
 
       // Style edits save the whole settings object (state.settings.annotationStyle
       // is additive on the Host) without replacing the reader settings state, so
@@ -6572,6 +6450,7 @@ html.bb-paged body table tr{break-inside:avoid}
           const frame = frameRef.current
           const windowNode = frame && frame.contentWindow
           if (!windowNode) return []
+          const { rangePage } = clientLib('epub-pagination')
           const sentences = module.splitSentences(documentNode.body.innerText || '')
           const entries = textIndex.buildSpeechBatches(documentNode, sentences)
           const startPage = pageIndexRef.current
@@ -6643,10 +6522,46 @@ html.bb-paged body table tr{break-inside:avoid}
       }, [createSpeechDriver, readAloud])
 
       // Bookmark / annotation panel model: merge, sort, search and counts live in
-      // assets/lib/reading-list.mjs; the reader only supplies localised chapter
-      // names and the page fallback. The module is preloaded with the reader, so
-      // the panel falls back to the plain bookmark list only if that load failed.
+      // assets/lib/reading-list.mjs. The reader supplies chapter labels and
+      // resolves bookmark positions into the chapter text.
       const readingListLib = clientLib('reading-list')
+      const chapterAnchorOffsets = useMemo(() => {
+        const chapters = new Map()
+        return (index) => {
+          if (chapters.has(index)) return chapters.get(index)
+          const chapter = data?.chapters[index]
+          if (!chapter || epubModule === null) return null
+          const textIndex = clientLib('text-index')
+          if (textIndex === null) return null
+          const anchors = new Map()
+          try {
+            const html = epubModule.renderChapterHtml({
+              data, chapterIndex: index, resourceIndex, imageCache: imageCacheRef.current,
+              readingCss: '', tooLargeText: t('chapterTooLarge'),
+            })
+            const doc = new DOMParser().parseFromString(html, 'text/html')
+            const { entries } = textIndex.buildSpeechIndex(doc)
+            for (const element of doc.body.querySelectorAll('[id]')) {
+              if (!anchors.has(element.id)) anchors.set(element.id, textIndex.textOffsetForAnchor(entries, { element }))
+            }
+          } catch {
+            // A broken chapter still has its estimated length for legacy bookmarks.
+          }
+          chapters.set(index, anchors)
+          return anchors
+        }
+      }, [data, epubModule, resourceIndex, t])
+
+      const positionForBookmark = useCallback((bookmark) => {
+        if (data === null || bookmark.format === 'pdf') return undefined
+        const index = bookmark.chapterIndex
+        const locator = clientLib('epub-location').matchingPageLocator(bookmark, data.chapters[index], data.sourceRevision)
+        if (locator && Number.isSafeInteger(bookmark.textOffset) && bookmark.textOffset >= 0) return bookmark.textOffset
+        const ratio = Math.min(1, Math.max(0, Number(bookmark.scrollRatio) || 0))
+        const offset = bookmark.anchor ? chapterAnchorOffsets(index)?.get(decodeAnchor(bookmark.anchor)) : undefined
+        return offset ?? Math.round(ratio * metrics.textLengthFor(index))
+      }, [chapterAnchorOffsets, data, metrics])
+
       const chapterLabels = useMemo(() => {
         const boundaries = new Map()
         return (index, mark) => {
@@ -6660,46 +6575,28 @@ html.bb-paged body table tr{break-inside:avoid}
           // Old and new highlights use the same offsets into the rendered text.
           // Index only chapters with both a saved mark and multiple TOC entries.
           if (!boundaries.has(index)) {
-            let html
-            try {
-              html = epubModule.renderChapterHtml({
-                data, chapterIndex: index, resourceIndex, imageCache: imageCacheRef.current,
-                readingCss: '', tooLargeText: t('chapterTooLarge'),
-              })
-            } catch {
-              // An unreadable chapter must not prevent the rest of the mark list from opening.
-              boundaries.set(index, [])
-              return generic
-            }
-            const doc = new DOMParser().parseFromString(html, 'text/html')
-            const points = clientLib('text-index')?.buildSpeechIndex(doc).entries || []
+            const offsets = chapterAnchorOffsets(index)
+            if (offsets === null) return generic
             const starts = []
             for (const entry of entries) {
-              const target = entry.anchor && doc.getElementById(decodeAnchor(entry.anchor))
-              if (!target) continue
-              let low = 0
-              let high = points.length
-              while (low < high) {
-                const mid = Math.floor((low + high) / 2)
-                if (target.compareDocumentPosition(points[mid].node) & Node.DOCUMENT_POSITION_FOLLOWING) high = mid
-                else low = mid + 1
-              }
-              starts.push({ offset: low, label: entry.label })
+              const offset = entry.anchor && offsets.get(decodeAnchor(entry.anchor))
+              if (Number.isInteger(offset)) starts.push({ offset, label: entry.label })
             }
             boundaries.set(index, starts.sort((a, b) => a.offset - b.offset))
           }
           return boundaries.get(index).findLast(entry => entry.offset <= mark.start)?.label || generic
         }
-      }, [sectionsByChapter, data, epubModule, resourceIndex, t])
+      }, [chapterAnchorOffsets, sectionsByChapter, t])
       const readingMerged = useMemo(() => {
         if (readingListLib === null) return []
         return readingListLib.mergeReadingItems({
           bookmarks,
           annotations,
           chapterLabels,
+          positionForBookmark,
           pageLabel: (page) => t('pageLabel', { number: page }),
         })
-      }, [annotations, bookmarks, chapterLabels, readingListLib, t])
+      }, [annotations, bookmarks, chapterLabels, positionForBookmark, readingListLib, t])
       const readingItems = useMemo(() => {
         if (readingListLib === null) return []
         return readingListLib.sortReadingItems(readingListLib.filterReadingItems(readingMerged, readingQuery), readingSort)
@@ -6823,8 +6720,8 @@ html.bb-paged body table tr{break-inside:avoid}
                                   emptyLabel: readingQuery.trim() === '' ? t('noReadingItems') : t('noReadingMatches'),
                                   onSelect: (item) => {
                                     const source = item.source || {}
-                                    const ratio = item.kind === 'bookmark' ? Number(source.scrollRatio) || 0 : 0
-                                    goTo(typeof item.chapterIndex === 'number' ? item.chapterIndex : 0, typeof source.anchor === 'string' ? source.anchor : '', ratio, item.kind === 'bookmark' ? null : source)
+                                    if (item.kind === 'bookmark') jumpToBookmark(source)
+                                    else goTo(item.chapterIndex || 0, source.anchor || '', 0, source)
                                   },
                                   onDelete: (item) => {
                                     const source = item.source || {}
@@ -6838,7 +6735,7 @@ html.bb-paged body table tr{break-inside:avoid}
                               : h(BookmarksList, {
                                   t,
                                   bookmarks,
-                                  onSelect: (bookmark) => goTo(bookmark.chapterIndex || 0, bookmark.anchor || '', Number(bookmark.scrollRatio) || 0),
+                                  onSelect: jumpToBookmark,
                                   onDelete: (bookmark) => readerState.editMark('bookmarks', bookmark.id),
                                 }),
                           ),

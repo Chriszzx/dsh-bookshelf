@@ -1,0 +1,53 @@
+{
+  "progress": {
+    "format": "epub",
+    "chapterIndex": 0,
+    "scrollRatio": 0.5,
+    "percent": 0.5,
+    "anchor": "",
+    "pageLocator": "0.24.0:0",
+    "locatorRevision": "shelf-file-v1:fd59654fdd884e00d93ce9895a8b1c58dbec5b3230730645bf36ab74a798e7d5",
+    "chapterPath": "one.xhtml",
+    "updatedAt": 1795060975543
+  },
+  "settings": {
+    "fontFamily": "publisher",
+    "fontName": "",
+    "fontWeight": 0,
+    "fontStyle": "normal",
+    "fontSize": 19,
+    "lineHeight": 1.85,
+    "pageMargin": "standard",
+    "theme": "auto",
+    "pageMode": "paged",
+    "pageSpread": "single",
+    "annotationStyle": {
+      "mode": "highlight",
+      "color": "#ffd23f",
+      "strength": 0.35,
+      "thickness": 2,
+      "underlineStyle": "solid"
+    }
+  },
+  "annotations": [
+    {
+      "id": "an_mwn0yg2d6wf1ea1",
+      "type": "highlight",
+      "chapterIndex": 0,
+      "start": 205,
+      "end": 246,
+      "quote": "Line 6 contains a fixed reading position.",
+      "prefix": "ine 5 contains a fixed reading position.",
+      "suffix": "Line 7 contains a fixed reading position",
+      "color": "#ffd23f",
+      "strength": 0.35,
+      "thickness": 2,
+      "underlineStyle": "solid",
+      "createdAt": 1795060974037,
+      "label": "Line 6 contains a fixed reading position."
+    }
+  ],
+  "recentMarkEdits": [
+    "7b910406-a184-4fdd-9a8a-900cb4b78785"
+  ]
+}

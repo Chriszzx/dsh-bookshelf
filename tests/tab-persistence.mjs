@@ -47,6 +47,7 @@ let delayDefaults = false
 let failWrites = false
 let failReads = false
 let writesDuringFailedRead = 0
+const failedEpubAssets = new Set()
 try {
   const { fixtures, chromePath } = await prepareBrowserEnvironment(temporary, { books: true })
   server = createServer(async (req, res) => {
@@ -55,6 +56,11 @@ try {
       const files = { '/react.js': join(fixtures, 'node_modules/react/umd/react.development.js'), '/react-dom.js': join(fixtures, 'node_modules/react-dom/umd/react-dom.development.js'), '/client.js': join(pluginDir, 'client.js') }
       if (path === '/test.html') { res.setHeader('content-type', 'text/html'); res.end(page); return }
       if (files[path]) { res.setHeader('content-type', 'text/javascript'); res.end(await readFile(files[path])); return }
+      if (failedEpubAssets.has(path)) {
+        res.writeHead(503)
+        res.end()
+        return
+      }
       if (delayDefaults && req.method === 'GET' && path.endsWith('/settings')) await new Promise(r => setTimeout(r, 3500))
       if (failReads && path.endsWith('/state')) {
         if (req.method === 'GET') {
@@ -149,6 +155,30 @@ try {
   const afterFailure = JSON.parse(await readFile(statePath, 'utf8')).books[epubId]
   assert.deepEqual(afterFailure, legacy.books[epubId], 'failure leaves all saved fields untouched')
   failReads = false
+  const locationAsset = '/bookshelf/assets/lib/epub-location.mjs'
+  const paginationAsset = '/bookshelf/assets/lib/epub-pagination.mjs'
+  failedEpubAssets.add(locationAsset)
+  failedEpubAssets.add(paginationAsset)
+  await evaluate(`(async()=>{
+    document.querySelector('.bs-reader-state-error button').click()
+    await until(()=>document.querySelector('.bs-reader-state-error')?.textContent.includes('openFailed'))
+    check(!document.querySelector('.bs-epub-frame'),'EPUB must wait for its required modules')
+    await wait(850)
+  })()`)
+  assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')).books[epubId], afterFailure, 'module failure preserves progress and bookmarks')
+  failedEpubAssets.delete(locationAsset)
+  await evaluate(`(async()=>{
+    const previousError = document.querySelector('.bs-reader-state-error')
+    const previousMessage = previousError.textContent
+    previousError.querySelector('button').click()
+    await until(()=>{
+      const message = document.querySelector('.bs-reader-state-error')?.textContent
+      return message !== previousMessage && message?.includes('epub-pagination.mjs')
+    })
+    check(!document.querySelector('.bs-epub-frame'),'EPUB must still wait for pagination')
+  })()`)
+  assert.deepEqual(JSON.parse(await readFile(statePath, 'utf8')).books[epubId], afterFailure, 'pagination failure preserves progress and bookmarks')
+  failedEpubAssets.delete(paginationAsset)
   await evaluate(`(async()=>{
     document.querySelector('.bs-reader-state-error button').click()
     await until(()=>labels())

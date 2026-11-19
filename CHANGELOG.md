@@ -2,6 +2,17 @@
 
 ## Unreleased / 未发布
 
+## [0.6.6](https://github.com/Chriszzx/dsh-bookshelf/releases/tag/v0.6.6) · 2026-11-19
+
+- 将 EPUB 阅读位置的编解码从阅读器拆到独立模块，兼容 0.6.5 保存的进度。\
+  Extract EPUB location encoding and decoding into a module compatible with progress saved by 0.6.5.
+- 将 EPUB 的分栏、页数计算和跨页定位移至同一模块，供阅读页和全书页数统计共用。\
+  Share EPUB column layout, page counting, and spread positioning between the reader and the book-wide page count.
+- 修复 EPUB 重排后总页数相同但原文已换页时，阅读器仍停在旧页的问题。\
+  Follow the reading position to its new page when EPUB reflow leaves the total page count unchanged.
+- 新建 EPUB 书签跟随原文位置，切换字体或单双页后仍能跳回原处。书签和标注按正文顺序混排。\
+  New EPUB bookmarks follow the original passage across font and spread changes. Bookmarks and annotations sort together in reading order.
+
 ## [0.6.5](https://github.com/Chriszzx/dsh-bookshelf/releases/tag/v0.6.5) · 2026-11-18
 
 - 修复窄窗口下滚动条占位造成的阅读工具栏错位。\

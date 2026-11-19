@@ -93,15 +93,19 @@ test('annotation state round-trips without disturbing progress, bookmarks or set
 
   // Progress, bookmarks and settings are the baseline an annotation write must
   // leave alone.
+  const bookmark = {
+    id: 'bm_first0001', label: '第一页', format: 'epub', chapterIndex: 1, percent: 0.1, createdAt: 1700000000000,
+    pageLocator: '4.0:2', locatorRevision: 'shelf-file-v1:test', chapterPath: 'one.xhtml', textOffset: 19,
+  }
   const baselinePut = await send('PUT', statePath, {
     progress: { chapterIndex: 4, percent: 0.25 },
-    bookmarks: [{ id: 'bm_first0001', label: '第一页', format: 'epub', chapterIndex: 1, percent: 0.1, createdAt: 1700000000000 }],
+    bookmarks: [bookmark],
     settings: { theme: 'dark', fontSize: 18 },
   })
   assert.equal(baselinePut.status, 200)
   const baseline = baselinePut.payload.state
   assert.equal(baseline.progress.chapterIndex, 4)
-  assert.equal(baseline.bookmarks.length, 1)
+  assert.deepEqual(baseline.bookmarks, [bookmark])
   assert.equal(baseline.settings.theme, 'dark')
 
   // A legal annotation is normalised, echoed back and persisted to state.json.

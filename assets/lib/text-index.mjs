@@ -55,6 +55,23 @@ export function buildSpeechIndex(doc) {
   return { flat, entries }
 }
 
+// Find the corresponding position in the normalised text. An element can
+// anchor a bookmark too, including an image between two passages.
+export function textOffsetForAnchor(entries, anchor) {
+  const target = anchor.node || anchor.element
+  let low = 0
+  let high = entries.length
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2)
+    const entry = entries[mid]
+    const before = entry.node === target ? entry.offset < (anchor.offset || 0)
+      : Boolean(target.compareDocumentPosition(entry.node) & Node.DOCUMENT_POSITION_PRECEDING)
+    if (before) low = mid + 1
+    else high = mid
+  }
+  return low
+}
+
 export function speechRangeFor(index, sentence, cursor) {
   const target = sentence.replace(/\s+/gu, ' ').trim()
   if (target === '' || index.entries.length === 0) return { range: null, cursor }

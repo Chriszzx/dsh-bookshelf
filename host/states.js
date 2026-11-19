@@ -28,6 +28,13 @@ function clampNumber(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, number))
 }
 
+function copyPageLocator(target, value) {
+  if (target.format !== 'epub' || typeof value.pageLocator !== 'string' || value.pageLocator.length > 512 ||
+      !/^\d+(?:\.\d+)*:\d+$/.test(value.pageLocator)) return
+  target.pageLocator = value.pageLocator
+  if (typeof value.locatorRevision === 'string' && value.locatorRevision.length <= 100) target.locatorRevision = value.locatorRevision
+}
+
 function sanitizeProgress(value, format) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
   const progress = {}
@@ -42,11 +49,7 @@ function sanitizeProgress(value, format) {
   const percent = clampNumber(value.percent, 0, 1)
   if (percent !== undefined) progress.percent = percent
   if (typeof value.anchor === 'string') progress.anchor = value.anchor.slice(0, 300)
-  if (progress.format === 'epub' && typeof value.pageLocator === 'string' && value.pageLocator.length <= 512 &&
-      /^\d+(?:\.\d+)*:\d+$/.test(value.pageLocator)) {
-    progress.pageLocator = value.pageLocator
-    if (typeof value.locatorRevision === 'string' && value.locatorRevision.length <= 100) progress.locatorRevision = value.locatorRevision
-  }
+  copyPageLocator(progress, value)
   if (typeof value.chapterPath === 'string') progress.chapterPath = value.chapterPath.slice(0, 500)
   const updatedAt = clampNumber(value.updatedAt, 0, Number.MAX_SAFE_INTEGER)
   progress.updatedAt = updatedAt === undefined ? Date.now() : updatedAt
@@ -77,6 +80,11 @@ function sanitizeBookmarks(value) {
     const percent = clampNumber(item.percent, 0, 1)
     if (percent !== undefined) bookmark.percent = percent
     if (typeof item.anchor === 'string') bookmark.anchor = item.anchor.slice(0, 300)
+    copyPageLocator(bookmark, item)
+    if (bookmark.pageLocator) {
+      if (typeof item.chapterPath === 'string') bookmark.chapterPath = item.chapterPath.slice(0, 500)
+      if (Number.isSafeInteger(item.textOffset) && item.textOffset >= 0) bookmark.textOffset = item.textOffset
+    }
     bookmarks.push(bookmark)
   }
   return bookmarks

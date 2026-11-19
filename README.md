@@ -43,9 +43,9 @@ Requires DSH `>=0.2.0-rc.2 <0.3.0` and Node `^22.19.0 || >=24.0.0` on macOS or W
 dsh plugin --profile web add github:Chriszzx/dsh-bookshelf
 ```
 
-DSH installs the plugin directly from GitHub. Restart the profile to open Bookshelf in the sidebar. To install a specific release, append its tag to the repository spec, for example `github:Chriszzx/dsh-bookshelf#v0.6.4`.
+DSH installs the plugin directly from GitHub. Restart the profile to open Bookshelf in the sidebar. Append the release tag to install a specific version, such as `github:Chriszzx/dsh-bookshelf#v0.6.6`.
 
-DSH 直接从 GitHub 安装插件。重启该 profile 后，从侧栏打开书架。要安装指定版本，可在仓库地址后加标签，例如 `github:Chriszzx/dsh-bookshelf#v0.6.4`。
+DSH 直接从 GitHub 安装插件。重启该 profile 后，从侧栏打开书架。要安装指定版本，可在仓库地址后加标签，例如 `github:Chriszzx/dsh-bookshelf#v0.6.6`。
 
 Releases also provide a `.tgz` and SHA-256 checksum. Install a downloaded package with `dsh plugin --profile web add ./dsh-bookshelf-X.Y.Z.tgz`. [Releases](https://github.com/Chriszzx/dsh-bookshelf/releases) · [Changelog](CHANGELOG.md)
 
@@ -60,6 +60,10 @@ Releases also provide a `.tgz` and SHA-256 checksum. Install a downloaded packag
 **Reader & Annotations.** EPUBs open in paginated single-page or adaptive spreads with a table of contents. EPUB typography follows the publication, including unencrypted, unobfuscated regular, bold and italic faces. Missing faces fall back automatically. Changing the text size preserves heading and quotation hierarchy. Choose a reading font or switch back to the publisher’s font in reading settings. PDFs support zoom and single-page or continuous views. A failed state load offers a retry that restores the saved position and bookmarks. Separate windows can add or remove bookmarks and annotations independently. Select text to copy with citation, read aloud, or apply custom highlights and underlines; bookmarks and annotations share a searchable, sortable sidebar.
 
 **阅读与标注。** EPUB 支持单页或自适应跨页阅读和目录跳转，默认采用原书字体与排版层级，支持原书中未经加密或混淆的常规、粗体和斜体字面。缺失字面时自动回退，调字号后仍保留标题与引文层级，可在阅读设置中更换正文字体或恢复原书字体。PDF 支持缩放、单页和连续视图。读取记录失败时可重试找回进度与书签。在两个窗口中分别增删书签和标注，也会保留各自的修改。选中文本即可带出处复制、朗读或添加高亮与下划线；所有标注与书签统一汇总在可搜索、可排序的侧栏中。
+
+From 0.6.6, EPUB reading progress and new bookmarks follow the passage across font changes, window resizes, and single-page or spread layouts. Existing bookmarks still open at their saved chapter anchor or approximate position. The sidebar's position sort interleaves bookmarks and annotations in reading order.
+
+从 0.6.6 起，EPUB 阅读进度和新建书签会跟随原文，换字体、调整窗口或切换单双页后仍能回到原处。旧书签继续按已有章节锚点或大致位置跳转。侧栏的「按位置」会把书签和标注按正文顺序混排。
 
 **Live Read-Aloud.** Floating frosted-glass controls for play/pause, sentence stepping, speed, and voice selection. Supports offline system voices (`say` on macOS, SAPI on Windows), Edge TTS (keyless), DeepSeek TTS, and OpenAI-compatible endpoints, with automatic language matching by default.
 

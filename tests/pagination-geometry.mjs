@@ -4,7 +4,7 @@
 import { installVisibleTextProbe } from './helpers/visible-text-probe.mjs'
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { readFile, mkdtemp, realpath, rm } from 'node:fs/promises'
+import { readFile, writeFile, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -255,6 +255,188 @@ try {
  assert.ok(await evaluate(`(()=>{const table=document.querySelector('.bs-epub-frame').contentDocument.querySelector('.bb-table-wrap');return table.scrollWidth>table.clientWidth})()`),'wide table really overflows within its own scroller without adding pages')
  await evaluate(`(async()=>{click('previousPage');await wait(700)})()`)
  assert.equal((await evaluate('inspect()')).label,'pageOf(current=2,total=3)','previous chapter restores final spread')
+
+ // The published 0.6.5 client saved a highlight on line 6 and a location at
+ // the start of its second page (line 13). Restore the original on-disk entry
+ // under the ID assigned to this import. The archive preserves locatorRevision.
+ const legacyArchive = await readFile(new URL('./fixtures/epub-0.6.5.epub', import.meta.url))
+ const legacyState = JSON.parse(await readFile(new URL('./fixtures/epub-0.6.5-state.json', import.meta.url), 'utf8'))
+ const importedLegacy = await fetch(`${origin}/bookshelf/api/books?name=epub-0.6.5.epub&title=Fixed%20Lines&format=epub`, {
+  method: 'POST', body: legacyArchive,
+ })
+ assert.equal(importedLegacy.status, 201)
+ const { book: legacyBook } = await importedLegacy.json()
+ const legacyBookUrl = `${origin}/bookshelf/api/books/${legacyBook.id}`
+ const legacyFile = await fetch(`${legacyBookUrl}/file`)
+ assert.equal(legacyFile.headers.get('X-Bookshelf-Source-Revision'), legacyState.progress.locatorRevision)
+ await legacyFile.arrayBuffer()
+
+ // The fixture has 30 lines at 38px, with 40px of reader padding at each
+ // end. Both heights produce three pages, but line 13 crosses the break.
+ async function fitLegacyLines(lines) {
+  const height = lines * 38 + 80 + 5
+  await evaluate(`(async()=>{
+    const root = document.getElementById('root')
+    const frameHeight = () => document.querySelector('.bs-epub-frame').contentWindow.innerHeight
+    root.style.height = (root.getBoundingClientRect().height + ${height} - frameHeight()) + 'px'
+    await until(() => Math.abs(frameHeight() - ${height}) <= 1)
+  })()`)
+ }
+ await fitLegacyLines(13)
+ await evaluate(`(async()=>{click('back');await until(()=>document.querySelector('.bs-shelf'))})()`)
+ const stateFile = join(process.env.DSH_HOME, 'bookshelf', 'state.json')
+ const persisted = JSON.parse(await readFile(stateFile, 'utf8'))
+ const olderBookmarks = [
+  { id: 'bm_old_ratio', label: 'Older ratio bookmark', format: 'epub', chapterIndex: 0, scrollRatio: 1, createdAt: 1 },
+  { id: 'bm_old_anchor', label: 'Older anchor bookmark', format: 'epub', chapterIndex: 0, anchor: 'line4', scrollRatio: 1, createdAt: 2 },
+ ]
+ persisted.books[legacyBook.id] = { ...legacyState, bookmarks: olderBookmarks }
+ await writeFile(stateFile, JSON.stringify(persisted))
+ async function openLegacyBook() {
+  await evaluate(`(async()=>{
+    remount()
+    await until(()=>[...document.querySelectorAll('.bs-book-title')].some(node=>node.textContent==='Fixed Lines'))
+    const title = [...document.querySelectorAll('.bs-book-title')].find(node=>node.textContent==='Fixed Lines')
+    title.closest('.bs-card').querySelector('.bs-cover').click()
+    await until(()=>document.querySelector('.bs-epub-frame')?.contentDocument?.getElementById('line13'))
+    await settled()
+  })()`)
+ }
+ async function legacyLinePosition() {
+  return evaluate(`(()=>{
+    const frame = document.querySelector('.bs-epub-frame')
+    const doc = frame.contentDocument
+    const range = doc.createRange()
+    range.selectNodeContents(doc.getElementById('line13'))
+    const rect = range.getBoundingClientRect()
+    const width = frame.contentWindow.innerWidth
+    return {
+      chapterPage: Math.floor((rect.left + doc.body.scrollLeft) / width) + 1,
+      visible: rect.width > 0 && rect.left >= -1 && rect.right <= width + 1 &&
+        rect.top >= -1 && rect.bottom <= frame.contentWindow.innerHeight + 1,
+    }
+  })()`)
+ }
+ await openLegacyBook()
+ const beforeReflow = await evaluate('inspect()')
+ assert.equal(beforeReflow.label, 'pageOf(current=1,total=3)', 'the 0.6.5 locator takes precedence over its old page ratio')
+ assert.deepEqual(await legacyLinePosition(), { chapterPage: 1, visible: true })
+ await fitLegacyLines(12)
+ const afterReflow = await evaluate('settled()')
+ assert.equal(afterReflow.label.match(/total=(\d+)/)[1], beforeReflow.label.match(/total=(\d+)/)[1], 'reflow must keep the same total page count')
+ const shiftedLine = await legacyLinePosition()
+ assert.equal(shiftedLine.chapterPage, 2, 'line 13 must move across a page boundary in the fixture')
+ assert.equal(shiftedLine.visible, true, 'reflow must follow line 13 onto page 2 despite the unchanged total')
+ assert.equal(afterReflow.label, 'pageOf(current=2,total=3)')
+ await evaluate(`(async()=>{click('back');await until(()=>document.querySelector('.bs-shelf'))})()`)
+ const savedLegacy = (await (await fetch(`${legacyBookUrl}/state`)).json()).state
+ assert.equal(savedLegacy.progress.pageLocator, legacyState.progress.pageLocator)
+ assert.deepEqual(savedLegacy.annotations, legacyState.annotations)
+ await openLegacyBook()
+ assert.deepEqual(await legacyLinePosition(), { chapterPage: 2, visible: true }, 'the same line survives reopening')
+ const openedMark = await evaluate(`(async()=>{
+   if (!document.querySelectorAll('.bs-aside-tab')[1]) click('toc')
+   await until(()=>document.querySelectorAll('.bs-aside-tab')[1])
+   document.querySelectorAll('.bs-aside-tab')[1].click()
+   const mark = () => document.querySelector('.bs-reading-row[data-kind="highlight"] .bs-reading-main')
+   await until(mark)
+   mark().click()
+   await settled()
+   const frame = document.querySelector('.bs-epub-frame')
+   const ranges = [...frame.contentWindow.CSS.highlights.values()].flatMap(layer => [...layer])
+   const range = ranges.find(item => item.startContainer.parentElement.id === 'line6')
+   const rect = range?.getBoundingClientRect()
+   return {
+     label: label(), quote: range?.toString(), visible: Boolean(rect && rect.width > 0 &&
+       rect.left >= -1 && rect.right <= frame.contentWindow.innerWidth + 1 &&
+       rect.top >= -1 && rect.bottom <= frame.contentWindow.innerHeight + 1),
+   }
+ })()`)
+ assert.deepEqual(openedMark, { label: 'pageOf(current=1,total=3)', quote: legacyState.annotations[0].quote, visible: true })
+ console.log('PASS: 0.6.5 locator and highlight, including a three-page reflow that moves line 13 from page 1 to page 2')
+
+ async function openMarks() {
+  await evaluate(`(async()=>{
+    if (!document.querySelectorAll('.bs-aside-tab')[1]) click('toc')
+    await until(()=>document.querySelectorAll('.bs-aside-tab')[1])
+    document.querySelectorAll('.bs-aside-tab')[1].click()
+    await until(()=>document.querySelectorAll('.bs-reading-row').length===4)
+  })()`)
+ }
+ async function selectMark(title) {
+  await evaluate(`(async()=>{
+    const rows = [...document.querySelectorAll('.bs-reading-main')]
+    const mark = rows.find(row=>row.title===${JSON.stringify(title)})
+    if (!mark) throw Error('Missing bookmark '+${JSON.stringify(title)})
+    mark.click()
+    await settled()
+  })()`)
+ }
+ await evaluate(`(async()=>{click('nextPage');await settled();click('addBookmark')})()`)
+ assert.deepEqual(await legacyLinePosition(), { chapterPage: 2, visible: true }, 'bookmark was created on the second page at line 13')
+ await openMarks()
+ const markLabels = () => evaluate(`[...document.querySelectorAll('.bs-reading-label')].map(node=>node.textContent)`)
+ const [oldAnchor, earlyHighlight, newBookmark, oldRatio] = await markLabels()
+ const expectedOrder = ['Older anchor bookmark', legacyState.annotations[0].quote, newBookmark, 'Older ratio bookmark']
+ assert.deepEqual([oldAnchor, earlyHighlight, newBookmark, oldRatio], expectedOrder)
+
+ await evaluate(`(async()=>{
+    click('readingSettings')
+    const select = document.querySelector('.bs-reader-settings select[aria-label="fontFamily"]')
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select,'preset:mono')
+    select.dispatchEvent(new Event('change',{bubbles:true}))
+    click('dismiss')
+    await until(()=>{
+      const view = document.querySelector('.bs-epub-frame').contentWindow
+      return view.getComputedStyle(view.document.getElementById('line13')).fontFamily.includes('monospace')
+    })
+  })()`)
+ await fitLegacyLines(13)
+ await selectMark('Older ratio bookmark')
+ assert.equal(await evaluate('label()'), 'pageOf(current=3,total=3)', 'old ratio bookmark retains its jump')
+ assert.equal((await legacyLinePosition()).visible, false)
+ await selectMark(newBookmark)
+ assert.deepEqual(await legacyLinePosition(), { chapterPage: 1, visible: true }, 'the new bookmark follows the passage after font change and reflow')
+ assert.ok(await evaluate(`Boolean(document.querySelector('button[title="removeBookmark"]'))`), 'the original text shows the bookmarked toolbar state')
+ await evaluate(`(async()=>{click('nextPage');await settled()})()`)
+ assert.equal(await evaluate('label()'), 'pageOf(current=2,total=3)')
+ assert.ok(await evaluate(`Boolean(document.querySelector('button[title="addBookmark"]'))`), 'the old page number is no longer marked')
+ await selectMark('Older anchor bookmark')
+ assert.equal(await evaluate('label()'), 'pageOf(current=1,total=3)', 'old directory anchor takes precedence over its ratio')
+ assert.deepEqual(await markLabels(), expectedOrder)
+
+ async function chooseSpread(preference, columns) {
+  await evaluate(`(async()=>{
+    click('readingSettings')
+    segment(${JSON.stringify(preference)})
+    click('dismiss')
+    await settled()
+  })()`)
+  assert.equal((await evaluate('inspect()')).columns, columns)
+ }
+ await chooseSpread('spreadAuto', 2)
+ await selectMark('Older ratio bookmark')
+ assert.equal((await legacyLinePosition()).visible, false)
+ await selectMark(newBookmark)
+ assert.equal((await legacyLinePosition()).visible, true, 'the new bookmark jumps back to the text in a two-page spread')
+ assert.deepEqual(await markLabels(), expectedOrder)
+ await chooseSpread('spreadSingle', 1)
+ await selectMark('Older ratio bookmark')
+ await evaluate(`(async()=>{click('back');await until(()=>document.querySelector('.bs-shelf'))})()`)
+ const bookAfterReflow = (await (await fetch(`${legacyBookUrl}/state`)).json()).state
+ const savedBookmark = bookAfterReflow.bookmarks.find(bookmark => bookmark.label === newBookmark)
+ assert.equal(savedBookmark.pageLocator, legacyState.progress.pageLocator)
+ assert.equal(savedBookmark.locatorRevision, legacyState.progress.locatorRevision)
+ assert.equal(savedBookmark.chapterPath, legacyState.progress.chapterPath)
+ assert.ok(Number.isSafeInteger(savedBookmark.textOffset) && savedBookmark.textOffset > legacyState.annotations[0].start)
+ assert.deepEqual(bookAfterReflow.bookmarks.filter(bookmark => bookmark.id !== savedBookmark.id), olderBookmarks)
+ await openLegacyBook()
+ await openMarks()
+ assert.deepEqual(await markLabels(), expectedOrder)
+ assert.equal((await legacyLinePosition()).visible, false)
+ await selectMark(newBookmark)
+ assert.deepEqual(await legacyLinePosition(), { chapterPage: 1, visible: true }, 'the new bookmark still jumps to the original text after reopening')
+ console.log('PASS: exact bookmark jumping and mixed reading order after changing font, toggling spreads and reopening; legacy ratio and anchor still work')
  assert.deepEqual(await evaluate('errors'),[])
  console.log(JSON.stringify({matrix:rows,anchor,dualAnchor,tailParities:[...tailParities],lastPage:last.label,errors:[]},null,2));console.log('PASS: single/dual geometry, typography, reflow, tail counts and persistence')
 } finally {

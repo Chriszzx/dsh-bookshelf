@@ -1,10 +1,7 @@
 // Reading-list model for the reader's bookmark / annotation panel. It merges
 // whole-page bookmarks with highlights and underlines into one flat list and
-// gives the panel stable ordering, search and counts. Pure functions only: no
-// DOM, no React and no locale text. Chapter names come from the caller through
-// `chapterLabels`, and the page fallback can be overridden with `pageLabel`, so
-// the same module is importable by Node (unit tests) and by client.js (dynamic
-// import from the reader preload).
+// gives the panel stable ordering, search and counts. The reader can supply
+// chapter labels and map EPUB bookmarks onto the same text offsets as annotations.
 //
 // Every merged entry has the same shape:
 //   {
@@ -15,8 +12,7 @@
 //                    (annotations)
 //     chapterIndex,  non-negative chapter index, undefined when not applicable
 //     position,      numeric reading position used by the `position` sort
-//                    (bookmarks: page, else book progress/scroll ratio;
-//                    annotations: chapter text offset)
+//                    (EPUB: chapter text offset when supplied; PDF: page)
 //     createdAt,     stored timestamp, 0 when missing
 //     source,        the original bookmark / annotation object
 //   }
@@ -164,7 +160,7 @@ export function readingKind(item) {
   return null
 }
 
-function mergeBookmark(bookmark, index, chapterLabels, pageLabel) {
+function mergeBookmark(bookmark, index, chapterLabels, pageLabel, positionForBookmark) {
   const chapterIndex = nonNegativeInteger(bookmark.chapterIndex)
   const chapterName = chapterNameFor(chapterLabels, chapterIndex, bookmark)
   const createdAt = finiteNumber(bookmark.createdAt)
@@ -174,7 +170,7 @@ function mergeBookmark(bookmark, index, chapterLabels, pageLabel) {
     label: bookmarkLabel(bookmark, chapterName, pageLabel),
     detail: chapterName,
     chapterIndex,
-    position: bookmarkPosition(bookmark),
+    position: nonNegativeNumber(positionForBookmark?.(bookmark)) ?? bookmarkPosition(bookmark),
     createdAt: createdAt === undefined ? 0 : createdAt,
     source: bookmark,
   }
@@ -217,7 +213,8 @@ function mergeAnnotation(annotation, index, chapterLabels) {
  * Merges stored bookmarks with stored annotations into the panel list.
  *
  * @param {{ bookmarks?: unknown[], annotations?: unknown[],
- *   chapterLabels?: unknown, pageLabel?: (page: number) => string }} [options]
+ *   chapterLabels?: unknown, pageLabel?: (page: number) => string,
+ *   positionForBookmark?: (bookmark: object) => number | undefined }} [options]
  *   `chapterLabels` supplies chapter names: object/Map keyed by chapter index,
  *   an array (indexed, or TOC-like `{ chapterIndex, label }` entries) or a
  *   function(index) => name. `pageLabel` optionally localises the bookmark
@@ -226,13 +223,14 @@ function mergeAnnotation(annotation, index, chapterLabels) {
  */
 export function mergeReadingItems(options) {
   const source = isRecord(options) ? options : {}
-  const { bookmarks, annotations, chapterLabels, pageLabel } = source
+  const { bookmarks, annotations, chapterLabels, pageLabel, positionForBookmark } = source
+  const resolveBookmarkPosition = typeof positionForBookmark === 'function' ? positionForBookmark : undefined
   const items = []
   if (Array.isArray(bookmarks)) {
     for (let index = 0; index < bookmarks.length; index += 1) {
       const bookmark = bookmarks[index]
       if (!isRecord(bookmark)) continue
-      items.push(mergeBookmark(bookmark, index, chapterLabels, pageLabel))
+      items.push(mergeBookmark(bookmark, index, chapterLabels, pageLabel, resolveBookmarkPosition))
     }
   }
   if (Array.isArray(annotations)) {

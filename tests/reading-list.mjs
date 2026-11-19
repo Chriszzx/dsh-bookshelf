@@ -181,6 +181,18 @@ test('sortReadingItems position orders chapter by chapter then by position', () 
   assert.deepEqual(items.map((item) => item.id), ['c2', 'a2', 'p9', 'a1', 'c1', 'p2'])
 })
 
+test('mixed reading order compares bookmark text offsets with annotation offsets', () => {
+  const items = mergeReadingItems({
+    bookmarks: [
+      { id: 'last', format: 'epub', chapterIndex: 0, scrollRatio: 0.8, textOffset: 300 },
+      { id: 'first', format: 'epub', chapterIndex: 0, scrollRatio: 0.2, textOffset: 0 },
+    ],
+    annotations: [{ id: 'middle', chapterIndex: 0, type: 'highlight', start: 120, end: 130, quote: 'middle' }],
+    positionForBookmark: bookmark => bookmark.textOffset,
+  })
+  assert.deepEqual(sortReadingItems(items, 'position').map(item => item.id), ['first', 'middle', 'last'])
+})
+
 test('sortReadingItems recent puts newest first and missing timestamps last', () => {
   const items = [
     row({ id: 'old', kind: 'bookmark', createdAt: 100 }),
