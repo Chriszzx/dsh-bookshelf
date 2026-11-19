@@ -28,7 +28,10 @@ function makeRun() {
       return { stdout: 'Tingting (中文（中国大陆）)     zh_CN    # 你好！我叫婷婷。\nMeijia (中文（台湾）)  zh_TW  # 你好，我叫美佳。\nSamantha (English (US))  en_US  # Hello.\nReed (德语（德国）)  de_DE  # Hallo.\n' }
     }
     const voiceIndex = args.indexOf('-v')
-    spoken.push(voiceIndex === -1 ? '' : String(args[voiceIndex + 1]))
+    spoken.push({
+      text: String(args.at(-1)),
+      voice: voiceIndex === -1 ? '' : String(args[voiceIndex + 1]),
+    })
     const out = args[args.indexOf('-o') + 1]
     if (typeof out === 'string' && out.endsWith('.wav')) {
       await (await import('node:fs/promises')).writeFile(out, Buffer.from('RIFFmockwav'))
@@ -58,7 +61,8 @@ function epubBytes(title, chapters, language = 'zh') {
   }
   chapters.forEach((lines, index) => {
     const body = lines.map((line) => `<p>${line}</p>`).join('')
-    files[`OEBPS/ch${index}.xhtml`] = strToU8(`<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter ${index + 1}</title></head><body><h1>Chapter ${index + 1}</h1>${body}</body></html>`)
+    const heading = language === 'en' ? `English chapter ${index + 1}` : `Chapter ${index + 1}`
+    files[`OEBPS/ch${index}.xhtml`] = strToU8(`<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${heading}</title></head><body><h1>${heading}</h1>${body}</body></html>`)
   })
   return zipSync(files)
 }
@@ -363,8 +367,9 @@ try {
 
   // The Chinese book picked a Chinese system voice, never the German locale
   // of a shared voice name.
-  assert.ok(spoken.some(voice => voice.includes('Tingting')), 'zh book uses a zh voice: ' + spoken.slice(0, 4).join(','))
-  assert.ok(!spoken.some(voice => voice.includes('Reed')), 'no silent German fallback: ' + spoken.slice(0, 4).join(','))
+  const chineseVoices = spoken.map(request => request.voice)
+  assert.ok(chineseVoices.some(voice => voice.includes('Tingting')), 'zh book uses a zh voice: ' + chineseVoices.slice(0, 4).join(','))
+  assert.ok(!chineseVoices.some(voice => voice.includes('Reed')), 'no silent German fallback: ' + chineseVoices.slice(0, 4).join(','))
 
   // The in-reader panel used to reset its draft on every render, so every
   // change snapped back to the saved settings.
@@ -504,8 +509,10 @@ try {
   })()`), true)
 
   // An English book switches to an English voice automatically.
-  spoken.length = 0
-  assert.equal(await evaluate(`(async()=>{
+  // An in-flight PDF synthesis can complete after the dock closes. Scope the
+  // assertion to the named English fixture and wait for its queue to finish.
+  const englishRequests = (since) => spoken.slice(since).filter(request => request.text.includes('English'))
+  const playEnglish = () => evaluate(`(async()=>{
     const dismiss=document.querySelector('.bs-tts-dock [aria-label="dismiss"]');
     if(dismiss)dismiss.click();
     await until(()=>!document.querySelector('.bs-tts-dock'));
@@ -514,11 +521,15 @@ try {
     await openBook('English');
     await until(()=>document.querySelector('.bs-epub-frame'));
     await startReading();
-    await until(()=>caption().includes('English sentence'));
+    await until(()=>caption().includes('The second English sentence.') &&
+      document.querySelector('.bs-tts-dock .bs-tts-status')?.textContent==='ttsStopped');
     return true;
-  })()`), true)
-  assert.ok(spoken.some(voice => voice.includes('Samantha')), 'en book uses an en voice: ' + spoken.join(','))
-  assert.ok(!spoken.some(voice => voice.includes('Tingting')), 'en book does not use the zh voice: ' + spoken.join(','))
+  })()`)
+  const automaticStart = spoken.length
+  assert.equal(await playEnglish(), true)
+  const automatic = englishRequests(automaticStart)
+  assert.ok(automatic.some(request => request.text.includes('The second English sentence.')), 'English playback synthesized the last sentence')
+  assert.ok(automatic.every(request => request.voice === 'Samantha (English (US))'), 'English book uses the English voice: ' + JSON.stringify(automatic))
 
   // Turning automatic selection off pins the chosen voice instead.
   await fetch(`${api}/tts/settings`, {
@@ -526,19 +537,11 @@ try {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ settings: { autoVoice: false, voice: 'Meijia (中文（台湾）)' } }),
   })
-  spoken.length = 0
-  assert.equal(await evaluate(`(async()=>{
-    document.querySelector('.bs-tts-dock [aria-label="dismiss"]')?.click();
-    await until(()=>!document.querySelector('.bs-tts-dock'));
-    document.querySelector('.bs-reader-bar [aria-label="back"]').click();
-    await until(()=>document.querySelector('.bs-shelf'));
-    await openBook('English');
-    await until(()=>document.querySelector('.bs-epub-frame'));
-    await startReading();
-    await until(()=>caption().includes('English sentence'));
-    return true;
-  })()`), true)
-  assert.ok(spoken.length > 0 && spoken.every(voice => voice === 'Meijia (中文（台湾）)'), 'pinned voice wins: ' + spoken.join(','))
+  const pinnedStart = spoken.length
+  assert.equal(await playEnglish(), true)
+  const pinned = englishRequests(pinnedStart)
+  assert.ok(pinned.some(request => request.text.includes('The second English sentence.')), 'pinned playback synthesized the last sentence')
+  assert.ok(pinned.every(request => request.voice === 'Meijia (中文（台湾）)'), 'pinned voice wins: ' + JSON.stringify(pinned))
 
   // A chapter long enough to paginate: following the text must only ever move
   // forward, and leaving read-aloud must keep the page the reader is on. The
