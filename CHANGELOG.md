@@ -2,6 +2,13 @@
 
 ## Unreleased / 未发布
 
+- 浏览器回归的完整输出同时写入 `.local/browser/`，日志开头记录平台、Node 与 Chrome 版本；失败时在失败步骤留下指向套件文件的 `::error` 注释。\
+  Tee browser regression output into `.local/browser/`, record platform, Node and Chrome versions at the top, and annotate the failing suite file.
+- CI 失败时打印并上传该日志（`browser-log-<os>-node<n>` artifact），不必再用步骤耗时推断是哪个套件失败。\
+  Print and upload that log when CI fails, so a failing suite is named instead of inferred from step timing.
+- CI 只在分支推送与 PR 上运行，发布标签不再触发整套矩阵。\
+  Run CI on branch pushes and pull requests only; a release tag no longer starts the full matrix.
+
 ## [0.6.6](https://github.com/Chriszzx/dsh-bookshelf/releases/tag/v0.6.6) · 2026-11-19
 
 - 将 EPUB 阅读位置的编解码从阅读器拆到独立模块，兼容 0.6.5 保存的进度。\

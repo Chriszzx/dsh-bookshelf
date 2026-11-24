@@ -12,7 +12,7 @@ const tasks = {
     'tests/tts-sentences.mjs', 'tests/tts-cache.mjs', 'tests/tts-providers.mjs', 'tests/tts-api.mjs',
     'tests/tts-native.mjs', 'tests/tts-no-cache.mjs',
     'tests/annotations-model.mjs', 'tests/annotations-api.mjs', 'tests/route-admission.mjs', 'tests/highlights-plan.mjs',
-    'tests/selection-speech.mjs', 'tests/reading-list.mjs',
+    'tests/selection-speech.mjs', 'tests/reading-list.mjs', 'tests/browser-log.mjs',
   ],
   browser: ['tests/run-browser.mjs'],
 }
